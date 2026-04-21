@@ -98,122 +98,63 @@ export interface MarketSkill {
   updatedAt: string
 }
 
-export type BuiltinProviderName = 'anthropic' | 'openai' | 'gemini' | 'groq' | 'mistral' | 'ollama' | 'lmstudio'
-export type ProviderName = BuiltinProviderName | (string & {})
+// ─── Provider system (cc-switch style) ───────────────────────────────────────
 
-export interface ProviderPreset {
-  id: ProviderName
-  label: string
-  baseUrl: string
-  requiresKey: boolean
-  keyPlaceholder: string
-  keyHint: string
-  modelsFallback: string[]
-  isLocal: boolean
+export type ProviderCategory = 'official' | 'cn_official' | 'aggregator' | 'local' | 'custom'
+
+/** A saved provider entry (preset-derived or fully custom) */
+export interface LLMProvider {
+  id: string              // unique slug
+  name: string
+  baseUrl: string         // e.g. https://api.minimaxi.com/anthropic  (passed to Anthropic SDK baseURL)
+  apiKey: string          // stored in electron-store; empty string when not set
+  model: string           // e.g. MiniMax-M2.7
+  category: ProviderCategory
+  websiteUrl?: string
+  isPreset?: boolean      // created from a built-in preset
+  presetId?: string       // which preset it came from
 }
 
-export const PROVIDER_PRESETS: ProviderPreset[] = [
-  {
-    id: 'anthropic',
-    label: 'Anthropic',
-    baseUrl: 'https://api.anthropic.com',
-    requiresKey: true,
-    keyPlaceholder: 'sk-ant-...',
-    keyHint: 'console.anthropic.com',
-    modelsFallback: ['claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
-    isLocal: false
-  },
-  {
-    id: 'openai',
-    label: 'OpenAI',
-    baseUrl: 'https://api.openai.com/v1',
-    requiresKey: true,
-    keyPlaceholder: 'sk-...',
-    keyHint: 'platform.openai.com',
-    modelsFallback: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
-    isLocal: false
-  },
-  {
-    id: 'gemini',
-    label: 'Gemini',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    requiresKey: true,
-    keyPlaceholder: 'AIza...',
-    keyHint: 'aistudio.google.com',
-    modelsFallback: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
-    isLocal: false
-  },
-  {
-    id: 'groq',
-    label: 'Groq',
-    baseUrl: 'https://api.groq.com/openai/v1',
-    requiresKey: true,
-    keyPlaceholder: 'gsk_...',
-    keyHint: 'console.groq.com',
-    modelsFallback: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
-    isLocal: false
-  },
-  {
-    id: 'mistral',
-    label: 'Mistral',
-    baseUrl: 'https://api.mistral.ai/v1',
-    requiresKey: true,
-    keyPlaceholder: '...',
-    keyHint: 'console.mistral.ai',
-    modelsFallback: ['mistral-large-latest', 'mistral-small-latest', 'open-mistral-7b'],
-    isLocal: false
-  },
-  {
-    id: 'ollama',
-    label: 'Ollama',
-    baseUrl: 'http://localhost:11434',
-    requiresKey: false,
-    keyPlaceholder: '',
-    keyHint: 'Run: ollama serve',
-    modelsFallback: [],
-    isLocal: true
-  },
-  {
-    id: 'lmstudio',
-    label: 'LM Studio',
-    baseUrl: 'http://localhost:1234',
-    requiresKey: false,
-    keyPlaceholder: '',
-    keyHint: 'Enable local server in LM Studio',
-    modelsFallback: [],
-    isLocal: true
-  }
+export interface LLMProviderPreset {
+  id: string
+  name: string
+  baseUrl: string
+  defaultModel: string
+  category: ProviderCategory
+  websiteUrl?: string
+  keyPlaceholder?: string
+  requiresKey: boolean
+}
+
+export const LLM_PROVIDER_PRESETS: LLMProviderPreset[] = [
+  // ── Official ──────────────────────────────────────────────────────────────
+  { id: 'anthropic',    name: 'Anthropic',       baseUrl: 'https://api.anthropic.com',                     defaultModel: 'claude-sonnet-4-6',              category: 'official',    websiteUrl: 'https://console.anthropic.com',          keyPlaceholder: 'sk-ant-...',  requiresKey: true },
+  // ── CN Official ───────────────────────────────────────────────────────────
+  { id: 'minimax-cn',   name: 'MiniMax (CN)',     baseUrl: 'https://api.minimaxi.com/anthropic',            defaultModel: 'MiniMax-M2.7',                   category: 'cn_official', websiteUrl: 'https://platform.minimaxi.com',          keyPlaceholder: '',            requiresKey: true },
+  { id: 'minimax-en',   name: 'MiniMax (Global)', baseUrl: 'https://api.minimax.io/anthropic',             defaultModel: 'MiniMax-M2.7',                   category: 'cn_official', websiteUrl: 'https://platform.minimax.io',            keyPlaceholder: '',            requiresKey: true },
+  { id: 'deepseek',     name: 'DeepSeek',         baseUrl: 'https://api.deepseek.com/anthropic',           defaultModel: 'DeepSeek-V3.2',                  category: 'cn_official', websiteUrl: 'https://platform.deepseek.com',          keyPlaceholder: 'sk-...',      requiresKey: true },
+  { id: 'kimi',         name: 'Kimi (Moonshot)',  baseUrl: 'https://api.moonshot.cn/anthropic',            defaultModel: 'kimi-k2.5',                      category: 'cn_official', websiteUrl: 'https://platform.moonshot.cn',           keyPlaceholder: 'sk-...',      requiresKey: true },
+  { id: 'zhipu',        name: 'Zhipu GLM',        baseUrl: 'https://open.bigmodel.cn/api/anthropic',       defaultModel: 'glm-5',                          category: 'cn_official', websiteUrl: 'https://open.bigmodel.cn',               keyPlaceholder: '',            requiresKey: true },
+  { id: 'doubao',       name: 'DouBao Seed',      baseUrl: 'https://ark.cn-beijing.volces.com/api/coding', defaultModel: 'doubao-seed-2-0-code-preview-latest', category: 'cn_official', websiteUrl: 'https://www.volcengine.com/product/doubao', keyPlaceholder: '', requiresKey: true },
+  // ── Aggregators ───────────────────────────────────────────────────────────
+  { id: 'siliconflow',  name: 'SiliconFlow',      baseUrl: 'https://api.siliconflow.cn',                   defaultModel: 'Pro/MiniMaxAI/MiniMax-M2.7',     category: 'aggregator',  websiteUrl: 'https://siliconflow.cn',                keyPlaceholder: 'sk-...',      requiresKey: true },
+  { id: 'aihubmix',     name: 'AiHubMix',         baseUrl: 'https://aihubmix.com',                         defaultModel: 'claude-sonnet-4-6',              category: 'aggregator',  websiteUrl: 'https://aihubmix.com',                  keyPlaceholder: '',            requiresKey: true },
+  { id: 'openrouter',   name: 'OpenRouter',        baseUrl: 'https://openrouter.ai/api',                   defaultModel: 'anthropic/claude-sonnet-4-6',    category: 'aggregator',  websiteUrl: 'https://openrouter.ai',                 keyPlaceholder: 'sk-or-...',   requiresKey: true },
+  // ── Local ─────────────────────────────────────────────────────────────────
+  { id: 'ollama',       name: 'Ollama',            baseUrl: 'http://localhost:11434',                       defaultModel: 'llama3.2',                       category: 'local',       websiteUrl: 'https://ollama.com',                    keyPlaceholder: '',            requiresKey: false },
+  { id: 'lmstudio',    name: 'LM Studio',          baseUrl: 'http://localhost:1234',                        defaultModel: 'local-model',                    category: 'local',       websiteUrl: 'https://lmstudio.ai',                   keyPlaceholder: '',            requiresKey: false },
 ]
 
-export interface CustomProvider {
-  id: string
-  label: string
-  baseUrl: string
-  apiKey?: string
-  defaultModel?: string
-  apiFormat: 'openai' | 'anthropic'
-}
-
 export interface AppConfig {
-  anthropicApiKey?: string
-  openaiApiKey?: string
-  defaultProvider: ProviderName
-  defaultModel: string
-  toolPaths?: Record<string, string>    // toolId -> override exportDir
-  enabledTools?: Record<string, boolean> // toolId -> enabled for scan/export
-  providerConfigs?: Record<string, { apiKey?: string; baseUrl?: string }>
-  customProviders?: CustomProvider[]
+  providers: LLMProvider[]         // all saved providers (preset-derived + custom)
+  activeProviderId: string         // id of the active provider
+  toolPaths?: Record<string, string>
+  enabledTools?: Record<string, boolean>
 }
 
-// What config:get returns to the renderer (keys are masked)
 export interface AppConfigPublic {
-  defaultProvider: ProviderName
-  defaultModel: string
-  anthropicApiKeySet: boolean
-  openaiApiKeySet: boolean
-  providerKeySet: Record<string, boolean>
-  providerBaseUrls: Record<string, string>
-  customProviders: Array<Omit<CustomProvider, 'apiKey'> & { apiKeySet: boolean }>
+  providers: Array<Omit<LLMProvider, 'apiKey'> & { apiKeySet: boolean }>
+  activeProviderId: string
 }
 
 export interface EvoRunResult {
@@ -245,8 +186,8 @@ export interface IpcChannels {
   'testcases:delete': (id: string) => Promise<void>
   'config:get': () => Promise<AppConfigPublic>
   'config:set': (config: Partial<AppConfig>) => Promise<void>
-  'config:test': (provider: ProviderName) => Promise<{ ok: boolean; error?: string }>
-  'config:listModels': (provider: ProviderName) => Promise<string[]>
-  'config:saveCustomProvider': (p: CustomProvider) => Promise<void>
-  'config:deleteCustomProvider': (id: string) => Promise<void>
+  'config:test': (providerId: string) => Promise<{ ok: boolean; error?: string }>
+  'config:saveProvider': (p: LLMProvider) => Promise<void>
+  'config:deleteProvider': (id: string) => Promise<void>
+  'config:setActive': (id: string) => Promise<void>
 }

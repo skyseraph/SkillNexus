@@ -32,7 +32,7 @@ async function judgeOneDimension(
   output: string
 ): Promise<EvalScore> {
   const provider = getAIProvider()
-  const model = getConfig().defaultModel
+  const model = getActiveModel()
   const result = await withTimeout(
     provider.call({
       model,
@@ -87,7 +87,7 @@ export function registerEvalHandlers(): void {
 
         try {
           const provider = getAIProvider()
-          const model = getConfig().defaultModel
+          const model = getActiveModel()
 
           // SEC-06: timeout on AI call
           const response = await withTimeout(

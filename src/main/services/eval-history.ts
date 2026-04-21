@@ -1,5 +1,5 @@
 import { getDb } from '../db'
-import { getConfig } from '../ipc/config.handler'
+import { getActiveModel, getActiveProviderName } from '../ipc/config.handler'
 import type { EvalScore } from '../../shared/types'
 
 export interface InsertEvalHistoryParams {
@@ -15,7 +15,6 @@ export interface InsertEvalHistoryParams {
 export function insertEvalHistory(params: InsertEvalHistoryParams): string {
   const { skillId, input, output, scores, totalScore, durationMs, status } = params
   const db = getDb()
-  const cfg = getConfig()
   const evalId = `er-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const now = Date.now()
   db.prepare(`
@@ -23,8 +22,8 @@ export function insertEvalHistory(params: InsertEvalHistoryParams): string {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     evalId, skillId,
-    cfg.defaultModel,
-    cfg.defaultProvider ?? 'anthropic',
+    getActiveModel(),
+    getActiveProviderName(),
     input, output,
     JSON.stringify(scores),
     totalScore, durationMs, status, now

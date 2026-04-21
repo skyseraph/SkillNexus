@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Skill, SkillFileEntry, TestCase, EvalResult, AppConfigPublic, AppConfig, ScannedSkill, ToolTarget, MarketSkill, EvoRunResult, ProviderName, CustomProvider } from '../shared/types'
+import type { Skill, SkillFileEntry, TestCase, EvalResult, AppConfigPublic, AppConfig, ScannedSkill, ToolTarget, MarketSkill, EvoRunResult, LLMProvider } from '../shared/types'
 
 const api = {
   skills: {
@@ -59,14 +59,14 @@ const api = {
   config: {
     get: (): Promise<AppConfigPublic> => ipcRenderer.invoke('config:get'),
     set: (config: Partial<AppConfig>): Promise<void> => ipcRenderer.invoke('config:set', config),
-    test: (provider: ProviderName): Promise<{ ok: boolean; error?: string }> =>
-      ipcRenderer.invoke('config:test', provider),
-    listModels: (provider: ProviderName): Promise<string[]> =>
-      ipcRenderer.invoke('config:listModels', provider),
-    saveCustomProvider: (p: CustomProvider): Promise<void> =>
-      ipcRenderer.invoke('config:saveCustomProvider', p),
-    deleteCustomProvider: (id: string): Promise<void> =>
-      ipcRenderer.invoke('config:deleteCustomProvider', id)
+    test: (providerId: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('config:test', providerId),
+    saveProvider: (p: LLMProvider): Promise<void> =>
+      ipcRenderer.invoke('config:saveProvider', p),
+    deleteProvider: (id: string): Promise<void> =>
+      ipcRenderer.invoke('config:deleteProvider', id),
+    setActive: (id: string): Promise<void> =>
+      ipcRenderer.invoke('config:setActive', id)
   }
 }
 

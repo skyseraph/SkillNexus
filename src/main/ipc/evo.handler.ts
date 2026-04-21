@@ -36,7 +36,7 @@ async function judgeOneDimension(
   output: string
 ): Promise<EvalScore> {
   const provider = getAIProvider()
-  const model = getConfig().defaultModel
+  const model = getActiveModel()
   const result = await withTimeout(
     provider.call({
       model,
@@ -73,7 +73,7 @@ async function runEvalJob(
 
     try {
       const provider = getAIProvider()
-      const model = getConfig().defaultModel
+      const model = getActiveModel()
       const response = await withTimeout(
         provider.call({ model, systemPrompt: skillContent, userMessage: tc.input as string }),
         AI_TIMEOUT_MS,
