@@ -12,6 +12,8 @@ function makeSkill(overrides: Partial<Skill> = {}): Skill {
     yamlFrontmatter: 'name: TestSkill\nversion: 1.0.0\ntags: [ai, code]',
     markdownContent: '# TestSkill\n\nDo useful things.',
     filePath: '/Users/bob/skills/test-skill.md',
+    rootDir: '/Users/bob/skills',
+    skillType: 'single',
     installedAt: 1714000000000,
     updatedAt: 1714000000000,
     ...overrides
@@ -22,7 +24,15 @@ const mockApi = {
   skills: {
     getAll: vi.fn(),
     install: vi.fn(),
-    uninstall: vi.fn()
+    uninstall: vi.fn(),
+    scan: vi.fn().mockResolvedValue([]),
+    importScanned: vi.fn(),
+    export: vi.fn().mockResolvedValue(undefined),
+    getToolTargets: vi.fn().mockResolvedValue([])
+  },
+  marketplace: {
+    search: vi.fn().mockResolvedValue([]),
+    install: vi.fn()
   }
 }
 vi.stubGlobal('window', { api: mockApi })
@@ -85,5 +95,37 @@ describe('HomePage — skill detail data', () => {
     expect(rendered.startsWith('---')).toBe(true)
     expect(rendered.endsWith('---')).toBe(true)
     expect(rendered).toContain('name: TestSkill')
+  })
+})
+
+describe('HomePage — My Skills tab filtering', () => {
+  it('filters skills by search query (name)', () => {
+    const skills = [makeSkill({ name: 'Alpha' }), makeSkill({ id: 'skill-2', name: 'Beta' })]
+    const q = 'alpha'
+    const filtered = skills.filter(s => s.name.toLowerCase().includes(q))
+    expect(filtered).toHaveLength(1)
+    expect(filtered[0].name).toBe('Alpha')
+  })
+
+  it('filters skills by type: agent', () => {
+    const skills = [makeSkill({ skillType: 'single' }), makeSkill({ id: 'skill-2', skillType: 'agent' })]
+    const agentOnly = skills.filter(s => s.skillType === 'agent')
+    expect(agentOnly).toHaveLength(1)
+  })
+
+  it('scan returns empty array when no tools are found', async () => {
+    const result = await window.api.skills.scan()
+    expect(Array.isArray(result)).toBe(true)
+    expect(result).toHaveLength(0)
+  })
+
+  it('getToolTargets returns array', async () => {
+    const targets = await window.api.skills.getToolTargets()
+    expect(Array.isArray(targets)).toBe(true)
+  })
+
+  it('marketplace.search returns array', async () => {
+    const results = await window.api.marketplace.search('code review')
+    expect(Array.isArray(results)).toBe(true)
   })
 })

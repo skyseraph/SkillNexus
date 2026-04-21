@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS skills (
   yaml_frontmatter TEXT NOT NULL DEFAULT '',
   markdown_content TEXT NOT NULL DEFAULT '',
   file_path TEXT NOT NULL DEFAULT '',
+  root_dir TEXT NOT NULL DEFAULT '',
+  skill_type TEXT NOT NULL DEFAULT 'single',
   installed_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -47,6 +49,12 @@ CREATE INDEX IF NOT EXISTS idx_eval_history_skill_id ON eval_history(skill_id);
 CREATE INDEX IF NOT EXISTS idx_eval_history_created_at ON eval_history(created_at);
 `
 
+// Runtime migration for existing DBs that predate root_dir/skill_type columns
+const MIGRATIONS = [
+  `ALTER TABLE skills ADD COLUMN root_dir TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE skills ADD COLUMN skill_type TEXT NOT NULL DEFAULT 'single'`
+]
+
 export function initDatabase(): Database.Database {
   if (db) return db
 
@@ -56,6 +64,11 @@ export function initDatabase(): Database.Database {
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
   db.exec(SCHEMA)
+
+  // Apply migrations idempotently — ignore "duplicate column" errors
+  for (const sql of MIGRATIONS) {
+    try { db.exec(sql) } catch { /* column already exists */ }
+  }
 
   return db
 }

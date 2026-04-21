@@ -1,36 +1,76 @@
-import { ipcMain } from 'electron'
+import { ipcMain, dialog } from 'electron'
 import { getDb } from '../db'
-import { readFileSync } from 'fs'
-import { basename, resolve, extname } from 'path'
+import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, symlinkSync, existsSync } from 'fs'
+import { basename, resolve, extname, join, relative, dirname } from 'path'
+import { app } from 'electron'
 import yaml from 'js-yaml'
-import type { Skill } from '../../shared/types'
+import { getConfig } from './config.handler'
+import type { Skill, SkillFileEntry, SkillType, ToolTarget, ScannedSkill } from '../../shared/types'
 
-// SEC-01: validate filePath is an absolute path ending in .md and not traversing into system dirs
-function validateSkillPath(filePath: string): void {
-  const resolved = resolve(filePath)
-  if (extname(resolved).toLowerCase() !== '.md') {
-    throw new Error('Only .md files are allowed')
-  }
-  // Block obvious system paths
-  const blocked = ['/etc', '/usr', '/bin', '/sbin', '/System', '/Library/Keychains']
-  if (blocked.some((p) => resolved.startsWith(p))) {
-    throw new Error(`Access to path is not allowed: ${resolved}`)
+// ── Security: allowed root directories ───────────────────────────────────────
+const ALLOWED_PATH_PREFIXES = () => [
+  resolve(app.getPath('userData')),
+  resolve(app.getPath('home')),
+  resolve(app.getPath('downloads')),
+  resolve(app.getPath('documents')),
+  resolve(app.getPath('desktop'))
+]
+
+function assertPathAllowed(p: string): void {
+  const r = resolve(p)
+  if (!ALLOWED_PATH_PREFIXES().some((prefix) => r.startsWith(prefix))) {
+    throw new Error(`Access to path is not allowed: ${r}`)
   }
 }
 
-function parseSkillFile(filePath: string): Omit<Skill, 'id' | 'installedAt' | 'updatedAt'> {
-  validateSkillPath(filePath)
+// ── File extensions we can display as text ───────────────────────────────────
+const TEXT_EXTS = new Set([
+  '.md', '.txt', '.yaml', '.yml', '.json', '.toml', '.ini', '.env',
+  '.ts', '.tsx', '.js', '.jsx', '.py', '.sh', '.bash', '.zsh',
+  '.rb', '.go', '.rs', '.java', '.kt', '.swift', '.c', '.cpp', '.h',
+  '.css', '.scss', '.html', '.xml', '.csv', '.log', ''
+])
+
+function isTextFile(ext: string): boolean {
+  return TEXT_EXTS.has(ext.toLowerCase())
+}
+
+// ── Ignore patterns for directory walk ───────────────────────────────────────
+const IGNORE_DIRS = new Set(['node_modules', '.git', '__pycache__', '.venv', 'venv', 'dist', 'build', '.next', 'out'])
+const IGNORE_FILES = new Set(['.DS_Store', 'Thumbs.db'])
+
+// ── AI tool export targets ─────────────────────────────────────────────────────
+const TOOL_DEFAULTS: Record<string, { name: string; exportDir: string; ext: string }> = {
+  'claude-code': { name: 'Claude Code',   exportDir: '.claude/commands',            ext: '.md' },
+  'cursor':      { name: 'Cursor',         exportDir: '.cursor/rules',               ext: '.mdc' },
+  'windsurf':    { name: 'Windsurf',       exportDir: '.codeium/windsurf/memories',  ext: '.md' },
+  'codex':       { name: 'Codex CLI',      exportDir: '.codex',                      ext: '.md' },
+  'gemini':      { name: 'Gemini CLI',     exportDir: '.gemini/skills',              ext: '.md' },
+  'opencode':    { name: 'OpenCode',       exportDir: '.opencode',                   ext: '.md' },
+  'openclaw':    { name: 'OpenClaw',       exportDir: '.openclaw',                   ext: '.md' },
+  'codebuddy':   { name: 'CodeBuddy',      exportDir: '.codebuddy/skills',           ext: '.md' },
+}
+
+function resolveToolDir(toolId: string): { name: string; exportDir: string; ext: string } | null {
+  const def = TOOL_DEFAULTS[toolId]
+  if (!def) return null
+  const home = app.getPath('home')
+  const cfg = getConfig()
+  const override = cfg.toolPaths?.[toolId]
+  const exportDir = resolve(home, override ?? def.exportDir)
+  return { name: def.name, exportDir, ext: def.ext }
+}
+
+// ── Parse single .md skill file ───────────────────────────────────────────────
+function parseSkillFile(filePath: string): Omit<Skill, 'id' | 'installedAt' | 'updatedAt' | 'rootDir' | 'skillType'> {
   const content = readFileSync(filePath, 'utf-8')
   const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/)
-
   let frontmatter: Record<string, unknown> = {}
   let markdownContent = content
-
   if (match) {
     frontmatter = (yaml.load(match[1]) as Record<string, unknown>) || {}
     markdownContent = match[2]
   }
-
   return {
     name: (frontmatter.name as string) || basename(filePath, '.md'),
     format: (frontmatter.format as string) || 'markdown',
@@ -42,51 +82,320 @@ function parseSkillFile(filePath: string): Omit<Skill, 'id' | 'installedAt' | 'u
   }
 }
 
+// ── Find the entry .md inside a skill directory ───────────────────────────────
+// Priority: SKILL.md > README.md > <dirname>.md > first .md found
+function findEntryMd(dirPath: string): string | null {
+  const dirName = basename(dirPath)
+  const candidates = [`SKILL.md`, `README.md`, `${dirName}.md`]
+  for (const c of candidates) {
+    const p = join(dirPath, c)
+    try { statSync(p); return p } catch { /* not found */ }
+  }
+  // Fallback: first .md at root
+  try {
+    const entries = readdirSync(dirPath)
+    const md = entries.find((e) => e.endsWith('.md'))
+    if (md) return join(dirPath, md)
+  } catch { /* ignore */ }
+  return null
+}
+
+// ── Parse agent skill from directory ─────────────────────────────────────────
+function parseSkillDir(dirPath: string): Omit<Skill, 'id' | 'installedAt' | 'updatedAt'> {
+  const entryMd = findEntryMd(dirPath)
+  const dirName = basename(dirPath)
+
+  let name = dirName
+  let format = 'agent'
+  let version = '1.0.0'
+  let tags: string[] = []
+  let yamlFrontmatter = ''
+  let markdownContent = ''
+  let filePath = entryMd ?? dirPath
+
+  if (entryMd) {
+    const content = readFileSync(entryMd, 'utf-8')
+    const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/)
+    if (match) {
+      const fm = (yaml.load(match[1]) as Record<string, unknown>) || {}
+      name = (fm.name as string) || dirName
+      format = (fm.format as string) || 'agent'
+      version = (fm.version as string) || '1.0.0'
+      tags = (fm.tags as string[]) || []
+      yamlFrontmatter = match[1]
+      markdownContent = match[2]
+    } else {
+      markdownContent = content
+    }
+  }
+
+  return { name, format, version, tags, yamlFrontmatter, markdownContent, filePath, rootDir: resolve(dirPath), skillType: 'agent' }
+}
+
+// ── Recursive file list (returns flat array with relative paths) ──────────────
+function walkDir(dirPath: string, rootDir: string): SkillFileEntry[] {
+  const results: SkillFileEntry[] = []
+  const entries = readdirSync(dirPath)
+
+  for (const entry of entries) {
+    if (IGNORE_FILES.has(entry)) continue
+    const fullPath = join(dirPath, entry)
+    const rel = relative(rootDir, fullPath)
+    let st
+    try { st = statSync(fullPath) } catch { continue }
+
+    if (st.isDirectory()) {
+      if (IGNORE_DIRS.has(entry)) continue
+      results.push({ name: entry, path: fullPath, relativePath: rel, isDir: true, ext: '', size: 0 })
+      results.push(...walkDir(fullPath, rootDir))
+    } else {
+      results.push({ name: entry, path: fullPath, relativePath: rel, isDir: false, ext: extname(entry), size: st.size })
+    }
+  }
+  return results
+}
+
+// ── DB row → Skill ─────────────────────────────────────────────────────────────
+function rowToSkill(r: Record<string, unknown>): Skill {
+  return {
+    id: r.id as string,
+    name: r.name as string,
+    format: r.format as string,
+    version: r.version as string,
+    tags: JSON.parse(r.tags as string),
+    yamlFrontmatter: r.yaml_frontmatter as string,
+    markdownContent: r.markdown_content as string,
+    filePath: r.file_path as string,
+    rootDir: (r.root_dir as string) || dirname(r.file_path as string),
+    skillType: ((r.skill_type as string) || 'single') as SkillType,
+    installedAt: r.installed_at as number,
+    updatedAt: r.updated_at as number
+  }
+}
+
+// ── IPC registration ──────────────────────────────────────────────────────────
 export function registerSkillsHandlers(): void {
+
+  // Open native file/dir picker — returns selected path or null
+  ipcMain.handle('skills:openDialog', async (_event, mode: 'file' | 'dir') => {
+    const result = await dialog.showOpenDialog({
+      properties: mode === 'dir'
+        ? ['openDirectory']
+        : ['openFile'],
+      filters: mode === 'file' ? [{ name: 'Skill', extensions: ['md'] }] : []
+    })
+    return result.canceled ? null : result.filePaths[0]
+  })
+
+  // List all installed skills
   ipcMain.handle('skills:getAll', () => {
     const db = getDb()
     const rows = db.prepare('SELECT * FROM skills ORDER BY installed_at DESC').all() as Record<string, unknown>[]
-    return rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      format: r.format,
-      version: r.version,
-      tags: JSON.parse(r.tags as string),
-      yamlFrontmatter: r.yaml_frontmatter,
-      markdownContent: r.markdown_content,
-      filePath: r.file_path,
-      installedAt: r.installed_at,
-      updatedAt: r.updated_at
-    }))
+    return rows.map(rowToSkill)
   })
 
+  // Install single .md file
   ipcMain.handle('skills:install', (_event, filePath: string) => {
+    assertPathAllowed(filePath)
+    if (extname(resolve(filePath)).toLowerCase() !== '.md') throw new Error('Only .md files are allowed')
+
     const db = getDb()
     const parsed = parseSkillFile(filePath)
     const now = Date.now()
     const id = `skill-${now}-${Math.random().toString(36).slice(2, 8)}`
+    const rootDir = dirname(resolve(filePath))
 
     db.prepare(`
-      INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, installed_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      parsed.name,
-      parsed.format,
-      parsed.version,
-      JSON.stringify(parsed.tags),
-      parsed.yamlFrontmatter,
-      parsed.markdownContent,
-      parsed.filePath,
-      now,
-      now
-    )
+      INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, installed_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, parsed.name, parsed.format, parsed.version, JSON.stringify(parsed.tags),
+      parsed.yamlFrontmatter, parsed.markdownContent, parsed.filePath, rootDir, 'single', now, now)
+
+    return { id, ...parsed, rootDir, skillType: 'single' as SkillType, installedAt: now, updatedAt: now }
+  })
+
+  // Install agent skill from directory
+  ipcMain.handle('skills:installDir', (_event, dirPath: string) => {
+    assertPathAllowed(dirPath)
+
+    const db = getDb()
+    const parsed = parseSkillDir(dirPath)
+    const now = Date.now()
+    const id = `skill-${now}-${Math.random().toString(36).slice(2, 8)}`
+
+    db.prepare(`
+      INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, installed_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, parsed.name, parsed.format, parsed.version, JSON.stringify(parsed.tags),
+      parsed.yamlFrontmatter, parsed.markdownContent, parsed.filePath, parsed.rootDir, 'agent', now, now)
 
     return { id, ...parsed, installedAt: now, updatedAt: now }
   })
 
+  // Uninstall
   ipcMain.handle('skills:uninstall', (_event, id: string) => {
+    getDb().prepare('DELETE FROM skills WHERE id = ?').run(id)
+  })
+
+  // List files for a skill (directory walk)
+  ipcMain.handle('skills:listFiles', (_event, skillId: string) => {
     const db = getDb()
-    db.prepare('DELETE FROM skills WHERE id = ?').run(id)
+    const row = db.prepare('SELECT root_dir, skill_type, file_path FROM skills WHERE id = ?').get(skillId) as Record<string, unknown> | undefined
+    if (!row) throw new Error(`Skill ${skillId} not found`)
+
+    const rootDir = (row.root_dir as string) || dirname(row.file_path as string)
+    assertPathAllowed(rootDir)
+
+    if (row.skill_type === 'single') {
+      // Single skill: just the one file
+      const fp = row.file_path as string
+      let size = 0
+      try { size = statSync(fp).size } catch { /* file may have moved */ }
+      return [{
+        name: basename(fp),
+        path: fp,
+        relativePath: basename(fp),
+        isDir: false,
+        ext: extname(fp),
+        size
+      }] as SkillFileEntry[]
+    }
+
+    return walkDir(rootDir, rootDir)
+  })
+
+  // Read a single file's content (text only)
+  ipcMain.handle('skills:readFile', (_event, filePath: string, skillId: string) => {
+    // Verify the file belongs to this skill's rootDir
+    const db = getDb()
+    const row = db.prepare('SELECT root_dir, file_path FROM skills WHERE id = ?').get(skillId) as Record<string, unknown> | undefined
+    if (!row) throw new Error(`Skill ${skillId} not found`)
+
+    const rootDir = resolve((row.root_dir as string) || dirname(row.file_path as string))
+    const resolvedFile = resolve(filePath)
+    if (!resolvedFile.startsWith(rootDir)) throw new Error('File is outside skill root directory')
+    assertPathAllowed(resolvedFile)
+
+    if (!isTextFile(extname(resolvedFile))) {
+      return `[Binary file — cannot display (${extname(resolvedFile)})]`
+    }
+
+    try {
+      return readFileSync(resolvedFile, 'utf-8')
+    } catch (err) {
+      throw new Error(`Cannot read file: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  })
+
+  // Get resolved ToolTarget list
+  ipcMain.handle('skills:getToolTargets', (): ToolTarget[] => {
+    const cfg = getConfig()
+    const home = app.getPath('home')
+    return Object.keys(TOOL_DEFAULTS).map((toolId) => {
+      const r = resolveToolDir(toolId)!
+      const enabled = cfg.enabledTools?.[toolId] ?? true  // default all enabled
+      return {
+        id: toolId,
+        name: r.name,
+        exportDir: r.exportDir,
+        exportDirDisplay: r.exportDir.startsWith(home) ? '~' + r.exportDir.slice(home.length) : r.exportDir,
+        ext: r.ext,
+        exists: existsSync(r.exportDir),
+        enabled
+      }
+    })
+  })
+
+  // Scan local AI tools for skills not yet imported
+  ipcMain.handle('skills:scan', (): ScannedSkill[] => {
+    const db = getDb()
+    const cfg = getConfig()
+    const installedPaths = new Set(
+      (db.prepare('SELECT file_path FROM skills').all() as { file_path: string }[]).map(r => r.file_path)
+    )
+    const results: ScannedSkill[] = []
+
+    for (const toolId of Object.keys(TOOL_DEFAULTS)) {
+      // skip disabled tools (default: enabled)
+      if (cfg.enabledTools?.[toolId] === false) continue
+      const r = resolveToolDir(toolId)
+      if (!r || !existsSync(r.exportDir)) continue
+      let entries: string[]
+      try { entries = readdirSync(r.exportDir) } catch { continue }
+
+      for (const entry of entries) {
+        if (!entry.endsWith('.md') && !entry.endsWith('.mdc')) continue
+        const filePath = join(r.exportDir, entry)
+        let st
+        try { st = statSync(filePath) } catch { continue }
+        if (!st.isFile()) continue
+
+        let name = basename(entry, extname(entry))
+        try {
+          const content = readFileSync(filePath, 'utf-8')
+          const match = content.match(/^---\n([\s\S]*?)\n---/)
+          if (match) {
+            const fm = yaml.load(match[1]) as Record<string, unknown>
+            if (fm?.name) name = fm.name as string
+          }
+        } catch { /* use filename as name */ }
+
+        results.push({
+          name,
+          filePath,
+          toolId,
+          toolName: r.name,
+          alreadyInstalled: installedPaths.has(filePath)
+        })
+      }
+    }
+    return results
+  })
+
+  // Import a scanned skill (already on disk, just DB register)
+  ipcMain.handle('skills:importScanned', (_event, filePath: string): Skill => {
+    assertPathAllowed(filePath)
+    const db = getDb()
+    const parsed = parseSkillFile(filePath)
+    const now = Date.now()
+    const id = `skill-${now}-${Math.random().toString(36).slice(2, 8)}`
+    const rootDir = dirname(resolve(filePath))
+
+    db.prepare(`
+      INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, installed_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, parsed.name, parsed.format, parsed.version, JSON.stringify(parsed.tags),
+      parsed.yamlFrontmatter, parsed.markdownContent, resolve(filePath), rootDir, 'single', now, now)
+
+    return { id, ...parsed, rootDir, skillType: 'single' as SkillType, installedAt: now, updatedAt: now }
+  })
+
+  // Export a skill to an AI tool's directory
+  ipcMain.handle('skills:export', (_event, skillId: string, toolId: string, mode: 'copy' | 'symlink') => {
+    const db = getDb()
+    const row = db.prepare('SELECT file_path, name FROM skills WHERE id = ?').get(skillId) as Record<string, unknown> | undefined
+    if (!row) throw new Error(`Skill ${skillId} not found`)
+
+    const r = resolveToolDir(toolId)
+    if (!r) throw new Error(`Unknown tool: ${toolId}`)
+
+    // Security: target must be under home directory
+    const home = resolve(app.getPath('home'))
+    if (!r.exportDir.startsWith(home)) throw new Error('Export path must be within home directory')
+
+    mkdirSync(r.exportDir, { recursive: true })
+
+    const srcPath = resolve(row.file_path as string)
+    const safeName = (row.name as string).replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '-').toLowerCase() || 'skill'
+    const destPath = join(r.exportDir, `${safeName}${r.ext}`)
+
+    if (mode === 'copy') {
+      const content = readFileSync(srcPath, 'utf-8')
+      writeFileSync(destPath, content, 'utf-8')
+    } else {
+      // Remove existing symlink/file at dest if present
+      try { require('fs').unlinkSync(destPath) } catch { /* not found */ }
+      symlinkSync(srcPath, destPath)
+    }
   })
 }

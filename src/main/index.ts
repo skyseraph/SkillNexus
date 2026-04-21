@@ -53,6 +53,9 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+}).catch((err) => {
+  console.error('App failed to initialize:', err)
+  app.quit()
 })
 
 app.on('window-all-closed', () => {

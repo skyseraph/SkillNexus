@@ -4,10 +4,14 @@ import type { AIProvider, AIRequestOptions, AIResponse } from './types'
 export class AnthropicProvider implements AIProvider {
   name = 'anthropic'
   private client: Anthropic | null = null
+  private currentKey: string | undefined = undefined
 
   private getClient(): Anthropic {
-    if (!this.client) {
-      this.client = new Anthropic()
+    const key = process.env.ANTHROPIC_API_KEY
+    // Refresh client if key changed
+    if (!this.client || key !== this.currentKey) {
+      this.client = new Anthropic({ apiKey: key })
+      this.currentKey = key
     }
     return this.client
   }

@@ -1,6 +1,8 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../db'
 import { getAIProvider } from '../services/ai-provider'
+import { getConfig } from './config.handler'
+import { insertEvalHistory } from '../services/eval-history'
 import { getMainWindow } from '../index'
 import type { EvalScore } from '../../shared/types'
 
@@ -30,9 +32,10 @@ async function judgeOneDimension(
   output: string
 ): Promise<EvalScore> {
   const provider = getAIProvider()
+  const model = getConfig().defaultModel
   const result = await withTimeout(
     provider.call({
-      model: 'claude-haiku-4-5-20251001',
+      model,
       systemPrompt: JUDGE_SYSTEM_PROMPT,
       userMessage: `Dimension: ${dimension}\n\nSkill:\n${skillContent}\n\nInput:\n${input}\n\nOutput:\n${output}`
     }),
@@ -71,9 +74,10 @@ export function registerEvalHandlers(): void {
       return jobId
     }
 
-    setImmediate(async () => {
-      let completed = 0
-      for (const tc of testCases) {
+    setImmediate(() => {
+      (async () => {
+        let completed = 0
+        for (const tc of testCases) {
         const start = Date.now()
         let status: 'success' | 'error' = 'success'
         let errorMsg = ''
@@ -83,11 +87,12 @@ export function registerEvalHandlers(): void {
 
         try {
           const provider = getAIProvider()
+          const model = getConfig().defaultModel
 
           // SEC-06: timeout on AI call
           const response = await withTimeout(
             provider.call({
-              model: 'claude-haiku-4-5-20251001',
+              model,
               systemPrompt: skill.markdown_content as string,
               userMessage: tc.input as string
             }),
@@ -111,21 +116,15 @@ export function registerEvalHandlers(): void {
         }
 
         // PROD-01: always write history record — even on error
-        const evalId = `er-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-        const now = Date.now()
-        db.prepare(`
-          INSERT INTO eval_history (id, skill_id, model, provider, input_prompt, output, scores, total_score, duration_ms, status, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          evalId, skillId, 'claude-haiku-4-5-20251001', 'anthropic',
-          tc.input as string,
-          status === 'error' ? errorMsg : output,
-          JSON.stringify(scores),
+        insertEvalHistory({
+          skillId,
+          input: tc.input as string,
+          output: status === 'error' ? errorMsg : output,
+          scores,
           totalScore,
-          Date.now() - start,
-          status,
-          now
-        )
+          durationMs: Date.now() - start,
+          status
+        })
 
         completed++
         win?.webContents.send('eval:progress', {
@@ -134,6 +133,9 @@ export function registerEvalHandlers(): void {
           message: `Evaluated ${completed}/${testCases.length}${status === 'error' ? ' (error)' : ''}`
         })
       }
+      })().catch((err) => {
+        win?.webContents.send('eval:progress', { jobId, progress: 100, message: `Fatal error: ${err instanceof Error ? err.message : String(err)}` })
+      })
     })
 
     return jobId
