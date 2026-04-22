@@ -52,7 +52,8 @@ CREATE INDEX IF NOT EXISTS idx_eval_history_created_at ON eval_history(created_a
 // Runtime migration for existing DBs that predate root_dir/skill_type columns
 const MIGRATIONS = [
   `ALTER TABLE skills ADD COLUMN root_dir TEXT NOT NULL DEFAULT ''`,
-  `ALTER TABLE skills ADD COLUMN skill_type TEXT NOT NULL DEFAULT 'single'`
+  `ALTER TABLE skills ADD COLUMN skill_type TEXT NOT NULL DEFAULT 'single'`,
+  `ALTER TABLE skills ADD COLUMN trust_level INTEGER NOT NULL DEFAULT 1`
 ]
 
 export function initDatabase(): Database.Database {

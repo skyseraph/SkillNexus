@@ -1,7 +1,8 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../db'
 import { getAIProvider } from '../services/ai-provider'
-import { getConfig } from './config.handler'
+import { getActiveModel } from './config.handler'
+import { withTimeout, AI_TIMEOUT_MS } from '../services/eval-job'
 import type { TestCase } from '../../shared/types'
 
 const GENERATE_TC_PROMPT = `You are an expert at writing test cases for AI Skills.
@@ -60,13 +61,16 @@ export function registerTestCasesHandlers(): void {
     if (!skill) throw new Error(`Skill ${skillId} not found`)
 
     const provider = getAIProvider()
-    const cfg = getConfig()
-    const result = await provider.call({
-      model: cfg.defaultModel,
-      systemPrompt: GENERATE_TC_PROMPT,
-      userMessage: `Skill name: ${skill.name as string}\n\nSkill content:\n${skill.markdown_content as string}\n\nGenerate ${count} test cases.`,
-      maxTokens: 2048
-    })
+    const result = await withTimeout(
+      provider.call({
+        model: getActiveModel(),
+        systemPrompt: GENERATE_TC_PROMPT,
+        userMessage: `Skill name: ${skill.name as string}\n\nSkill content:\n${skill.markdown_content as string}\n\nGenerate ${count} test cases.`,
+        maxTokens: 2048
+      }),
+      AI_TIMEOUT_MS,
+      'testcases:generate'
+    )
 
     // Parse NDJSON lines
     const created: TestCase[] = []

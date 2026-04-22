@@ -1,11 +1,11 @@
-import { ipcMain, dialog } from 'electron'
+import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { getDb } from '../db'
-import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, symlinkSync, existsSync } from 'fs'
+import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, symlinkSync, existsSync, unlinkSync } from 'fs'
 import { basename, resolve, extname, join, relative, dirname } from 'path'
 import { app } from 'electron'
 import yaml from 'js-yaml'
 import { getConfig } from './config.handler'
-import type { Skill, SkillFileEntry, SkillType, ToolTarget, ScannedSkill } from '../../shared/types'
+import type { Skill, SkillFileEntry, SkillType, ToolTarget, ScannedSkill, ScanResult } from '../../shared/types'
 
 // ── Security: allowed root directories ───────────────────────────────────────
 const ALLOWED_PATH_PREFIXES = () => [
@@ -168,6 +168,7 @@ function rowToSkill(r: Record<string, unknown>): Skill {
     filePath: r.file_path as string,
     rootDir: (r.root_dir as string) || dirname(r.file_path as string),
     skillType: ((r.skill_type as string) || 'single') as SkillType,
+    trustLevel: ((r.trust_level as number) || 1) as 1 | 2 | 3 | 4,
     installedAt: r.installed_at as number,
     updatedAt: r.updated_at as number
   }
@@ -178,10 +179,10 @@ export function registerSkillsHandlers(): void {
 
   // Open native file/dir picker — returns selected path or null
   ipcMain.handle('skills:openDialog', async (_event, mode: 'file' | 'dir') => {
-    const result = await dialog.showOpenDialog({
-      properties: mode === 'dir'
-        ? ['openDirectory']
-        : ['openFile'],
+    const win = BrowserWindow.getAllWindows()[0]
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
+      properties: mode === 'dir' ? ['openDirectory'] : ['openFile'],
       filters: mode === 'file' ? [{ name: 'Skill', extensions: ['md'] }] : []
     })
     return result.canceled ? null : result.filePaths[0]
@@ -190,7 +191,14 @@ export function registerSkillsHandlers(): void {
   // List all installed skills
   ipcMain.handle('skills:getAll', () => {
     const db = getDb()
-    const rows = db.prepare('SELECT * FROM skills ORDER BY installed_at DESC').all() as Record<string, unknown>[]
+    const rows = db.prepare(`
+      SELECT * FROM skills
+      WHERE root_dir NOT LIKE '%three-condition%'
+        AND root_dir NOT LIKE '%evolved%'
+        AND id NOT LIKE 'skill-noskill-%'
+        AND id NOT LIKE 'skill-gen-%'
+      ORDER BY installed_at DESC
+    `).all() as Record<string, unknown>[]
     return rows.map(rowToSkill)
   })
 
@@ -206,12 +214,12 @@ export function registerSkillsHandlers(): void {
     const rootDir = dirname(resolve(filePath))
 
     db.prepare(`
-      INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, installed_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, trust_level, installed_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, parsed.name, parsed.format, parsed.version, JSON.stringify(parsed.tags),
-      parsed.yamlFrontmatter, parsed.markdownContent, parsed.filePath, rootDir, 'single', now, now)
+      parsed.yamlFrontmatter, parsed.markdownContent, parsed.filePath, rootDir, 'single', 1, now, now)
 
-    return { id, ...parsed, rootDir, skillType: 'single' as SkillType, installedAt: now, updatedAt: now }
+    return { id, ...parsed, rootDir, skillType: 'single' as SkillType, trustLevel: 1 as const, installedAt: now, updatedAt: now }
   })
 
   // Install agent skill from directory
@@ -224,12 +232,12 @@ export function registerSkillsHandlers(): void {
     const id = `skill-${now}-${Math.random().toString(36).slice(2, 8)}`
 
     db.prepare(`
-      INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, installed_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, trust_level, installed_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, parsed.name, parsed.format, parsed.version, JSON.stringify(parsed.tags),
-      parsed.yamlFrontmatter, parsed.markdownContent, parsed.filePath, parsed.rootDir, 'agent', now, now)
+      parsed.yamlFrontmatter, parsed.markdownContent, parsed.filePath, parsed.rootDir, 'agent', 1, now, now)
 
-    return { id, ...parsed, installedAt: now, updatedAt: now }
+    return { id, ...parsed, trustLevel: 1 as const, installedAt: now, updatedAt: now }
   })
 
   // Uninstall
@@ -307,19 +315,24 @@ export function registerSkillsHandlers(): void {
   })
 
   // Scan local AI tools for skills not yet imported
-  ipcMain.handle('skills:scan', (): ScannedSkill[] => {
+  ipcMain.handle('skills:scan', (): ScanResult => {
     const db = getDb()
     const cfg = getConfig()
+    const home = app.getPath('home')
     const installedPaths = new Set(
       (db.prepare('SELECT file_path FROM skills').all() as { file_path: string }[]).map(r => r.file_path)
     )
-    const results: ScannedSkill[] = []
+    const skills: ScannedSkill[] = []
+    const scannedDirs: ScanResult['scannedDirs'] = []
 
     for (const toolId of Object.keys(TOOL_DEFAULTS)) {
-      // skip disabled tools (default: enabled)
       if (cfg.enabledTools?.[toolId] === false) continue
       const r = resolveToolDir(toolId)
-      if (!r || !existsSync(r.exportDir)) continue
+      if (!r) continue
+      const dirDisplay = r.exportDir.startsWith(home) ? '~' + r.exportDir.slice(home.length) : r.exportDir
+      const exists = existsSync(r.exportDir)
+      scannedDirs.push({ toolName: r.name, dir: dirDisplay, exists })
+      if (!exists) continue
       let entries: string[]
       try { entries = readdirSync(r.exportDir) } catch { continue }
 
@@ -340,16 +353,10 @@ export function registerSkillsHandlers(): void {
           }
         } catch { /* use filename as name */ }
 
-        results.push({
-          name,
-          filePath,
-          toolId,
-          toolName: r.name,
-          alreadyInstalled: installedPaths.has(filePath)
-        })
+        skills.push({ name, filePath, toolId, toolName: r.name, alreadyInstalled: installedPaths.has(filePath) })
       }
     }
-    return results
+    return { skills, scannedDirs }
   })
 
   // Import a scanned skill (already on disk, just DB register)
@@ -362,12 +369,12 @@ export function registerSkillsHandlers(): void {
     const rootDir = dirname(resolve(filePath))
 
     db.prepare(`
-      INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, installed_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, trust_level, installed_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, parsed.name, parsed.format, parsed.version, JSON.stringify(parsed.tags),
-      parsed.yamlFrontmatter, parsed.markdownContent, resolve(filePath), rootDir, 'single', now, now)
+      parsed.yamlFrontmatter, parsed.markdownContent, resolve(filePath), rootDir, 'single', 1, now, now)
 
-    return { id, ...parsed, rootDir, skillType: 'single' as SkillType, installedAt: now, updatedAt: now }
+    return { id, ...parsed, rootDir, skillType: 'single' as SkillType, trustLevel: 1 as const, installedAt: now, updatedAt: now }
   })
 
   // Export a skill to an AI tool's directory
@@ -394,7 +401,7 @@ export function registerSkillsHandlers(): void {
       writeFileSync(destPath, content, 'utf-8')
     } else {
       // Remove existing symlink/file at dest if present
-      try { require('fs').unlinkSync(destPath) } catch { /* not found */ }
+      try { unlinkSync(destPath) } catch { /* not found */ }
       symlinkSync(srcPath, destPath)
     }
   })

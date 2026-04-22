@@ -12,8 +12,19 @@ const GH_RAW = 'https://raw.githubusercontent.com'
 // Default search: repos tagged with skill-related topics
 const DEFAULT_QUERY = 'topic:claude-skill topic:ai-skill topic:llm-skill topic:claude-code-skill'
 
+const FETCH_TIMEOUT_MS = 15_000
+
+function withFetchTimeout<T>(promise: Promise<T>): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Network request timed out')), FETCH_TIMEOUT_MS)
+    )
+  ])
+}
+
 function fetchJson(url: string): Promise<unknown> {
-  return new Promise((resolve, reject) => {
+  return withFetchTimeout(new Promise((resolve, reject) => {
     const req = net.request({ url, method: 'GET' })
     req.setHeader('Accept', 'application/vnd.github+json')
     req.setHeader('User-Agent', 'SkillNexus/1.0')
@@ -40,11 +51,11 @@ function fetchJson(url: string): Promise<unknown> {
     })
     req.on('error', reject)
     req.end()
-  })
+  }))
 }
 
 function fetchText(url: string): Promise<string> {
-  return new Promise((resolve, reject) => {
+  return withFetchTimeout(new Promise((resolve, reject) => {
     const req = net.request({ url, method: 'GET' })
     req.setHeader('User-Agent', 'SkillNexus/1.0')
     const chunks: Buffer[] = []
@@ -61,7 +72,7 @@ function fetchText(url: string): Promise<string> {
     })
     req.on('error', reject)
     req.end()
-  })
+  }))
 }
 
 function repoToMarketSkill(repo: Record<string, unknown>): MarketSkill {
@@ -127,8 +138,8 @@ export function registerMarketplaceHandlers(): void {
     const name = (frontmatter.name as string) || skill.name
 
     db.prepare(`
-      INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, installed_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, trust_level, installed_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, name,
       (frontmatter.format as string) || 'markdown',
@@ -139,6 +150,7 @@ export function registerMarketplaceHandlers(): void {
       filePath,
       rootDir,
       'single',
+      1,
       now,
       now
     )
@@ -153,6 +165,7 @@ export function registerMarketplaceHandlers(): void {
       filePath,
       rootDir,
       skillType: 'single' as SkillType,
+      trustLevel: 1 as const,
       installedAt: now,
       updatedAt: now
     }

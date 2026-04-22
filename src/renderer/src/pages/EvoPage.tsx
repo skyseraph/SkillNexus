@@ -92,7 +92,7 @@ export default function EvoPage() {
 
   useEffect(() => {
     window.api.skills.getAll().then(setSkills)
-    window.api.config.get().then((c) => setApiKeySet(c.anthropicApiKeySet || c.openaiApiKeySet))
+    window.api.config.get().then((c) => setApiKeySet(c.providers.length > 0))
   }, [])
 
   const loadSkill = useCallback(async (id: string) => {
@@ -130,6 +130,7 @@ export default function EvoPage() {
       const eScores = avgScores(evolvedH)
       if (Object.keys(eScores).length > 0 || attempts >= maxAttempts) {
         clearInterval(interval)
+        cleanupRef.current = null
         setOrigScores(oScores)
         setEvolvedScores(eScores)
         setPhase('done')
@@ -137,8 +138,8 @@ export default function EvoPage() {
         setEvalProgress(Math.min(90, attempts * 3))
       }
     }, 2000)
-    return () => clearInterval(interval)
-  }, [selectedId])
+    cleanupRef.current = () => clearInterval(interval)
+  }, [selectedId, cleanupRef])
 
   const handleEvolve = async () => {
     if (!selectedId) return

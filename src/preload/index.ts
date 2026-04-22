@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Skill, SkillFileEntry, TestCase, EvalResult, AppConfigPublic, AppConfig, ScannedSkill, ToolTarget, MarketSkill, EvoRunResult, LLMProvider } from '../shared/types'
+import type { Skill, SkillFileEntry, TestCase, EvalResult, AppConfigPublic, AppConfig, ScannedSkill, ScanResult, ToolTarget, MarketSkill, EvoRunResult, LLMProvider, ThreeConditionResult, SkillRankEntry, SkillScore5D } from '../shared/types'
 
 const api = {
   skills: {
@@ -10,7 +10,7 @@ const api = {
     listFiles: (skillId: string): Promise<SkillFileEntry[]> => ipcRenderer.invoke('skills:listFiles', skillId),
     readFile: (filePath: string, skillId: string): Promise<string> => ipcRenderer.invoke('skills:readFile', filePath, skillId),
     openDialog: (mode: 'file' | 'dir'): Promise<string | null> => ipcRenderer.invoke('skills:openDialog', mode),
-    scan: (): Promise<ScannedSkill[]> => ipcRenderer.invoke('skills:scan'),
+    scan: (): Promise<ScanResult> => ipcRenderer.invoke('skills:scan'),
     importScanned: (filePath: string): Promise<Skill> => ipcRenderer.invoke('skills:importScanned', filePath),
     export: (skillId: string, toolId: string, mode: 'copy' | 'symlink'): Promise<void> =>
       ipcRenderer.invoke('skills:export', skillId, toolId, mode),
@@ -25,9 +25,14 @@ const api = {
       ipcRenderer.invoke('eval:start', skillId, testCaseIds),
     history: (skillId: string): Promise<EvalResult[]> =>
       ipcRenderer.invoke('eval:history', skillId),
+    historyAll: (): Promise<SkillRankEntry[]> =>
+      ipcRenderer.invoke('eval:historyAll'),
+    startThreeCondition: (skillId: string, testCaseIds: string[]): Promise<ThreeConditionResult> =>
+      ipcRenderer.invoke('eval:startThreeCondition', skillId, testCaseIds),
     onProgress: (cb: (data: { jobId: string; progress: number; message: string }) => void) => {
-      ipcRenderer.on('eval:progress', (_event, data) => cb(data))
-      return () => ipcRenderer.removeAllListeners('eval:progress')
+      const handler = (_event: Electron.IpcRendererEvent, data: { jobId: string; progress: number; message: string }) => cb(data)
+      ipcRenderer.on('eval:progress', handler)
+      return () => ipcRenderer.removeListener('eval:progress', handler)
     }
   },
   studio: {
@@ -38,9 +43,16 @@ const api = {
       ipcRenderer.invoke('studio:generateFromExamples', examples, description),
     install: (content: string, name: string): Promise<Skill> =>
       ipcRenderer.invoke('studio:install', content, name),
-    onChunk: (cb: (data: { chunk: string; done: boolean }) => void) => {
-      ipcRenderer.on('studio:chunk', (_event, data) => cb(data))
-      return () => ipcRenderer.removeAllListeners('studio:chunk')
+    extract: (conversation: string): Promise<void> =>
+      ipcRenderer.invoke('studio:extract', conversation),
+    scoreSkill: (content: string): Promise<SkillScore5D> =>
+      ipcRenderer.invoke('studio:scoreSkill', content),
+    similarSkills: (content: string): Promise<Skill[]> =>
+      ipcRenderer.invoke('studio:similarSkills', content),
+    onChunk: (cb: (data: { chunk: string; done: boolean; noSkill?: boolean }) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: { chunk: string; done: boolean; noSkill?: boolean }) => cb(data)
+      ipcRenderer.on('studio:chunk', handler)
+      return () => ipcRenderer.removeListener('studio:chunk', handler)
     }
   },
   testcases: {
@@ -67,6 +79,9 @@ const api = {
       ipcRenderer.invoke('config:deleteProvider', id),
     setActive: (id: string): Promise<void> =>
       ipcRenderer.invoke('config:setActive', id)
+  },
+  shell: {
+    openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url)
   }
 }
 

@@ -218,7 +218,7 @@ export default function TestCasePage() {
 
   useEffect(() => {
     window.api.skills.getAll().then(setSkills)
-    window.api.config.get().then((c) => setApiKeySet(c.anthropicApiKeySet || c.openaiApiKeySet))
+    window.api.config.get().then((c) => setApiKeySet(c.providers.length > 0))
   }, [])
 
   useEffect(() => {

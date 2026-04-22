@@ -1,5 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import type { Skill, SkillFileEntry, ToolTarget, ScannedSkill, MarketSkill } from '../../../shared/types'
+import type { Skill, SkillFileEntry, ToolTarget, ScannedSkill, ScanResult, MarketSkill } from '../../../shared/types'
+
+type ViewMode = 'grid' | 'list'
+type SortMode = 'newest' | 'oldest' | 'name'
 
 // ── File tree helpers ─────────────────────────────────────────────────────────
 
@@ -76,10 +79,27 @@ function TreeNodeView({ node, depth, selectedPath, onSelect, expandedPaths, onTo
   )
 }
 
+function renderMarkdown(md: string): string {
+  return md
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^```[\w]*\n([\s\S]*?)^```/gm, '<pre><code>$1</code></pre>')
+    .replace(/^\s*[-*] (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, s => `<ul>${s}</ul>`)
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="#" data-href="$2">$1</a>')
+    .replace(/^(?!<[hupla]|<pre|<li|<ul|<\/ul)(.+)$/gm, '<p>$1</p>')
+}
+
 function FileViewer({ skill, file }: { skill: Skill; file: SkillFileEntry | null }) {
   const [content, setContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [renderMd, setRenderMd] = useState(true)
 
   useEffect(() => {
     if (!file || file.isDir) { setContent(null); return }
@@ -88,6 +108,8 @@ function FileViewer({ skill, file }: { skill: Skill; file: SkillFileEntry | null
       .then(c => { setContent(c); setLoading(false) })
       .catch(e => { setError(String(e)); setLoading(false) })
   }, [file?.path, skill.id])
+
+  const isMd = file && ['.md', '.mdc'].includes(file.ext.toLowerCase())
 
   if (!file) return <div className="viewer-empty">Select a file to view its content</div>
   if (file.isDir) return <div className="viewer-empty">📁 {file.name}/</div>
@@ -99,26 +121,37 @@ function FileViewer({ skill, file }: { skill: Skill; file: SkillFileEntry | null
         <span>{fileIcon(file)}</span>
         <span className="viewer-filename">{file.relativePath}</span>
         <span className="viewer-lang">{langFromExt(file.ext)}</span>
+        {isMd && (
+          <button className="viewer-toggle-btn" onClick={() => setRenderMd(v => !v)}>
+            {renderMd ? 'Raw' : 'Preview'}
+          </button>
+        )}
       </div>
-      <pre className="viewer-pre">{content}</pre>
+      {isMd && renderMd && content !== null
+        ? <div className="viewer-md" dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} onClick={e => {
+            const a = (e.target as HTMLElement).closest('a[data-href]')
+            if (a) { e.preventDefault(); window.api.shell.openExternal(a.getAttribute('data-href')!) }
+          }} />
+        : <pre className="viewer-pre">{content}</pre>
+      }
     </div>
   )
 }
 
-function ExportTab({ skill }: { skill: Skill }) {
+function ExportTab({ skill, toast }: { skill: Skill; toast?: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
   const [targets, setTargets] = useState<ToolTarget[]>([])
-  const [status, setStatus] = useState<Record<string, { ok: boolean; msg: string }>>({})
 
   useEffect(() => {
     window.api.skills.getToolTargets().then(setTargets)
   }, [])
 
   const doExport = async (toolId: string, mode: 'copy' | 'symlink') => {
+    const toolName = targets.find(t => t.id === toolId)?.name ?? toolId
     try {
       await window.api.skills.export(skill.id, toolId, mode)
-      setStatus(s => ({ ...s, [toolId]: { ok: true, msg: `${mode === 'copy' ? 'Copied' : 'Symlinked'} ✓` } }))
+      toast?.(`Exported to ${toolName} (${mode})`, 'success')
     } catch (e) {
-      setStatus(s => ({ ...s, [toolId]: { ok: false, msg: String(e) } }))
+      toast?.(String(e), 'error')
     }
   }
 
@@ -134,9 +167,6 @@ function ExportTab({ skill }: { skill: Skill }) {
               <span className="tool-dir">{t.exportDirDisplay}</span>
             </div>
             <div className="export-actions">
-              {status[t.id] && (
-                <span className={`export-status ${status[t.id].ok ? 'ok' : 'err'}`}>{status[t.id].msg}</span>
-              )}
               <button className="btn btn-xs" onClick={() => doExport(t.id, 'copy')} title="Copy file">Copy</button>
               <button className="btn btn-xs btn-ghost" onClick={() => doExport(t.id, 'symlink')} title="Create symlink">Symlink</button>
             </div>
@@ -147,8 +177,9 @@ function ExportTab({ skill }: { skill: Skill }) {
   )
 }
 
-function SkillDrawer({ skill, onClose, onUninstall }: {
+function SkillDrawer({ skill, onClose, onUninstall, toast }: {
   skill: Skill; onClose: () => void; onUninstall: (id: string) => void
+  toast?: (msg: string, type?: 'success' | 'error' | 'info') => void
 }) {
   const [files, setFiles] = useState<SkillFileEntry[]>([])
   const [filesLoading, setFilesLoading] = useState(true)
@@ -249,7 +280,7 @@ function SkillDrawer({ skill, onClose, onUninstall }: {
             </div>
           )}
 
-          {activeTab === 'export' && <ExportTab skill={skill} />}
+          {activeTab === 'export' && <ExportTab skill={skill} toast={toast} />}
         </div>
       </div>
     </>
@@ -264,14 +295,16 @@ function ScanModal({ onClose, onImport }: {
 }) {
   const [scanning, setScanning] = useState(true)
   const [results, setResults] = useState<ScannedSkill[]>([])
+  const [scannedDirs, setScannedDirs] = useState<ScanResult['scannedDirs']>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [importing, setImporting] = useState(false)
   const [importStatus, setImportStatus] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     window.api.skills.scan().then(r => {
-      setResults(r)
-      setSelected(new Set(r.filter(s => !s.alreadyInstalled).map(s => s.filePath)))
+      setResults(r.skills)
+      setScannedDirs(r.scannedDirs)
+      setSelected(new Set(r.skills.filter(s => !s.alreadyInstalled).map(s => s.filePath)))
       setScanning(false)
     })
   }, [])
@@ -314,7 +347,19 @@ function ScanModal({ onClose, onImport }: {
           {scanning ? (
             <div className="scan-loading">Scanning installed AI tools...</div>
           ) : results.length === 0 ? (
-            <div className="scan-empty">No Skills found in local AI tool directories.<br/>Install AI tools like Claude Code or Cursor to find existing skills.</div>
+            <div className="scan-empty">
+              <p>No Skills found in local AI tool directories.</p>
+              <div className="scan-dirs">
+                {scannedDirs.map(d => (
+                  <div key={d.dir} className={`scan-dir-row ${d.exists ? 'exists' : 'missing'}`}>
+                    <span className="scan-dir-dot" />
+                    <span className="scan-dir-name">{d.toolName}</span>
+                    <span className="scan-dir-path">{d.dir}</span>
+                    <span className="scan-dir-status">{d.exists ? 'found' : 'not found'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : (
             Object.entries(byTool).map(([toolName, skills]) => (
               <div key={toolName} className="scan-group">
@@ -350,125 +395,345 @@ function ScanModal({ onClose, onImport }: {
 
 // ── My Skills Tab ─────────────────────────────────────────────────────────────
 
-function SkillCard({ skill, onClick }: { skill: Skill; onClick: () => void }) {
+function skillDesc(skill: Skill): string {
+  return skill.markdownContent.trim().split('\n').find(l => l.trim() && !l.startsWith('#'))?.trim().slice(0, 80) || ''
+}
+
+function QuickExportBtn({ skill, toast }: { skill: Skill; toast?: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
+  const [open, setOpen] = useState(false)
+  const [targets, setTargets] = useState<ToolTarget[]>([])
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    window.api.skills.getToolTargets().then(setTargets)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const doExport = async (e: React.MouseEvent, toolId: string) => {
+    e.stopPropagation()
+    const toolName = targets.find(t => t.id === toolId)?.name ?? toolId
+    try {
+      await window.api.skills.export(skill.id, toolId, 'copy')
+      toast?.(`Exported to ${toolName}`, 'success')
+      setOpen(false)
+    } catch (err) {
+      toast?.(String(err), 'error')
+    }
+  }
+
   return (
-    <div className="skill-card" onClick={onClick}>
+    <div ref={ref} style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+      <button className="card-del-btn" title="Quick export" onClick={e => { e.stopPropagation(); setOpen(v => !v) }}>↗</button>
+      {open && (
+        <div className="quick-export-popover">
+          <div className="qe-title">Export to</div>
+          {targets.length === 0 && <div className="qe-empty">No tools configured</div>}
+          {targets.map(t => (
+            <button key={t.id} className="qe-row" onClick={e => doExport(e, t.id)}>
+              <span className={`tool-dot ${t.exists ? 'exists' : ''}`} />
+              <span className="qe-name">{t.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Context Menu ─────────────────────────────────────────────────────────────
+
+interface CtxMenuState { x: number; y: number; skill: Skill }
+
+function SkillCtxMenu({ state, onClose, onCardClick, onUninstall, onNavigate }: {
+  state: CtxMenuState
+  onClose: () => void
+  onCardClick: (s: Skill) => void
+  onUninstall: (id: string) => void
+  onNavigate?: (page: string) => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose() }
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('mousedown', h)
+    document.addEventListener('keydown', k)
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k) }
+  }, [onClose])
+
+  const go = (page: string) => { onClose(); onNavigate?.(page) }
+
+  return (
+    <div ref={ref} className="ctx-menu" style={{ left: state.x, top: state.y }}>
+      <button className="ctx-item" onMouseDown={e => { e.preventDefault(); onClose(); onCardClick(state.skill) }}>🔍 View Details</button>
+      <button className="ctx-item" onMouseDown={e => { e.preventDefault(); go('eval') }}>📊 Eval</button>
+      <button className="ctx-item" onMouseDown={e => { e.preventDefault(); go('testcase') }}>🧪 TestCase</button>
+      <button className="ctx-item" onMouseDown={e => { e.preventDefault(); go('evo') }}>⚡ Evolve</button>
+      <div className="ctx-sep" />
+      <button className="ctx-item ctx-danger" onMouseDown={e => { e.preventDefault(); onClose(); onUninstall(state.skill.id) }}>🗑 Uninstall</button>
+    </div>
+  )
+}
+
+function SkillCard({ skill, onClick, onUninstall, onCtxMenu, toast }: { skill: Skill; onClick: () => void; onUninstall: (id: string) => void; onCtxMenu: (e: React.MouseEvent, s: Skill) => void; toast?: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
+  const [confirm, setConfirm] = useState(false)
+  return (
+    <div className="skill-card" onClick={onClick} onContextMenu={e => { e.preventDefault(); onCtxMenu(e, skill) }}>
       <div className="card-icon">{skill.skillType === 'agent' ? '🤖' : '📝'}</div>
       <div className="card-body">
         <div className="card-name">{skill.name}</div>
-        {skill.markdownContent && (
-          <div className="card-desc">{skill.markdownContent.trim().split('\n').find(l => l.trim() && !l.startsWith('#'))?.trim().slice(0, 80) || ''}</div>
-        )}
+        {skill.markdownContent && <div className="card-desc">{skillDesc(skill)}</div>}
         <div className="card-footer">
           <span className="version-badge">v{skill.version}</span>
           <span className={`type-badge ${skill.skillType}`}>{skill.skillType === 'agent' ? 'Agent' : 'Single'}</span>
           {skill.tags.slice(0, 2).map(t => <span key={t} className="tag">#{t}</span>)}
         </div>
       </div>
+      <div className="card-actions" onClick={e => e.stopPropagation()}>
+        <QuickExportBtn skill={skill} toast={toast} />
+        <button
+          className={`card-del-btn ${confirm ? 'confirm' : ''}`}
+          title={confirm ? 'Click again to confirm' : 'Uninstall'}
+          onClick={() => { if (!confirm) { setConfirm(true); return } onUninstall(skill.id) }}
+          onBlur={() => setConfirm(false)}
+        >{confirm ? '✓' : '✕'}</button>
+      </div>
     </div>
   )
 }
 
-function MySkillsTab({ skills, loading, onInstallFile, onInstallDir, onCardClick, onScanDone, installing }: {
+function SkillRow({ skill, onClick, onUninstall, onCtxMenu, toast }: { skill: Skill; onClick: () => void; onUninstall: (id: string) => void; onCtxMenu: (e: React.MouseEvent, s: Skill) => void; toast?: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
+  const [confirm, setConfirm] = useState(false)
+  return (
+    <div className="skill-row" onClick={onClick} onContextMenu={e => { e.preventDefault(); onCtxMenu(e, skill) }}>
+      <span className="row-icon">{skill.skillType === 'agent' ? '🤖' : '📝'}</span>
+      <span className="row-name">{skill.name}</span>
+      <span className="row-desc">{skillDesc(skill)}</span>
+      <div className="row-meta">
+        <span className="version-badge">v{skill.version}</span>
+        <span className={`type-badge ${skill.skillType}`}>{skill.skillType === 'agent' ? 'Agent' : 'Single'}</span>
+        {skill.tags.slice(0, 3).map(t => <span key={t} className="tag">#{t}</span>)}
+      </div>
+      <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4 }}>
+        <QuickExportBtn skill={skill} toast={toast} />
+        <button
+          className={`card-del-btn ${confirm ? 'confirm' : ''}`}
+          title={confirm ? 'Click again to confirm' : 'Uninstall'}
+          onClick={e => { e.stopPropagation(); if (!confirm) { setConfirm(true); return } onUninstall(skill.id) }}
+          onBlur={() => setConfirm(false)}
+        >{confirm ? '✓' : '✕'}</button>
+      </div>
+    </div>
+  )
+}
+
+function MySkillsTab({ skills, loading, onInstallFile, onInstallDir, onCardClick, onScanDone, installing, onUninstall, onNavigate, toast }: {
   skills: Skill[]; loading: boolean; installing: boolean
   onInstallFile: () => void; onInstallDir: () => void
   onCardClick: (s: Skill) => void
   onScanDone: (added: Skill[]) => void
+  onUninstall: (id: string) => void
+  onNavigate?: (page: string) => void
+  toast?: (msg: string, type?: 'success' | 'error' | 'info') => void
 }) {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'single' | 'agent'>('all')
+  const [formatFilter, setFormatFilter] = useState<'all' | 'claude-code' | 'openclaw'>('all')
+  const [activeTags, setActiveTags] = useState<Set<string>>(new Set())
+  const [sortMode, setSortMode] = useState<SortMode>('newest')
+  const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  const [showAddMenu, setShowAddMenu] = useState(false)
   const [showScan, setShowScan] = useState(false)
+  const [ctxMenu, setCtxMenu] = useState<CtxMenuState | null>(null)
+  const addMenuRef = useRef<HTMLDivElement>(null)
 
-  const filtered = skills.filter(s => {
+  useEffect(() => {
+    if (!showAddMenu) return
+    const h = (e: MouseEvent) => {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
+        setShowAddMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', h, true)
+    return () => document.removeEventListener('mousedown', h, true)
+  }, [showAddMenu])
+
+  const allTags = Array.from(new Set(skills.flatMap(s => s.tags))).sort()
+
+  const toggleTag = (tag: string) => setActiveTags(prev => {
+    const n = new Set(prev); n.has(tag) ? n.delete(tag) : n.add(tag); return n
+  })
+
+  const sorted = [...skills].sort((a, b) => {
+    if (sortMode === 'newest') return b.installedAt - a.installedAt
+    if (sortMode === 'oldest') return a.installedAt - b.installedAt
+    return a.name.localeCompare(b.name)
+  })
+
+  const filtered = sorted.filter(s => {
     const q = search.toLowerCase()
     const matchSearch = !q || s.name.toLowerCase().includes(q) || s.tags.some(t => t.toLowerCase().includes(q))
     const matchType = typeFilter === 'all' || s.skillType === typeFilter
-    return matchSearch && matchType
+    const matchFormat = formatFilter === 'all' || (s as any).format === formatFilter
+    const matchTags = activeTags.size === 0 || [...activeTags].every(t => s.tags.includes(t))
+    return matchSearch && matchType && matchFormat && matchTags
   })
 
-  const handleScanImport = async (scanned: ScannedSkill[]) => {
-    // Reload all skills after import
+  const handleScanImport = async (_scanned: ScannedSkill[]) => {
+    setShowScan(false)
     const all = await window.api.skills.getAll()
     onScanDone(all)
-    setShowScan(false)
+  }
+
+  const ccCount = skills.filter(s => (s as any).format === 'claude-code').length
+  const ocCount = skills.filter(s => (s as any).format === 'openclaw').length
+  const handleCtxMenu = (e: React.MouseEvent, s: Skill) => {
+    const x = Math.min(e.clientX, window.innerWidth - 180)
+    const y = Math.min(e.clientY, window.innerHeight - 180)
+    setCtxMenu({ x, y, skill: s })
   }
 
   return (
-    <div className="tab-content">
-      <div className="toolbar">
-        <div className="search-wrap">
-          <span className="search-icon">🔍</span>
-          <input className="search-input" placeholder="Search skills..." value={search} onChange={e => setSearch(e.target.value)} />
-          {search && <button className="search-clear" onClick={() => setSearch('')}>✕</button>}
-        </div>
-        <div className="filter-chips">
-          {(['all', 'single', 'agent'] as const).map(t => (
-            <button key={t} className={`chip ${typeFilter === t ? 'active' : ''}`} onClick={() => setTypeFilter(t)}>
-              {t === 'all' ? 'All' : t.charAt(0).toUpperCase() + t.slice(1)}
-            </button>
-          ))}
-        </div>
-        <div className="toolbar-actions">
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowScan(true)} title="Scan local AI tool directories">
-            🔎 Scan Local
+    <div className="my-skills-root">
+      {/* Sidebar */}
+      <div className="skills-sidebar">
+        <div className="sidebar-section-label">Format</div>
+        {([['all', 'All', skills.length], ['claude-code', 'Claude Code', ccCount], ['openclaw', 'OpenClaw', ocCount]] as const).map(([val, label, count]) => (
+          <button key={val} className={`sidebar-filter-item ${formatFilter === val ? 'active' : ''}`} onClick={() => setFormatFilter(val)}>
+            <span className="sfi-dot" style={{ background: val === 'claude-code' ? 'var(--accent)' : val === 'openclaw' ? 'var(--accent2)' : 'var(--text)' }} />
+            <span className="sfi-label">{label}</span>
+            <span className="sfi-count">{count}</span>
           </button>
-          <button className="btn btn-primary btn-sm" onClick={onInstallFile} disabled={installing}>+ Skill</button>
-          <button className="btn btn-ghost btn-sm" onClick={onInstallDir} disabled={installing}>+ Agent</button>
-        </div>
+        ))}
+        <div className="sidebar-section-label" style={{ marginTop: 16 }}>Quick</div>
+        <button className="sidebar-filter-item" onClick={() => window.api.skills.getAll().then(() => {})}>↺ Refresh</button>
       </div>
 
-      {loading ? (
-        <div className="loading-state">Loading skills...</div>
-      ) : filtered.length === 0 ? (
-        <div className="empty-state">
-          {skills.length === 0 ? (
-            <>
-              <div className="empty-icon">📦</div>
-              <p>No Skills installed yet</p>
-              <div className="empty-actions">
-                <button className="btn btn-primary" onClick={onInstallFile}>+ Install Skill</button>
-                <button className="btn btn-ghost" onClick={onInstallDir}>+ Install Agent</button>
-                <button className="btn btn-ghost" onClick={() => setShowScan(true)}>🔎 Scan Local Tools</button>
+      {/* Main */}
+      <div className="tab-content">
+        <div className="toolbar">
+          <div className="search-wrap">
+            <span className="search-icon">🔍</span>
+            <input className="search-input" placeholder="Search skills..." value={search} onChange={e => setSearch(e.target.value)} />
+            {search && <button className="search-clear" onClick={() => setSearch('')}>✕</button>}
+          </div>
+          <div className="filter-chips">
+            {(['all', 'single', 'agent'] as const).map(t => (
+              <button key={t} className={`chip ${typeFilter === t ? 'active' : ''}`} onClick={() => setTypeFilter(t)}>
+                {t === 'all' ? 'All' : t.charAt(0).toUpperCase() + t.slice(1)}
+              </button>
+            ))}
+          </div>
+          <select className="sort-select" value={sortMode} onChange={e => setSortMode(e.target.value as SortMode)}>
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="name">Name A→Z</option>
+          </select>
+          <div className="view-toggle">
+            <button className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')} title="Grid view">⊞</button>
+            <button className={`view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')} title="List view">☰</button>
+          </div>
+          <div className="toolbar-actions" ref={addMenuRef} style={{ position: 'relative' }}>
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={installing}
+              onMouseDown={e => { e.preventDefault(); setShowAddMenu(v => !v) }}
+            >+ Add ▾</button>
+            {showAddMenu && (
+              <div className="add-dropdown">
+                <button className="add-menu-item" onMouseDown={e => { e.preventDefault(); setShowAddMenu(false); onInstallFile() }}>📝 Install Skill (.md)</button>
+                <button className="add-menu-item" onMouseDown={e => { e.preventDefault(); setShowAddMenu(false); onInstallDir() }}>🤖 Install Agent (folder)</button>
+                <div className="add-menu-divider" />
+                <button className="add-menu-item" onMouseDown={e => { e.preventDefault(); setShowAddMenu(false); setShowScan(true) }}>🔎 Scan Local Tools</button>
               </div>
-            </>
-          ) : (
-            <p>No skills match your search</p>
-          )}
+            )}
+          </div>
         </div>
-      ) : (
-        <div className="skill-grid">
-          {filtered.map(s => <SkillCard key={s.id} skill={s} onClick={() => onCardClick(s)} />)}
-        </div>
-      )}
 
-      {showScan && <ScanModal onClose={() => setShowScan(false)} onImport={handleScanImport} />}
+        {allTags.length > 0 && (
+          <div className="tag-filter-row">
+            {allTags.map(tag => (
+              <button key={tag} className={`chip chip-sm ${activeTags.has(tag) ? 'active' : ''}`} onClick={() => toggleTag(tag)}>#{tag}</button>
+            ))}
+            {activeTags.size > 0 && <button className="chip chip-sm clear-tags" onClick={() => setActiveTags(new Set())}>✕ clear</button>}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="loading-state">Loading skills...</div>
+        ) : filtered.length === 0 ? (
+          <div className="empty-state">
+            {skills.length === 0 ? (
+              <>
+                <div className="empty-icon">📦</div>
+                <p>No Skills installed yet</p>
+                <div className="empty-actions">
+                  <button className="btn btn-primary" onClick={onInstallFile}>+ Install Skill</button>
+                  <button className="btn btn-ghost" onClick={onInstallDir}>+ Install Agent</button>
+                  <button className="btn btn-ghost" onClick={() => setShowScan(true)}>🔎 Scan Local Tools</button>
+                </div>
+              </>
+            ) : (
+              <p>No skills match your filters</p>
+            )}
+          </div>
+        ) : viewMode === 'grid' ? (
+          <div className="skill-grid">
+            {filtered.map(s => <SkillCard key={s.id} skill={s} onClick={() => onCardClick(s)} onUninstall={onUninstall} onCtxMenu={handleCtxMenu} toast={toast} />)}
+          </div>
+        ) : (
+          <div className="skill-list">
+            {filtered.map(s => <SkillRow key={s.id} skill={s} onClick={() => onCardClick(s)} onUninstall={onUninstall} onCtxMenu={handleCtxMenu} toast={toast} />)}
+          </div>
+        )}
+
+        {showScan && <ScanModal onClose={() => setShowScan(false)} onImport={handleScanImport} />}
+        {ctxMenu && <SkillCtxMenu state={ctxMenu} onClose={() => setCtxMenu(null)} onCardClick={onCardClick} onUninstall={onUninstall} onNavigate={onNavigate} />}
+      </div>
     </div>
   )
 }
 
 // ── Marketplace Tab ───────────────────────────────────────────────────────────
 
-function MarketCard({ skill, installed, onInstall }: {
-  skill: MarketSkill; installed: boolean; onInstall: () => void
+function MarketCard({ skill, installState, onInstall, onTopicClick }: {
+  skill: MarketSkill
+  installState: 'idle' | 'installing' | 'installed' | 'error'
+  onInstall: () => void
+  onTopicClick: (topic: string) => void
 }) {
+  const updatedAgo = skill.updatedAt ? (() => {
+    const diff = Date.now() - new Date(skill.updatedAt).getTime()
+    const d = Math.floor(diff / 86400000)
+    return d < 1 ? 'today' : d < 30 ? `${d}d ago` : d < 365 ? `${Math.floor(d/30)}mo ago` : `${Math.floor(d/365)}y ago`
+  })() : null
+
   return (
     <div className="skill-card market-card">
       <div className="card-icon">🌐</div>
       <div className="card-body">
         <div className="card-name-row">
           <span className="card-name">{skill.name}</span>
-          <a href="#" className="card-author" onClick={e => { e.preventDefault(); e.stopPropagation() }}>@{skill.author}</a>
+          <button className="card-author-link" onClick={e => { e.stopPropagation(); window.api.shell.openExternal(skill.htmlUrl) }}>@{skill.author} ↗</button>
         </div>
         {skill.description && <div className="card-desc">{skill.description.slice(0, 90)}</div>}
         <div className="card-footer">
           <span className="stars">⭐ {skill.stars}</span>
-          {skill.topics.slice(0, 2).map(t => <span key={t} className="tag">#{t}</span>)}
+          {updatedAgo && <span className="market-updated">{updatedAgo}</span>}
+          {skill.topics.slice(0, 3).map(t => (
+            <button key={t} className="tag tag-btn" onClick={e => { e.stopPropagation(); onTopicClick(t) }}>#{t}</button>
+          ))}
           <span style={{flex:1}} />
-          {installed ? (
-            <span className="installed-badge">✓ Installed</span>
-          ) : (
-            <button className="btn btn-xs btn-primary" onClick={e => { e.stopPropagation(); onInstall() }}>Install</button>
-          )}
+          {installState === 'installed' && <span className="installed-badge">✓ Installed</span>}
+          {installState === 'installing' && <span className="installed-badge installing">Installing...</span>}
+          {installState === 'error' && <span className="installed-badge error">✗ Failed</span>}
+          {installState === 'idle' && <button className="btn btn-xs btn-primary" onClick={e => { e.stopPropagation(); onInstall() }}>Install</button>}
         </div>
       </div>
     </div>
@@ -483,10 +748,11 @@ function MarketplaceTab({ installedSkills, onInstalled }: {
   const [results, setResults] = useState<MarketSkill[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [installing, setInstalling] = useState<string | null>(null)
+  const [installStates, setInstallStates] = useState<Record<string, 'installing' | 'installed' | 'error'>>({})
+  const [topicFilter, setTopicFilter] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const installedIds = new Set(installedSkills.map(s => s.name.toLowerCase()))
+  const installedNames = new Set(installedSkills.map(s => s.name.toLowerCase()))
 
   const doSearch = useCallback(async (q: string) => {
     setLoading(true); setError(null)
@@ -500,27 +766,32 @@ function MarketplaceTab({ installedSkills, onInstalled }: {
     }
   }, [])
 
-  useEffect(() => {
-    doSearch('')
-  }, [doSearch])
+  useEffect(() => { doSearch('') }, [doSearch])
 
   const handleSearch = (q: string) => {
-    setQuery(q)
+    setQuery(q); setTopicFilter(null)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => doSearch(q), 500)
   }
 
   const handleInstall = async (skill: MarketSkill) => {
-    setInstalling(skill.id)
+    setInstallStates(s => ({ ...s, [skill.id]: 'installing' }))
     try {
-      const s = await window.api.marketplace.install(skill)
-      onInstalled(s)
-    } catch (e) {
-      setError(`Install failed: ${e}`)
-    } finally {
-      setInstalling(null)
+      const installed = await window.api.marketplace.install(skill)
+      setInstallStates(s => ({ ...s, [skill.id]: 'installed' }))
+      onInstalled(installed)
+    } catch {
+      setInstallStates(s => ({ ...s, [skill.id]: 'error' }))
     }
   }
+
+  const getInstallState = (skill: MarketSkill): 'idle' | 'installing' | 'installed' | 'error' => {
+    if (installStates[skill.id]) return installStates[skill.id]
+    if (installedNames.has(skill.name.toLowerCase())) return 'installed'
+    return 'idle'
+  }
+
+  const displayed = topicFilter ? results.filter(s => s.topics.includes(topicFilter)) : results
 
   return (
     <div className="tab-content">
@@ -530,6 +801,11 @@ function MarketplaceTab({ installedSkills, onInstalled }: {
           <input className="search-input" placeholder="Search marketplace..." value={query} onChange={e => handleSearch(e.target.value)} />
           {query && <button className="search-clear" onClick={() => handleSearch('')}>✕</button>}
         </div>
+        {topicFilter && (
+          <div className="filter-chips">
+            <button className="chip active" onClick={() => setTopicFilter(null)}>#{topicFilter} ✕</button>
+          </div>
+        )}
         <button className="btn btn-ghost btn-sm" onClick={() => doSearch(query)}>Refresh</button>
       </div>
 
@@ -539,14 +815,14 @@ function MarketplaceTab({ installedSkills, onInstalled }: {
         <div className="skill-grid">
           {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skill-card skeleton" />)}
         </div>
-      ) : results.length === 0 ? (
+      ) : displayed.length === 0 ? (
         <div className="empty-state"><p>No results found. Try a different search.</p></div>
       ) : (
         <div className="skill-grid">
-          {results.map(s => (
-            <MarketCard key={s.id} skill={s}
-              installed={installedIds.has(s.name.toLowerCase()) || installing === s.id}
-              onInstall={() => handleInstall(s)} />
+          {displayed.map(s => (
+            <MarketCard key={s.id} skill={s} installState={getInstallState(s)}
+              onInstall={() => handleInstall(s)}
+              onTopicClick={t => setTopicFilter(prev => prev === t ? null : t)} />
           ))}
         </div>
       )}
@@ -556,7 +832,7 @@ function MarketplaceTab({ installedSkills, onInstalled }: {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-export default function HomePage() {
+export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, type?: 'success' | 'error' | 'info') => void; onNavigate?: (page: string) => void }) {
   const [skills, setSkills] = useState<Skill[]>([])
   const [loading, setLoading] = useState(true)
   const [installing, setInstalling] = useState(false)
@@ -568,44 +844,52 @@ export default function HomePage() {
   }, [])
 
   const handleInstallFile = async () => {
-    setInstalling(true)
+    console.log('[Add] handleInstallFile called')
     try {
       const path = await window.api.skills.openDialog('file')
-      if (path) {
-        const skill = await window.api.skills.install(path)
-        setSkills(prev => [skill, ...prev])
-        setDrawerSkill(skill)
-      }
+      console.log('[Add] openDialog returned:', path)
+      if (!path) return
+      setInstalling(true)
+      const skill = await window.api.skills.install(path)
+      setSkills(prev => [skill, ...prev])
+      setDrawerSkill(skill)
+      toast?.(`"${skill.name}" installed`, 'success')
     } catch (e) {
-      console.error('Install file failed:', e)
+      console.error('[Add] error:', e)
+      toast?.(String(e), 'error')
     } finally {
       setInstalling(false)
     }
   }
 
   const handleInstallDir = async () => {
-    setInstalling(true)
+    console.log('[Add] handleInstallDir called')
     try {
       const path = await window.api.skills.openDialog('dir')
-      if (path) {
-        const skill = await window.api.skills.installDir(path)
-        setSkills(prev => [skill, ...prev])
-        setDrawerSkill(skill)
-      }
+      console.log('[Add] openDialog returned:', path)
+      if (!path) return
+      setInstalling(true)
+      const skill = await window.api.skills.installDir(path)
+      setSkills(prev => [skill, ...prev])
+      setDrawerSkill(skill)
+      toast?.(`"${skill.name}" installed`, 'success')
     } catch (e) {
-      console.error('Install dir failed:', e)
+      console.error('[Add] error:', e)
+      toast?.(String(e), 'error')
     } finally {
       setInstalling(false)
     }
   }
 
   const handleUninstall = async (id: string) => {
+    const name = skills.find(s => s.id === id)?.name ?? 'Skill'
     try {
       await window.api.skills.uninstall(id)
       setSkills(prev => prev.filter(s => s.id !== id))
       setDrawerSkill(null)
+      toast?.(`"${name}" removed`, 'info')
     } catch (e) {
-      console.error('Uninstall failed:', e)
+      toast?.(String(e), 'error')
     }
   }
 
@@ -626,6 +910,9 @@ export default function HomePage() {
           onInstallFile={handleInstallFile} onInstallDir={handleInstallDir}
           onCardClick={setDrawerSkill}
           onScanDone={setSkills}
+          onUninstall={handleUninstall}
+          onNavigate={onNavigate}
+          toast={toast}
         />
       )}
 
@@ -641,6 +928,7 @@ export default function HomePage() {
           skill={drawerSkill}
           onClose={() => setDrawerSkill(null)}
           onUninstall={handleUninstall}
+          toast={toast}
         />
       )}
 
@@ -674,15 +962,44 @@ export default function HomePage() {
 
         /* Skill grid */
         .skill-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
-        .skill-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; cursor: pointer; transition: all var(--transition); display: flex; gap: 12px; }
+        .skill-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; cursor: pointer; transition: all var(--transition); display: flex; gap: 12px; position: relative; }
         .skill-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+        .skill-card:hover .card-actions { opacity: 1; }
+        .card-actions { position: absolute; top: 8px; right: 8px; opacity: 0; transition: opacity var(--transition); }
+        .card-del-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: 11px; padding: 2px 6px; cursor: pointer; transition: all var(--transition); }
+        .card-del-btn:hover { background: rgba(239,68,68,0.15); border-color: var(--danger); color: var(--danger); }
+        .card-del-btn.confirm { background: var(--danger); border-color: var(--danger); color: #fff; }
         .card-icon { font-size: 24px; flex-shrink: 0; line-height: 1; padding-top: 2px; }
         .card-body { flex: 1; min-width: 0; }
-        .card-name { font-size: 14px; font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .card-name { font-size: 14px; font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 20px; }
         .card-name-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
-        .card-author { font-size: 11px; color: var(--text-muted); text-decoration: none; }
+        .card-author-link { font-size: 11px; color: var(--text-muted); background: none; border: none; cursor: pointer; padding: 0; text-decoration: underline; }
+        .card-author-link:hover { color: var(--accent); }
         .card-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.45; }
         .card-footer { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+
+        /* Skill list view */
+        .skill-list { display: flex; flex-direction: column; gap: 4px; }
+        .skill-row { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; cursor: pointer; transition: all var(--transition); }
+        .skill-row:hover { border-color: var(--accent); background: var(--surface2); }
+        .row-icon { font-size: 16px; flex-shrink: 0; }
+        .row-name { font-size: 13px; font-weight: 600; flex-shrink: 0; min-width: 140px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .row-desc { font-size: 12px; color: var(--text-muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .row-meta { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+
+        /* Tag filter row */
+        .tag-filter-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 14px; margin-top: -6px; }
+        .chip-sm { padding: 3px 9px; font-size: 11px; }
+        .clear-tags { border-color: var(--danger); color: var(--danger); }
+        .clear-tags:hover { background: rgba(239,68,68,0.1); }
+
+        /* Sort + view toggle */
+        .sort-select { padding: 5px 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 12px; cursor: pointer; }
+        .sort-select:focus { outline: none; border-color: var(--accent); }
+        .view-toggle { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+        .view-btn { padding: 5px 9px; background: transparent; color: var(--text-muted); font-size: 14px; border: none; cursor: pointer; transition: all var(--transition); }
+        .view-btn:hover { color: var(--text); background: var(--surface); }
+        .view-btn.active { background: var(--accent); color: #fff; }
         .version-badge { font-size: 10px; color: var(--text-muted); background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; }
         .type-badge { font-size: 10px; border-radius: 3px; padding: 1px 6px; }
         .type-badge.agent { background: rgba(108,99,255,0.15); color: var(--accent); border: 1px solid rgba(108,99,255,0.3); }
@@ -690,6 +1007,42 @@ export default function HomePage() {
         .tag { font-size: 10px; color: var(--text-muted); background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; }
         .stars { font-size: 11px; color: var(--text-muted); }
         .installed-badge { font-size: 11px; color: var(--success); background: rgba(74,222,128,0.1); border: 1px solid var(--success); border-radius: 3px; padding: 1px 7px; }
+        .installed-badge.installing { color: var(--text-muted); background: var(--surface2); border-color: var(--border); }
+        .installed-badge.error { color: var(--danger); background: rgba(239,68,68,0.1); border-color: var(--danger); }
+        .market-updated { font-size: 11px; color: var(--text-muted); }
+        .tag-btn { background: none; border: 1px solid var(--border); cursor: pointer; color: var(--text-muted); border-radius: 3px; padding: 1px 6px; font-size: 11px; transition: all var(--transition); }
+        .tag-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(99,102,241,0.08); }
+
+        /* Quick export popover */
+        .quick-export-popover { position: absolute; top: calc(100% + 4px); right: 0; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px; min-width: 180px; z-index: 200; box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+        .qe-title { font-size: 11px; color: var(--text-muted); padding: 2px 6px 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        .qe-empty { font-size: 12px; color: var(--text-muted); padding: 4px 6px; }
+        .qe-row { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: none; color: var(--text); font-size: 12px; padding: 6px 8px; border-radius: 4px; cursor: pointer; text-align: left; transition: background var(--transition); }
+        .qe-row:hover { background: var(--surface); }
+        .qe-name { flex: 1; }
+        .qe-ok { color: var(--success); font-size: 12px; }
+        .qe-err { color: var(--danger); font-size: 12px; }
+
+        /* Add dropdown */
+        .add-dropdown { position: absolute; top: calc(100% + 4px); right: 0; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px; min-width: 200px; z-index: 200; box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+        .add-menu-item { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: none; color: var(--text); font-size: 13px; padding: 8px 10px; border-radius: 4px; cursor: pointer; text-align: left; transition: background var(--transition); }
+        .add-menu-item:hover { background: var(--surface); }
+        .add-menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+        /* Markdown viewer */
+        .viewer-toggle-btn { margin-left: auto; padding: 2px 8px; font-size: 11px; background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; color: var(--text-muted); cursor: pointer; transition: all var(--transition); }
+        .viewer-toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .viewer-md { padding: 16px 20px; overflow-y: auto; flex: 1; line-height: 1.7; font-size: 13px; color: var(--text); }
+        .viewer-md h1 { font-size: 20px; font-weight: 700; margin: 0 0 12px; }
+        .viewer-md h2 { font-size: 16px; font-weight: 600; margin: 20px 0 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+        .viewer-md h3 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; }
+        .viewer-md p { margin: 0 0 10px; }
+        .viewer-md ul { margin: 0 0 10px; padding-left: 20px; }
+        .viewer-md li { margin-bottom: 4px; }
+        .viewer-md code { background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; font-family: monospace; font-size: 12px; }
+        .viewer-md pre { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; overflow-x: auto; margin: 0 0 12px; }
+        .viewer-md pre code { background: none; border: none; padding: 0; }
+        .viewer-md a { color: var(--accent); text-decoration: underline; cursor: pointer; }
 
         /* Skeleton */
         .skeleton { background: var(--surface); animation: pulse 1.5s ease-in-out infinite; min-height: 90px; }
@@ -772,7 +1125,17 @@ export default function HomePage() {
         .modal-header h2 { font-size: 16px; font-weight: 700; }
         .modal-body { overflow-y: auto; padding: 16px 20px; flex: 1; }
         .modal-footer { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-top: 1px solid var(--border); }
-        .scan-loading, .scan-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
+        .scan-loading { padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
+        .scan-empty { padding: 16px 24px; color: var(--text-muted); font-size: 13px; }
+        .scan-empty p { margin: 0 0 12px; text-align: center; }
+        .scan-dirs { display: flex; flex-direction: column; gap: 4px; }
+        .scan-dir-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--radius); background: var(--surface); font-size: 12px; }
+        .scan-dir-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+        .scan-dir-row.exists .scan-dir-dot { background: var(--success); }
+        .scan-dir-name { font-weight: 500; flex-shrink: 0; min-width: 90px; }
+        .scan-dir-path { font-family: 'Courier New', monospace; color: var(--text-muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .scan-dir-status { font-size: 11px; flex-shrink: 0; color: var(--text-muted); }
+        .scan-dir-row.exists .scan-dir-status { color: var(--success); }
         .scan-group { margin-bottom: 16px; }
         .scan-group-header { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
         .scan-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius); cursor: pointer; font-size: 13px; }
@@ -786,6 +1149,26 @@ export default function HomePage() {
         .scan-count { font-size: 13px; color: var(--text-muted); flex: 1; }
         .btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
         .btn-danger:hover { opacity: 0.85; }
+
+        /* My Skills layout with sidebar */
+        .my-skills-root { display: flex; flex: 1; overflow: hidden; }
+        .skills-sidebar { width: 160px; flex-shrink: 0; border-right: 1px solid var(--border); padding: 16px 8px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; background: var(--bg); }
+        .sidebar-section-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; padding: 0 6px; margin-bottom: 4px; }
+        .sidebar-filter-item { display: flex; align-items: center; gap: 7px; width: 100%; background: none; border: none; color: var(--text-muted); font-size: 12px; padding: 6px 8px; border-radius: 5px; cursor: pointer; text-align: left; transition: all var(--transition); }
+        .sidebar-filter-item:hover { background: var(--surface); color: var(--text); }
+        .sidebar-filter-item.active { background: rgba(108,99,255,0.12); color: var(--accent); }
+        .sfi-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--text-muted); }
+        .sfi-label { flex: 1; }
+        .sfi-count { font-size: 10px; background: var(--surface2); border-radius: 8px; padding: 1px 5px; color: var(--text-muted); }
+
+        /* Context menu */
+        .ctx-menu { position: fixed; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px; min-width: 170px; z-index: 500; box-shadow: 0 8px 24px rgba(0,0,0,0.35); animation: fadeIn 0.1s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.97) } to { opacity: 1; transform: scale(1) } }
+        .ctx-item { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: none; color: var(--text); font-size: 13px; padding: 7px 10px; border-radius: 4px; cursor: pointer; text-align: left; transition: background var(--transition); }
+        .ctx-item:hover { background: var(--surface); }
+        .ctx-sep { height: 1px; background: var(--border); margin: 3px 0; }
+        .ctx-danger { color: var(--danger); }
+        .ctx-danger:hover { background: rgba(239,68,68,0.12); }
       `}</style>
     </div>
   )

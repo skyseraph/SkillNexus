@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import type { Skill, EvalResult } from '../../../shared/types'
+import type { SkillRankEntry } from '../../../shared/types'
 
 const DIM_COLORS: Record<string, string> = {
   correctness:  '#6c63ff',
@@ -12,10 +12,8 @@ const DIM_COLORS: Record<string, string> = {
 const DIMS = ['overall', 'correctness', 'clarity', 'completeness', 'safety']
 const MEDALS = ['🥇', '🥈', '🥉']
 
-interface RankedSkill extends Skill {
-  scores: Record<string, number>   // dim → avg
-  evalCount: number
-  trend: number[]                  // last 8 total scores
+type RankedSkill = SkillRankEntry & {
+  scores: Record<string, number>  // normalized for existing UI
 }
 
 // ── Mini sparkline ────────────────────────────────────────────────────────────
@@ -65,40 +63,22 @@ export default function TrendingPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const allSkills = await window.api.skills.getAll()
-
-      const rankedList = await Promise.all(
-        allSkills.map(async (skill): Promise<RankedSkill> => {
-          try {
-            const history: EvalResult[] = await window.api.eval.history(skill.id)
-            const success = history.filter((r) => r.status === 'success')
-            const totals: Record<string, { sum: number; count: number }> = {}
-            for (const r of success) {
-              for (const [dim, s] of Object.entries(r.scores)) {
-                if (!totals[dim]) totals[dim] = { sum: 0, count: 0 }
-                totals[dim].sum += s.score
-                totals[dim].count++
-              }
-            }
-            const scores: Record<string, number> = Object.fromEntries(
-              Object.entries(totals).map(([d, { sum, count }]) => [d, sum / count])
-            )
-            scores.overall = success.length
-              ? success.reduce((s, r) => s + r.totalScore, 0) / success.length
-              : 0
-            return { ...skill, scores, evalCount: success.length, trend: success.slice(-8).map((r) => r.totalScore) }
-          } catch {
-            return { ...skill, scores: { overall: 0 }, evalCount: 0, trend: [] }
-          }
-        })
-      )
-
-      rankedList.sort((a, b) => (b.scores[activeDim] ?? 0) - (a.scores[activeDim] ?? 0))
+      const entries = await window.api.eval.historyAll()
+      const rankedList: RankedSkill[] = entries.map((e) => ({
+        ...e,
+        scores: {
+          overall:        e.avgTotal,
+          correctness:    e.avgCorrectness,
+          clarity:        e.avgClarity,
+          completeness:   e.avgCompleteness,
+          safety:         e.avgSafety
+        }
+      }))
       setRanked(rankedList)
     } finally {
       setLoading(false)
     }
-  }, [activeDim])
+  }, [])
 
   useEffect(() => { load() }, [load])
 
@@ -144,15 +124,15 @@ export default function TrendingPage() {
         <div className="leaderboard">
           {withEvals.map((skill, idx) => {
             const dimScore = skill.scores[activeDim] ?? 0
-            const isExpanded = expandedId === skill.id
+            const isExpanded = expandedId === skill.skillId
             const trendDelta = skill.trend.length >= 2
               ? skill.trend[skill.trend.length - 1] - skill.trend[0]
               : null
 
             return (
-              <div key={skill.id} className={`rank-card ${idx < 3 ? 'podium' : ''} ${isExpanded ? 'expanded' : ''}`}
+              <div key={skill.skillId} className={`rank-card ${idx < 3 ? 'podium' : ''} ${isExpanded ? 'expanded' : ''}`}
                 style={idx < 3 ? { borderColor: color + '55' } : {}}>
-                <div className="rank-main" onClick={() => setExpandedId(isExpanded ? null : skill.id)}>
+                <div className="rank-main" onClick={() => setExpandedId(isExpanded ? null : skill.skillId)}>
                   {/* Medal / rank */}
                   <div className="rank-pos">
                     {idx < 3
@@ -162,10 +142,8 @@ export default function TrendingPage() {
 
                   {/* Info */}
                   <div className="rank-info">
-                    <div className="rank-name">{skill.name}</div>
+                    <div className="rank-name">{skill.skillName}</div>
                     <div className="rank-meta">
-                      <span className="version">v{skill.version}</span>
-                      {skill.tags.slice(0, 3).map((t) => <span key={t} className="tag">{t}</span>)}
                       <span className="eval-count">{skill.evalCount} evals</span>
                     </div>
                   </div>
@@ -214,14 +192,12 @@ export default function TrendingPage() {
             <div className="no-evals-section">
               <div className="no-evals-label">未评测 ({noEvals.length})</div>
               {noEvals.map((skill) => (
-                <div key={skill.id} className="rank-card unranked">
+                <div key={skill.skillId} className="rank-card unranked">
                   <div className="rank-main">
                     <div className="rank-pos"><span className="rank-num">—</span></div>
                     <div className="rank-info">
-                      <div className="rank-name">{skill.name}</div>
+                      <div className="rank-name">{skill.skillName}</div>
                       <div className="rank-meta">
-                        <span className="version">v{skill.version}</span>
-                        {skill.tags.slice(0, 3).map((t) => <span key={t} className="tag">{t}</span>)}
                       </div>
                     </div>
                     <span className="no-eval-hint">运行评测后显示排名</span>

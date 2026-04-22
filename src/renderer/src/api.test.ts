@@ -32,10 +32,12 @@ const mockApi = {
     delete: vi.fn()
   },
   config: {
-    get: vi.fn().mockResolvedValue({ defaultProvider: 'anthropic', defaultModel: 'claude-sonnet-4-6', anthropicApiKeySet: false, openaiApiKeySet: false }),
+    get: vi.fn().mockResolvedValue({ providers: [], activeProviderId: '' }),
     set: vi.fn(),
     test: vi.fn().mockResolvedValue({ ok: true }),
-    listModels: vi.fn().mockResolvedValue(['claude-sonnet-4-6', 'claude-haiku-4-5-20251001'])
+    saveProvider: vi.fn().mockResolvedValue(undefined),
+    deleteProvider: vi.fn().mockResolvedValue(undefined),
+    setActive: vi.fn().mockResolvedValue(undefined)
   }
 }
 
@@ -73,10 +75,11 @@ describe('window.api contract', () => {
     expect(typeof cleanup).toBe('function')
   })
 
-  it('config.get returns object with defaultProvider', async () => {
+  it('config.get returns object with providers array and activeProviderId', async () => {
     const config = await window.api.config.get()
-    expect(config).toHaveProperty('defaultProvider')
-    expect(['anthropic', 'openai']).toContain(config.defaultProvider)
+    expect(config).toHaveProperty('providers')
+    expect(Array.isArray(config.providers)).toBe(true)
+    expect(config).toHaveProperty('activeProviderId')
   })
 
   it('skills.scan returns array', async () => {
@@ -96,11 +99,5 @@ describe('window.api contract', () => {
   it('marketplace.search returns array', async () => {
     const results = await window.api.marketplace.search('test')
     expect(Array.isArray(results)).toBe(true)
-  })
-
-  it('config.listModels returns model id array', async () => {
-    const models = await window.api.config.listModels('anthropic')
-    expect(Array.isArray(models)).toBe(true)
-    expect(models.every(m => typeof m === 'string')).toBe(true)
   })
 })

@@ -6,9 +6,12 @@ import TestCasePage from './pages/TestCasePage'
 import EvoPage from './pages/EvoPage'
 import TrendingPage from './pages/TrendingPage'
 import SettingsPage from './pages/SettingsPage'
+import ToastContainer from './components/ToastContainer'
+import { useToast } from './hooks/useToast'
 import './App.css'
 
 type Page = 'home' | 'eval' | 'studio' | 'testcase' | 'evo' | 'trending' | 'settings'
+export type Theme = 'dark' | 'light' | 'system'
 
 const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
   { id: 'home', label: 'Home', icon: '⚡' },
@@ -19,25 +22,44 @@ const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
   { id: 'trending', label: 'Trending', icon: '🔥' }
 ]
 
+function applyTheme(theme: Theme) {
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+  const resolved = theme === 'system' ? (prefersDark ? 'dark' : 'light') : theme
+  document.documentElement.setAttribute('data-theme', resolved === 'light' ? 'light' : '')
+}
+
 export default function App() {
   const [page, setPage] = useState<Page>('home')
   const [apiKeySet, setApiKeySet] = useState<boolean | null>(null)
+  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('theme') as Theme) ?? 'dark')
+  const { toasts, toast, dismiss } = useToast()
 
   const checkApiKey = () => {
-    window.api.config.get().then((c) => setApiKeySet(c.anthropicApiKeySet || c.openaiApiKeySet))
+    window.api.config.get().then((c) => setApiKeySet(c.providers.length > 0))
   }
 
   useEffect(() => { checkApiKey() }, [])
 
+  useEffect(() => {
+    applyTheme(theme)
+    localStorage.setItem('theme', theme)
+    if (theme === 'system') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)')
+      const handler = () => applyTheme('system')
+      mq.addEventListener('change', handler)
+      return () => mq.removeEventListener('change', handler)
+    }
+  }, [theme])
+
   const renderPage = () => {
     switch (page) {
-      case 'home': return <HomePage />
+      case 'home': return <HomePage toast={toast} onNavigate={setPage} />
       case 'eval': return <EvalPage />
       case 'studio': return <StudioPage />
       case 'testcase': return <TestCasePage />
       case 'evo': return <EvoPage />
       case 'trending': return <TrendingPage />
-      case 'settings': return <SettingsPage onConfigSaved={checkApiKey} />
+      case 'settings': return <SettingsPage onConfigSaved={checkApiKey} theme={theme} onThemeChange={setTheme} toast={toast} />
     }
   }
 
@@ -76,10 +98,9 @@ export default function App() {
       </nav>
 
       <div className="main-area">
-        {/* Global banner when no API key is configured */}
         {apiKeySet === false && page !== 'settings' && (
           <div className="api-key-banner">
-            <span>⚠️ No API key configured — AI features (Eval, Studio) will not work.</span>
+            <span>⚠️ No LLM provider configured — AI features (Eval, Studio, Evo) will not work.</span>
             <button className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 13 }} onClick={() => setPage('settings')}>
               Configure
             </button>
@@ -87,6 +108,7 @@ export default function App() {
         )}
         <main className="content">{renderPage()}</main>
       </div>
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </div>
   )
 }

@@ -1,4 +1,5 @@
 export type SkillType = 'single' | 'agent'
+export type TrustLevel = 1 | 2 | 3 | 4
 
 export interface Skill {
   id: string
@@ -11,8 +12,17 @@ export interface Skill {
   filePath: string       // entry .md for single; main entry for agent
   rootDir: string        // same as filePath dir for single; folder root for agent
   skillType: SkillType
+  trustLevel: TrustLevel // 1=AI-generated, 2=format+safety, 3=eval-tested, 4=user-approved
   installedAt: number
   updatedAt: number
+}
+
+export interface SkillScore5D {
+  safety: number           // 0-10
+  completeness: number     // 0-10
+  executability: number    // 0-10
+  maintainability: number  // 0-10
+  costAwareness: number    // 0-10
 }
 
 export interface SkillFileEntry {
@@ -54,18 +64,16 @@ export interface EvalResult {
   createdAt: number
 }
 
-export interface AIRequestOptions {
-  model: string
-  systemPrompt: string
-  userMessage: string
-  maxTokens?: number
-}
-
-export interface AIResponse {
-  content: string
-  inputTokens: number
-  outputTokens: number
-  durationMs: number
+export interface SkillRankEntry {
+  skillId: string
+  skillName: string
+  evalCount: number
+  avgTotal: number
+  avgCorrectness: number
+  avgClarity: number
+  avgCompleteness: number
+  avgSafety: number
+  trend: number[]
 }
 
 export interface ToolTarget {
@@ -84,6 +92,11 @@ export interface ScannedSkill {
   toolId: string
   toolName: string
   alreadyInstalled: boolean
+}
+
+export interface ScanResult {
+  skills: ScannedSkill[]
+  scannedDirs: { toolName: string; dir: string; exists: boolean }[]
 }
 
 export interface MarketSkill {
@@ -163,6 +176,15 @@ export interface EvoRunResult {
   evolvedJobId: string
 }
 
+export interface ThreeConditionResult {
+  jobIdA: string           // no-skill baseline
+  jobIdB: string           // current skill
+  jobIdC: string           // AI-generated skill
+  noSkillId: string
+  generatedSkillId: string
+  generatedSkillContent: string
+}
+
 export interface IpcChannels {
   'skills:getAll': () => Promise<Skill[]>
   'skills:install': (filePath: string) => Promise<Skill>
@@ -171,7 +193,7 @@ export interface IpcChannels {
   'skills:listFiles': (skillId: string) => Promise<SkillFileEntry[]>
   'skills:readFile': (filePath: string, skillId: string) => Promise<string>
   'skills:openDialog': (mode: 'file' | 'dir') => Promise<string | null>
-  'skills:scan': () => Promise<ScannedSkill[]>
+  'skills:scan': () => Promise<ScanResult>
   'skills:importScanned': (filePath: string) => Promise<Skill>
   'skills:export': (skillId: string, toolId: string, mode: 'copy' | 'symlink') => Promise<void>
   'skills:getToolTargets': () => Promise<ToolTarget[]>
@@ -179,11 +201,21 @@ export interface IpcChannels {
   'marketplace:install': (skill: MarketSkill) => Promise<Skill>
   'eval:start': (skillId: string, testCaseIds: string[]) => Promise<string>
   'eval:history': (skillId: string) => Promise<EvalResult[]>
+  'eval:historyAll': () => Promise<SkillRankEntry[]>
+  'eval:startThreeCondition': (skillId: string, testCaseIds: string[]) => Promise<ThreeConditionResult>
   'studio:generate': (prompt: string) => Promise<string>
   'studio:install': (content: string, name: string) => Promise<Skill>
   'testcases:getBySkill': (skillId: string) => Promise<TestCase[]>
   'testcases:create': (tc: Omit<TestCase, 'id' | 'createdAt'>) => Promise<TestCase>
   'testcases:delete': (id: string) => Promise<void>
+  'testcases:generate': (skillId: string, count: number) => Promise<TestCase[]>
+  'evo:installAndEval': (originalSkillId: string, evolvedContent: string) => Promise<EvoRunResult>
+  'studio:evolve': (skillId: string, strategy: string) => Promise<void>
+  'studio:generateFromExamples': (examples: Array<{ input: string; output: string }>, description?: string) => Promise<void>
+  'studio:generateStream': (prompt: string) => Promise<void>
+  'studio:extract': (conversation: string) => Promise<void>
+  'studio:scoreSkill': (content: string) => Promise<SkillScore5D>
+  'studio:similarSkills': (content: string) => Promise<Skill[]>
   'config:get': () => Promise<AppConfigPublic>
   'config:set': (config: Partial<AppConfig>) => Promise<void>
   'config:test': (providerId: string) => Promise<{ ok: boolean; error?: string }>

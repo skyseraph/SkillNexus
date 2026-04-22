@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { Skill, EvalResult, TestCase } from '../../../shared/types'
+import CompareMode from './EvalCompareMode'
+import ThreeConditionMode from './EvalThreeConditionMode'
 
 const DIM_COLORS: Record<string, string> = {
   correctness:  '#6c63ff',
@@ -131,7 +133,7 @@ export default function EvalPage() {
 
   useEffect(() => {
     window.api.skills.getAll().then(setSkills)
-    window.api.config.get().then((c) => setApiKeySet(c.anthropicApiKeySet || c.openaiApiKeySet))
+    window.api.config.get().then((c) => setApiKeySet(c.providers.length > 0))
   }, [])
 
   const refreshHistory = useCallback(() => {
@@ -179,6 +181,8 @@ export default function EvalPage() {
     ? successHistory.reduce((s, r) => s + r.totalScore, 0) / successHistory.length
     : null
 
+  const [evalMode, setEvalMode] = useState<'single' | 'compare' | 'three'>('single')
+
   return (
     <div className="eval-root">
       {/* Header */}
@@ -187,24 +191,40 @@ export default function EvalPage() {
           <h1>Eval</h1>
           <p className="subtitle">多维度评测 Skill 质量</p>
         </div>
-        <div className="eval-controls">
-          <select value={selectedSkill} onChange={(e) => setSelectedSkill(e.target.value)} className="skill-select">
-            <option value="">选择 Skill...</option>
-            {skills.map((s) => <option key={s.id} value={s.id}>{s.name} v{s.version}</option>)}
-          </select>
-          <button
-            className="btn btn-primary"
-            onClick={handleRunEval}
-            disabled={!selectedSkill || running || selectedTcIds.size === 0 || apiKeySet === false}
-          >
-            {running ? `${progress}%` : `▶ 运行评测（${selectedTcIds.size}）`}
-          </button>
-        </div>
+        {evalMode === 'single' && (
+          <div className="eval-controls">
+            <select value={selectedSkill} onChange={(e) => setSelectedSkill(e.target.value)} className="skill-select">
+              <option value="">选择 Skill...</option>
+              {skills.map((s) => <option key={s.id} value={s.id}>{s.name} v{s.version}</option>)}
+            </select>
+            <button
+              className="btn btn-primary"
+              onClick={handleRunEval}
+              disabled={!selectedSkill || running || selectedTcIds.size === 0 || apiKeySet === false}
+            >
+              {running ? `${progress}%` : `▶ 运行评测（${selectedTcIds.size}）`}
+            </button>
+          </div>
+        )}
       </div>
 
-      {apiKeySet === false && (
-        <div className="guard-banner">⚠️ 未配置 API Key，请前往 Settings 添加后再运行评测。</div>
-      )}
+      {/* Mode tabs */}
+      <div className="eval-mode-tabs">
+        <button className={`eval-mode-tab ${evalMode === 'single' ? 'active' : ''}`} onClick={() => setEvalMode('single')}>
+          📊 单 Skill 评测
+        </button>
+        <button className={`eval-mode-tab ${evalMode === 'compare' ? 'active' : ''}`} onClick={() => setEvalMode('compare')}>
+          ⚖️ 对比评测
+        </button>
+        <button className={`eval-mode-tab ${evalMode === 'three' ? 'active' : ''}`} onClick={() => setEvalMode('three')}>
+          🧪 三条件评测
+        </button>
+      </div>
+
+      {evalMode === 'compare' && <CompareMode skills={skills} apiKeySet={apiKeySet} />}
+      {evalMode === 'three' && <ThreeConditionMode skills={skills} apiKeySet={apiKeySet} />}
+
+      {evalMode === 'single' && (<>
 
       {/* Test case selector */}
       {selectedSkill && testCases.length === 0 && (
@@ -342,6 +362,8 @@ export default function EvalPage() {
         </div>
       )}
 
+      </>)}
+
       <style>{`
         .eval-root { display: flex; flex-direction: column; gap: 20px; }
         .eval-page-header { display: flex; justify-content: space-between; align-items: flex-start; }
@@ -351,6 +373,12 @@ export default function EvalPage() {
         .skill-select { padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 14px; min-width: 200px; }
         .guard-banner { background: rgba(250,204,21,0.08); border: 1px solid rgba(250,204,21,0.3); border-radius: var(--radius); padding: 12px 16px; color: var(--warning); font-size: 13px; }
         .info-banner { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; color: var(--text-muted); font-size: 13px; }
+
+        /* Mode tabs */
+        .eval-mode-tabs { display: flex; gap: 6px; }
+        .eval-mode-tab { display: flex; align-items: center; gap: 6px; padding: 7px 16px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 13px; font-weight: 500; cursor: pointer; transition: all var(--transition); }
+        .eval-mode-tab:hover { color: var(--text); border-color: var(--text-muted); }
+        .eval-mode-tab.active { background: var(--surface2); color: var(--text); border-color: var(--accent); }
 
         /* Cards */
         .eval-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
@@ -421,6 +449,43 @@ export default function EvalPage() {
         .detail-input { }
         .detail-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); display: block; margin-bottom: 4px; }
         .detail-pre { font-family: 'Courier New', monospace; font-size: 11px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; margin: 0; white-space: pre-wrap; word-break: break-all; color: var(--text); max-height: 120px; overflow-y: auto; }
+
+        /* Compare mode */
+        .compare-mode { display: flex; flex-direction: column; gap: 16px; }
+        .cmp-skill-row { display: flex; align-items: center; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
+        .cmp-skill-picker { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 160px; }
+        .cmp-skill-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+        .cmp-vs { font-size: 16px; font-weight: 800; color: var(--text-muted); padding: 0 4px; flex-shrink: 0; }
+        .cmp-tc-section { margin-top: 16px; }
+        .cmp-overall-row { display: flex; align-items: center; justify-content: center; gap: 32px; padding: 20px 0 16px; }
+        .cmp-overall-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .cmp-overall-name { font-size: 13px; font-weight: 600; color: var(--text-muted); max-width: 160px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cmp-overall-score { font-size: 36px; font-weight: 800; line-height: 1; }
+        .cmp-overall-vs { font-size: 18px; font-weight: 800; color: var(--text-muted); }
+        .cmp-dim-table { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+        .cmp-dim-header { display: grid; grid-template-columns: 100px 1fr 1fr 60px; gap: 8px; padding: 4px 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+        .cmp-dim-col { }
+        .cmp-dim-row { display: grid; grid-template-columns: 100px 1fr 1fr 60px; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 6px; background: var(--surface2); }
+        .cmp-dim-name { font-size: 12px; font-weight: 600; text-transform: capitalize; }
+        .cmp-bar-cell { display: flex; align-items: center; gap: 8px; }
+        .cmp-bar-track { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+        .cmp-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s; }
+        .cmp-bar-val { font-size: 12px; font-weight: 700; width: 28px; text-align: right; flex-shrink: 0; }
+        .cmp-delta { font-size: 12px; font-weight: 700; text-align: center; }
+        .cmp-delta.pos { color: var(--success); }
+        .cmp-delta.neg { color: var(--danger); }
+        .cmp-delta.neu { color: var(--text-muted); }
+        .cmp-winner { display: flex; justify-content: center; margin-top: 16px; }
+        .winner-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; border-radius: 20px; font-size: 14px; font-weight: 700; }
+        .winner-badge.a { background: rgba(108,99,255,0.12); color: var(--accent); border: 1px solid var(--accent); }
+        .winner-badge.b { background: rgba(0,212,170,0.12); color: var(--success); border: 1px solid var(--success); }
+        .winner-badge.neu { background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border); }
+
+        /* Three-condition cards */
+        .three-cond-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin: 16px 0; }
+        .three-cond-card { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 12px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface2); }
+        .three-cond-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); text-align: center; }
+        .three-cond-score { font-size: 32px; font-weight: 800; line-height: 1; }
       `}</style>
     </div>
   )

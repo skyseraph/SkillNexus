@@ -50,8 +50,10 @@ describe('db/index', () => {
     expect(db1).toBe(db2)
   })
 
-  it('getDb throws if not initialized', () => {
-    // Reset module to test cold start
+  it('getDb throws if not initialized', async () => {
     vi.resetModules()
+    // Re-import fresh module with no prior initDatabase() call
+    const { getDb: freshGetDb } = await import('./index')
+    expect(() => freshGetDb()).toThrow('Database not initialized')
   })
 })

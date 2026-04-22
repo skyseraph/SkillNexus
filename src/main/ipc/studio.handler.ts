@@ -1,11 +1,13 @@
 import { ipcMain } from 'electron'
 import { getAIProvider } from '../services/ai-provider'
-import { getConfig } from './config.handler'
+import { getActiveModel } from './config.handler'
 import { getDb } from '../db'
 import { writeFileSync, mkdirSync } from 'fs'
 import { join, resolve, basename, dirname } from 'path'
 import { app } from 'electron'
 import yaml from 'js-yaml'
+import { withTimeout, AI_TIMEOUT_MS } from '../services/eval-job'
+import type { SkillScore5D } from '../../shared/types'
 
 const SKILL_FORMAT_HINT = `A Skill has this structure:
 ---
@@ -44,15 +46,36 @@ const STRATEGY_HINTS: Record<string, string> = {
   add_examples: 'Add concrete examples, sample inputs/outputs, and edge-case guidance within the skill.'
 }
 
+const EXTRACT_SYSTEM_PROMPT = `You are an expert Skill author. Analyze the conversation below and extract a reusable Skill ONLY if it contains stable, durable user preferences, constraints, or workflows that would benefit future interactions.
+
+${SKILL_FORMAT_HINT}
+
+Rules:
+- If the conversation contains reusable patterns → output a complete Skill in the format above
+- If it's a one-off request with no durable value → output exactly: NO_SKILL
+- Prefer merging into an existing pattern over creating duplicates
+- Output ONLY the Skill content or NO_SKILL. No commentary.`
+
+const SCORE_SYSTEM_PROMPT = `You are a Skill quality evaluator. Score the given Skill on 5 dimensions, each from 0 to 10.
+
+Dimensions:
+- safety: Does it avoid harmful, biased, or dangerous instructions?
+- completeness: Does it cover the task thoroughly with clear instructions?
+- executability: Can an AI follow it without ambiguity?
+- maintainability: Is it well-structured, readable, and easy to update?
+- costAwareness: Does it avoid unnecessary verbosity that wastes tokens?
+
+Respond with ONLY valid JSON in this exact format:
+{"safety":8,"completeness":7,"executability":9,"maintainability":8,"costAwareness":6}`
+
 export function registerStudioHandlers(): void {
   ipcMain.handle('studio:generate', async (_event, prompt: string) => {
     const provider = getAIProvider()
-    const cfg = getConfig()
-    const result = await provider.call({
-      model: cfg.defaultModel,
-      systemPrompt: STUDIO_SYSTEM_PROMPT,
-      userMessage: prompt
-    })
+    const result = await withTimeout(
+      provider.call({ model: getActiveModel(), systemPrompt: STUDIO_SYSTEM_PROMPT, userMessage: prompt }),
+      AI_TIMEOUT_MS,
+      'studio:generate'
+    )
     return result.content
   })
 
@@ -100,9 +123,8 @@ export function registerStudioHandlers(): void {
       `Produce the improved Skill at version ${nextVersion}:`
 
     const provider = getAIProvider()
-    const cfg = getConfig()
     await provider.stream(
-      { model: cfg.defaultModel, systemPrompt: EVOLVE_SYSTEM_PROMPT, userMessage },
+      { model: getActiveModel(), systemPrompt: EVOLVE_SYSTEM_PROMPT, userMessage },
       (chunk) => event.sender.send('studio:chunk', { chunk, done: false })
     )
     event.sender.send('studio:chunk', { chunk: '', done: true })
@@ -119,9 +141,8 @@ export function registerStudioHandlers(): void {
     const userMessage = `Based on these examples, write a Skill:\n\n${examplesText}${descLine}\n\nGenerate the Skill:`
 
     const provider = getAIProvider()
-    const cfg = getConfig()
     await provider.stream(
-      { model: cfg.defaultModel, systemPrompt: EXAMPLES_SYSTEM_PROMPT, userMessage },
+      { model: getActiveModel(), systemPrompt: EXAMPLES_SYSTEM_PROMPT, userMessage },
       (chunk) => event.sender.send('studio:chunk', { chunk, done: false })
     )
     event.sender.send('studio:chunk', { chunk: '', done: true })
@@ -129,9 +150,8 @@ export function registerStudioHandlers(): void {
 
   ipcMain.handle('studio:generateStream', async (event, prompt: string) => {
     const provider = getAIProvider()
-    const cfg = getConfig()
     await provider.stream(
-      { model: cfg.defaultModel, systemPrompt: STUDIO_SYSTEM_PROMPT, userMessage: prompt },
+      { model: getActiveModel(), systemPrompt: STUDIO_SYSTEM_PROMPT, userMessage: prompt },
       (chunk) => event.sender.send('studio:chunk', { chunk, done: false })
     )
     event.sender.send('studio:chunk', { chunk: '', done: true })
@@ -169,8 +189,8 @@ export function registerStudioHandlers(): void {
     const skillName = (frontmatter.name as string) || name
 
     db.prepare(`
-      INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, installed_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, trust_level, installed_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       skillName,
@@ -182,6 +202,7 @@ export function registerStudioHandlers(): void {
       filePath,
       rootDir,
       'single',
+      1,
       now,
       now
     )
@@ -197,8 +218,89 @@ export function registerStudioHandlers(): void {
       filePath,
       rootDir,
       skillType: 'single',
+      trustLevel: 1,
       installedAt: now,
       updatedAt: now
     }
+  })
+
+  // Extract Skill from conversation text (AutoSkill-style)
+  ipcMain.handle('studio:extract', async (event, conversation: string) => {
+    const userMessage = `Conversation to analyze:\n\n${conversation}\n\nExtract a reusable Skill or output NO_SKILL:`
+    const provider = getAIProvider()
+    let buffer = ''
+    await provider.stream(
+      { model: getActiveModel(), systemPrompt: EXTRACT_SYSTEM_PROMPT, userMessage },
+      (chunk) => {
+        buffer += chunk
+        event.sender.send('studio:chunk', { chunk, done: false })
+      }
+    )
+    // If AI returned NO_SKILL, signal with a special done payload
+    const isNoSkill = buffer.trim() === 'NO_SKILL'
+    event.sender.send('studio:chunk', { chunk: '', done: true, noSkill: isNoSkill })
+  })
+
+  // Score a Skill on 5 dimensions (SkillNet-style)
+  ipcMain.handle('studio:scoreSkill', async (_event, content: string): Promise<SkillScore5D> => {
+    const provider = getAIProvider()
+    const result = await withTimeout(
+      provider.call({ model: getActiveModel(), systemPrompt: SCORE_SYSTEM_PROMPT, userMessage: content }),
+      AI_TIMEOUT_MS,
+      'studio:scoreSkill'
+    )
+    try {
+      const parsed = JSON.parse(result.content.trim()) as Record<string, number>
+      const clamp = (v: unknown) => Math.min(10, Math.max(0, Number(v) || 0))
+      return {
+        safety:         clamp(parsed.safety),
+        completeness:   clamp(parsed.completeness),
+        executability:  clamp(parsed.executability),
+        maintainability: clamp(parsed.maintainability),
+        costAwareness:  clamp(parsed.costAwareness)
+      }
+    } catch {
+      return { safety: 5, completeness: 5, executability: 5, maintainability: 5, costAwareness: 5 }
+    }
+  })
+
+  // Find similar skills by name/tag overlap
+  ipcMain.handle('studio:similarSkills', (_event, content: string) => {
+    const db = getDb()
+    // Extract name from frontmatter if present
+    const nameMatch = content.match(/^---[\s\S]*?name:\s*(.+?)\s*\n/m)
+    const tagsMatch = content.match(/^---[\s\S]*?tags:\s*\[([^\]]*)\]/m)
+    const name = nameMatch ? nameMatch[1].toLowerCase() : ''
+    const tags = tagsMatch ? tagsMatch[1].split(',').map(t => t.trim().replace(/['"]/g, '').toLowerCase()).filter(Boolean) : []
+
+    const rows = db.prepare(`
+      SELECT * FROM skills
+      WHERE id NOT LIKE 'skill-noskill-%' AND id NOT LIKE 'skill-gen-%'
+    `).all() as Record<string, unknown>[]
+
+    return rows
+      .filter(r => {
+        const rName = (r.name as string).toLowerCase()
+        const rTags: string[] = JSON.parse(r.tags as string)
+        const nameMatch = name && (rName.includes(name) || name.includes(rName))
+        const tagOverlap = tags.some(t => rTags.includes(t))
+        return nameMatch || tagOverlap
+      })
+      .slice(0, 5)
+      .map(r => ({
+        id: r.id as string,
+        name: r.name as string,
+        format: r.format as string,
+        version: r.version as string,
+        tags: JSON.parse(r.tags as string),
+        yamlFrontmatter: r.yaml_frontmatter as string,
+        markdownContent: r.markdown_content as string,
+        filePath: r.file_path as string,
+        rootDir: (r.root_dir as string) || '',
+        skillType: ((r.skill_type as string) || 'single'),
+        trustLevel: (r.trust_level as number) || 1,
+        installedAt: r.installed_at as number,
+        updatedAt: r.updated_at as number
+      }))
   })
 }

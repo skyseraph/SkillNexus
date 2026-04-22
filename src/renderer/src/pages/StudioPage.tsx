@@ -1,7 +1,84 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import type { Skill, EvalResult } from '../../../shared/types'
+import type { Skill, EvalResult, SkillScore5D } from '../../../shared/types'
 
-type StudioMode = 'describe' | 'evolve' | 'examples'
+type StudioMode = 'describe' | 'evolve' | 'examples' | 'extract'
+
+// ── 5D Score Panel ────────────────────────────────────────────────────────────
+
+const SCORE_5D_COLORS: Record<string, string> = {
+  safety:          '#ef4444',
+  completeness:    '#6c63ff',
+  executability:   '#00d4aa',
+  maintainability: '#f59e0b',
+  costAwareness:   '#8b5cf6'
+}
+
+const SCORE_5D_LABELS: Record<string, string> = {
+  safety:          'Safety',
+  completeness:    'Completeness',
+  executability:   'Executability',
+  maintainability: 'Maintainability',
+  costAwareness:   'Cost Awareness'
+}
+
+function Score5DPanel({ scores, loading }: { scores: SkillScore5D | null; loading: boolean }) {
+  if (loading) return <div className="score5d-panel"><div className="score5d-loading">Scoring...</div></div>
+  if (!scores) return null
+  const avg = Object.values(scores).reduce((a, b) => a + b, 0) / 5
+  return (
+    <div className="score5d-panel">
+      <div className="score5d-header">
+        <span>5D Quality Score</span>
+        <span className="score5d-avg" style={{ color: avg >= 7 ? 'var(--success)' : avg >= 5 ? 'var(--warning)' : 'var(--danger)' }}>
+          {avg.toFixed(1)}/10
+        </span>
+      </div>
+      {(Object.keys(SCORE_5D_LABELS) as (keyof SkillScore5D)[]).map(dim => (
+        <div key={dim} className="score-bar-row">
+          <span className="score-dim">{SCORE_5D_LABELS[dim]}</span>
+          <div className="score-track">
+            <div className="score-fill" style={{ width: `${(scores[dim] / 10) * 100}%`, background: SCORE_5D_COLORS[dim] }} />
+          </div>
+          <span className="score-val" style={{ color: SCORE_5D_COLORS[dim] }}>{scores[dim].toFixed(1)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Trust Badge ───────────────────────────────────────────────────────────────
+
+const TRUST_LABELS = ['', 'T1 AI生成', 'T2 格式验证', 'T3 测试覆盖', 'T4 人工确认']
+const TRUST_COLORS = ['', '#888', '#f59e0b', '#00d4aa', '#6c63ff']
+
+function TrustBadge({ level }: { level: 1 | 2 | 3 | 4 }) {
+  return (
+    <span className="trust-badge" style={{ background: `${TRUST_COLORS[level]}22`, color: TRUST_COLORS[level], borderColor: `${TRUST_COLORS[level]}55` }}>
+      {TRUST_LABELS[level]}
+    </span>
+  )
+}
+
+// ── Similar Skills Warning ────────────────────────────────────────────────────
+
+function SimilarSkillsWarning({ skills }: { skills: Skill[] }) {
+  if (skills.length === 0) return null
+  return (
+    <div className="similar-warning">
+      <span className="similar-icon">⚠️</span>
+      <div>
+        <div className="similar-title">发现相似 Skill，考虑更新而非新建：</div>
+        <div className="similar-list">
+          {skills.map(s => (
+            <span key={s.id} className="similar-item">
+              {s.name} <TrustBadge level={(s.trustLevel ?? 1) as 1|2|3|4} />
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── Shared: generated content + install ──────────────────────────────────────
 
@@ -9,11 +86,26 @@ function InstallPanel({ content, onInstalled }: { content: string; onInstalled: 
   const [name, setName] = useState('')
   const [installing, setInstalling] = useState(false)
   const [installed, setInstalled] = useState<Skill | null>(null)
+  const [scores, setScores] = useState<SkillScore5D | null>(null)
+  const [scoring, setScoring] = useState(false)
+  const [similar, setSimilar] = useState<Skill[]>([])
 
   useEffect(() => {
-    // Auto-extract name from frontmatter
     const m = content.match(/^---\s*\n[\s\S]*?name:\s*(.+?)\s*\n/m)
     if (m) setName(m[1].trim())
+
+    // Auto-score and find similar
+    setScoring(true)
+    setScores(null)
+    setSimilar([])
+    Promise.all([
+      window.api.studio.scoreSkill(content),
+      window.api.studio.similarSkills(content)
+    ]).then(([s, sim]) => {
+      setScores(s)
+      setSimilar(sim)
+      setScoring(false)
+    }).catch(() => setScoring(false))
   }, [content])
 
   const handleInstall = async () => {
@@ -27,8 +119,10 @@ function InstallPanel({ content, onInstalled }: { content: string; onInstalled: 
 
   return (
     <div className="install-panel">
+      <SimilarSkillsWarning skills={similar} />
+      <Score5DPanel scores={scores} loading={scoring} />
       {installed ? (
-        <div className="success-banner">✅ Skill &quot;{installed.name}&quot; installed!</div>
+        <div className="success-banner">✅ Skill &quot;{installed.name}&quot; installed! <TrustBadge level={1} /></div>
       ) : (
         <div className="install-row">
           <input
@@ -306,7 +400,7 @@ function EvolveMode({ apiKeySet, cleanupRef }: {
   )
 }
 
-// ── Mode 3: 示例生成 ──────────────────────────────────────────────────────────
+// ── Mode 3: 示例生成 ─────────────────────────────────────────────────────────
 
 interface ExPair { id: number; input: string; output: string }
 
@@ -436,12 +530,105 @@ function ExamplesMode({ apiKeySet, cleanupRef }: {
   )
 }
 
+// ── Mode 4: 对话提炼 ──────────────────────────────────────────────────────────
+
+function ExtractMode({ apiKeySet, cleanupRef }: {
+  apiKeySet: boolean | null
+  cleanupRef: React.MutableRefObject<(() => void) | null>
+}) {
+  const [conversation, setConversation] = useState('')
+  const [generated, setGenerated] = useState('')
+  const [streaming, setStreaming] = useState(false)
+  const [noSkill, setNoSkill] = useState(false)
+  const [installed, setInstalled] = useState<Skill | null>(null)
+
+  const handleExtract = async () => {
+    if (!conversation.trim()) return
+    setStreaming(true)
+    setGenerated('')
+    setNoSkill(false)
+    setInstalled(null)
+
+    cleanupRef.current?.()
+    cleanupRef.current = window.api.studio.onChunk(({ chunk, done, noSkill: ns }) => {
+      if (!done) setGenerated((p) => p + chunk)
+      else {
+        setStreaming(false)
+        if (ns) setNoSkill(true)
+        cleanupRef.current?.()
+        cleanupRef.current = null
+      }
+    })
+
+    try {
+      await window.api.studio.extract(conversation)
+    } catch {
+      setStreaming(false)
+      cleanupRef.current?.()
+      cleanupRef.current = null
+    }
+  }
+
+  return (
+    <div className="mode-body">
+      <div className="card">
+        <h2>从对话中提炼 Skill</h2>
+        <p className="text-muted" style={{ marginBottom: 12 }}>
+          粘贴一段对话（user/assistant 轮次），AI 判断是否包含可复用的稳定偏好或工作流，并提炼为 Skill。
+        </p>
+        <textarea
+          rows={10}
+          value={conversation}
+          onChange={(e) => setConversation(e.target.value)}
+          placeholder={'User: 每次写报告时，请不要使用被动语态，并在结尾加上行动项清单。\nAssistant: 好的，我会记住这个偏好...'}
+          style={{ width: '100%', resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }}
+        />
+        <button
+          className="btn btn-primary"
+          style={{ marginTop: 12 }}
+          onClick={handleExtract}
+          disabled={streaming || !conversation.trim() || apiKeySet === false}
+        >
+          {streaming ? '提炼中...' : '提炼 Skill'}
+        </button>
+      </div>
+
+      {noSkill && !streaming && (
+        <div className="card">
+          <div className="no-skill-notice">
+            <span style={{ fontSize: 20 }}>🔍</span>
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>未发现可提炼内容</div>
+              <div className="text-muted">这段对话是一次性请求，没有稳定的偏好或工作流值得提炼为 Skill。</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(streaming || (generated && !noSkill)) && (
+        <div className="card">
+          <h2>
+            提炼结果
+            {streaming && <span className="streaming-dot"> ●</span>}
+          </h2>
+          <GeneratedPreview content={generated} streaming={streaming} />
+          {!streaming && generated && !installed && (
+            <InstallPanel content={generated} onInstalled={setInstalled} />
+          )}
+          {installed && <div className="success-banner">✅ &quot;{installed.name}&quot; 已安装！</div>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main StudioPage ───────────────────────────────────────────────────────────
 
 const TABS: { id: StudioMode; label: string; icon: string }[] = [
   { id: 'describe', label: '描述生成', icon: '✍️' },
   { id: 'evolve',   label: '进化生成', icon: '🧬' },
-  { id: 'examples', label: '示例生成', icon: '🔁' }
+  { id: 'examples', label: '示例生成', icon: '🔁' },
+  { id: 'extract',  label: '对话提炼', icon: '💬' }
 ]
 
 export default function StudioPage() {
@@ -450,7 +637,7 @@ export default function StudioPage() {
   const cleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
-    window.api.config.get().then((c) => setApiKeySet(c.anthropicApiKeySet || c.openaiApiKeySet))
+    window.api.config.get().then((c) => setApiKeySet(c.providers.length > 0))
     return () => { cleanupRef.current?.() }
   }, [])
 
@@ -485,6 +672,7 @@ export default function StudioPage() {
       {mode === 'describe' && <DescribeMode apiKeySet={apiKeySet} cleanupRef={cleanupRef} />}
       {mode === 'evolve'   && <EvolveMode   apiKeySet={apiKeySet} cleanupRef={cleanupRef} />}
       {mode === 'examples' && <ExamplesMode apiKeySet={apiKeySet} cleanupRef={cleanupRef} />}
+      {mode === 'extract'  && <ExtractMode  apiKeySet={apiKeySet} cleanupRef={cleanupRef} />}
 
       <style>{`
         .studio-root { display: flex; flex-direction: column; gap: 0; }
@@ -558,6 +746,25 @@ export default function StudioPage() {
         .pair-fields textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 12px; padding: 8px 10px; }
         .pair-fields textarea:focus { outline: none; border-color: var(--accent); }
         .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+        /* 5D Score Panel */
+        .score5d-panel { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px; }
+        .score5d-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; font-weight: 600; }
+        .score5d-avg { font-size: 15px; font-weight: 700; }
+        .score5d-loading { font-size: 12px; color: var(--text-muted); text-align: center; padding: 8px 0; }
+
+        /* Trust Badge */
+        .trust-badge { display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; border: 1px solid; letter-spacing: 0.04em; margin-left: 6px; }
+
+        /* Similar Skills Warning */
+        .similar-warning { display: flex; gap: 10px; align-items: flex-start; background: rgba(245,158,11,0.07); border: 1px solid rgba(245,158,11,0.3); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; }
+        .similar-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+        .similar-title { font-size: 12px; font-weight: 600; color: var(--warning); margin-bottom: 6px; }
+        .similar-list { display: flex; flex-wrap: wrap; gap: 6px; }
+        .similar-item { font-size: 12px; color: var(--text); background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; display: flex; align-items: center; }
+
+        /* Extract — no skill notice */
+        .no-skill-notice { display: flex; gap: 14px; align-items: flex-start; padding: 4px 0; }
       `}</style>
     </div>
   )

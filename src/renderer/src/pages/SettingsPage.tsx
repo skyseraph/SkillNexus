@@ -1,9 +1,13 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import type { AppConfigPublic, AppConfig, ToolTarget, LLMProvider, LLMProviderPreset } from '../../../shared/types'
 import { LLM_PROVIDER_PRESETS } from '../../../shared/types'
+import type { Theme } from '../App'
 
 interface Props {
   onConfigSaved?: () => void
+  theme: Theme
+  onThemeChange: (t: Theme) => void
+  toast?: (msg: string, type?: 'success' | 'error' | 'info') => void
 }
 
 type PublicProvider = Omit<LLMProvider, 'apiKey'> & { apiKeySet: boolean }
@@ -29,7 +33,7 @@ function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
-export default function SettingsPage({ onConfigSaved }: Props) {
+export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toast }: Props) {
   const [config, setConfig] = useState<AppConfigPublic | null>(null)
   const [toolTargets, setToolTargets] = useState<ToolTarget[]>([])
   const [toolPathOverrides, setToolPathOverrides] = useState<Record<string, string>>({})
@@ -37,15 +41,16 @@ export default function SettingsPage({ onConfigSaved }: Props) {
 
   // Provider UI state
   const [form, setForm] = useState<EditForm>(EMPTY_FORM)
-  const [editingId, setEditingId] = useState<string | null>(null) // null = new, string = editing
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [showPresets, setShowPresets] = useState(false)
   const [saving, setSaving] = useState(false)
   const [testingId, setTestingId] = useState<string | null>(null)
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; error?: string }>>({})
   const [formError, setFormError] = useState('')
-  const [toolSaving, setToolSaving] = useState(false)
-  const [toolSaved, setToolSaved] = useState(false)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [toolAutoSaved, setToolAutoSaved] = useState(false)
+  const toolSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const reload = useCallback(async () => {
     const c = await window.api.config.get()
@@ -97,6 +102,7 @@ export default function SettingsPage({ onConfigSaved }: Props) {
   const handleSave = async () => {
     if (!form.name.trim()) { setFormError('Name is required'); return }
     if (!form.baseUrl.trim()) { setFormError('Base URL is required'); return }
+    try { new URL(form.baseUrl.trim()) } catch { setFormError('Base URL must be a valid URL (e.g. https://api.example.com/v1)'); return }
     if (!form.model.trim()) { setFormError('Model is required'); return }
     const finalId = editingId ?? (form.id.trim() || slugify(form.name) + '-' + Date.now().toString(36).slice(-4))
 
@@ -113,14 +119,13 @@ export default function SettingsPage({ onConfigSaved }: Props) {
       presetId: form.presetId || undefined
     }
     await window.api.config.saveProvider(provider)
-    // Set as active if it's the first provider
     const fresh = await window.api.config.get()
     if (fresh.providers.length === 1 || !fresh.activeProviderId) {
       await window.api.config.setActive(finalId)
     }
     await reload()
     setSaving(false)
-    // Stay in edit mode so user can test immediately
+    toast?.(editingId ? `"${form.name}" updated` : `"${form.name}" added`, 'success')
     if (!editingId) {
       setEditingId(finalId)
       setForm(f => ({ ...f, id: finalId, apiKey: '' }))
@@ -129,9 +134,35 @@ export default function SettingsPage({ onConfigSaved }: Props) {
   }
 
   const handleDelete = async (id: string) => {
+    if (deleteConfirmId !== id) { setDeleteConfirmId(id); return }
+    const name = config?.providers.find(p => p.id === id)?.name ?? id
+    setDeleteConfirmId(null)
     await window.api.config.deleteProvider(id)
     await reload()
     if (showForm && editingId === id) setShowForm(false)
+    toast?.(`"${name}" removed`, 'info')
+  }
+
+  const autoSaveTools = (paths: Record<string, string>, enabled: Record<string, boolean>) => {
+    if (toolSaveTimer.current) clearTimeout(toolSaveTimer.current)
+    toolSaveTimer.current = setTimeout(async () => {
+      await window.api.config.set({ toolPaths: paths, enabledTools: enabled } as Partial<AppConfig>)
+      setToolAutoSaved(true)
+      setTimeout(() => setToolAutoSaved(false), 1500)
+    }, 600)
+  }
+
+  const updateToolPath = (id: string, val: string) => {
+    const next = { ...toolPathOverrides, [id]: val }
+    if (!val) delete next[id]
+    setToolPathOverrides(next)
+    autoSaveTools(next, enabledTools)
+  }
+
+  const updateToolEnabled = (id: string, val: boolean) => {
+    const next = { ...enabledTools, [id]: val }
+    setEnabledTools(next)
+    autoSaveTools(toolPathOverrides, next)
   }
 
   const handleSetActive = async (id: string) => {
@@ -146,14 +177,8 @@ export default function SettingsPage({ onConfigSaved }: Props) {
     const result = await window.api.config.test(id)
     setTestResults(r => ({ ...r, [id]: result }))
     setTestingId(null)
-  }
-
-  const handleSaveTools = async () => {
-    setToolSaving(true)
-    await window.api.config.set({ toolPaths: toolPathOverrides, enabledTools } as Partial<AppConfig>)
-    setToolSaving(false)
-    setToolSaved(true)
-    setTimeout(() => setToolSaved(false), 2000)
+    if (result.ok) toast?.('Connection successful', 'success')
+    else toast?.(result.error?.slice(0, 80) ?? 'Connection failed', 'error')
   }
 
   const providers = config?.providers ?? []
@@ -238,7 +263,11 @@ export default function SettingsPage({ onConfigSaved }: Props) {
                     {isTesting ? '…' : 'Test'}
                   </button>
                   <button className="btn btn-ghost btn-xs" onClick={() => openEdit(p)}>Edit</button>
-                  <button className="btn btn-ghost btn-xs danger" onClick={() => handleDelete(p.id)}>Delete</button>
+                  <button
+                    className={`btn btn-xs ${deleteConfirmId === p.id ? 'btn-danger' : 'btn-ghost danger'}`}
+                    onClick={() => handleDelete(p.id)}
+                    onBlur={() => setDeleteConfirmId(null)}
+                  >{deleteConfirmId === p.id ? 'Confirm?' : 'Delete'}</button>
                 </div>
               </div>
             )
@@ -302,28 +331,38 @@ export default function SettingsPage({ onConfigSaved }: Props) {
             <div key={t.id} className="tool-path-row">
               <label className="tool-toggle-label">
                 <input type="checkbox" checked={enabledTools[t.id] ?? true}
-                  onChange={e => setEnabledTools(prev => ({ ...prev, [t.id]: e.target.checked }))} />
+                  onChange={e => updateToolEnabled(t.id, e.target.checked)} />
                 <span className={`tool-dot ${t.exists ? 'exists' : ''}`} />
                 <span className="tool-path-name">{t.name}</span>
               </label>
               <div className="tool-path-inputs">
                 <input className="tool-path-input" placeholder={t.exportDirDisplay}
                   value={toolPathOverrides[t.id] || ''}
-                  onChange={e => setToolPathOverrides(prev => ({ ...prev, [t.id]: e.target.value }))} />
+                  onChange={e => updateToolPath(t.id, e.target.value)} />
                 {toolPathOverrides[t.id] && (
-                  <button className="btn btn-ghost btn-xs" onClick={() => setToolPathOverrides(prev => {
-                    const n = { ...prev }; delete n[t.id]; return n
-                  })}>Reset</button>
+                  <button className="btn btn-ghost btn-xs" onClick={() => updateToolPath(t.id, '')}>Reset</button>
                 )}
               </div>
             </div>
           ))}
         </div>
         <div className="save-row">
-          <button className="btn btn-primary btn-sm" onClick={handleSaveTools} disabled={toolSaving}>
-            {toolSaving ? 'Saving…' : 'Save Tool Settings'}
-          </button>
-          {toolSaved && <span className="saved-msg">✓ Saved</span>}
+          {toolAutoSaved && <span className="saved-msg">✓ Auto-saved</span>}
+        </div>
+      </section>
+
+      {/* ── Appearance ── */}
+      <section className="settings-section">
+        <h2>Appearance</h2>
+        <div className="appearance-row">
+          <span className="appearance-label">Theme</span>
+          <div className="theme-toggle">
+            {(['dark', 'light', 'system'] as Theme[]).map(t => (
+              <button key={t} className={`theme-btn ${theme === t ? 'active' : ''}`} onClick={() => onThemeChange(t)}>
+                {t === 'dark' ? '🌙 Dark' : t === 'light' ? '☀️ Light' : '💻 System'}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -418,6 +457,14 @@ export default function SettingsPage({ onConfigSaved }: Props) {
         .about-item { display: flex; flex-direction: column; gap: 3px; }
         .about-label { font-size: 11px; color: var(--text-muted); }
         .about-item span:last-child { font-size: 13px; font-weight: 500; }
+
+        /* Appearance */
+        .appearance-row { display: flex; align-items: center; gap: 16px; margin-top: 12px; }
+        .appearance-label { font-size: 13px; color: var(--text-muted); width: 60px; flex-shrink: 0; }
+        .theme-toggle { display: flex; gap: 6px; }
+        .theme-btn { padding: 6px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface2); color: var(--text-muted); font-size: 12px; cursor: pointer; transition: all var(--transition); }
+        .theme-btn:hover { border-color: var(--accent); color: var(--text); }
+        .theme-btn.active { border-color: var(--accent); background: rgba(108,99,255,0.15); color: var(--accent); font-weight: 600; }
       `}</style>
     </div>
   )
