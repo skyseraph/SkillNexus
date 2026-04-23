@@ -20,13 +20,15 @@ export function registerConfigHandlers(): void {
     const s = store.store
     return {
       providers: s.providers.map(p => ({ ...p, apiKey: undefined as unknown as string, apiKeySet: !!p.apiKey })),
-      activeProviderId: s.activeProviderId
+      activeProviderId: s.activeProviderId,
+      toolApiKeysSet: { tavily: !!(s.toolApiKeys?.tavily) }
     }
   })
 
   ipcMain.handle('config:set', (_event, config: Partial<AppConfig>) => {
     if ('toolPaths' in config) store.set('toolPaths', config.toolPaths)
     if ('enabledTools' in config) store.set('enabledTools', config.enabledTools)
+    if ('toolApiKeys' in config) store.set('toolApiKeys', config.toolApiKeys)
   })
 
   ipcMain.handle('config:saveProvider', (_event, p: LLMProvider) => {
@@ -99,4 +101,8 @@ export function getActiveModel(): string {
 
 export function getActiveProviderName(): string {
   return getActiveProvider()?.name ?? 'anthropic'
+}
+
+export function getToolApiKeys(): { tavily?: string } {
+  return store.get('toolApiKeys') ?? {}
 }

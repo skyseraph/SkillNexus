@@ -2,14 +2,18 @@ import { useEffect, useState, useCallback } from 'react'
 import type { SkillRankEntry } from '../../../shared/types'
 
 const DIM_COLORS: Record<string, string> = {
-  correctness:  '#6c63ff',
-  clarity:      '#00d4aa',
-  completeness: '#f59e0b',
-  safety:       '#ef4444',
-  overall:      '#6c63ff'
+  correctness:           '#6c63ff',
+  instruction_following: '#00d4aa',
+  safety:                '#ef4444',
+  completeness:          '#f59e0b',
+  robustness:            '#8b5cf6',
+  executability:         '#06b6d4',
+  cost_awareness:        '#10b981',
+  maintainability:       '#f97316',
+  overall:               '#6c63ff'
 }
 
-const DIMS = ['overall', 'correctness', 'clarity', 'completeness', 'safety']
+const DIMS = ['overall', 'correctness', 'instruction_following', 'safety', 'completeness', 'robustness', 'executability', 'cost_awareness', 'maintainability']
 const MEDALS = ['🥇', '🥈', '🥉']
 
 type RankedSkill = SkillRankEntry & {
@@ -67,11 +71,15 @@ export default function TrendingPage() {
       const rankedList: RankedSkill[] = entries.map((e) => ({
         ...e,
         scores: {
-          overall:        e.avgTotal,
-          correctness:    e.avgCorrectness,
-          clarity:        e.avgClarity,
-          completeness:   e.avgCompleteness,
-          safety:         e.avgSafety
+          overall:               e.avgTotal,
+          correctness:           e.avgCorrectness,
+          instruction_following: e.avgInstructionFollowing,
+          safety:                e.avgSafety,
+          completeness:          e.avgCompleteness,
+          robustness:            e.avgRobustness,
+          executability:         e.avgExecutability,
+          cost_awareness:        e.avgCostAwareness,
+          maintainability:       e.avgMaintainability
         }
       }))
       setRanked(rankedList)

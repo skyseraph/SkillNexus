@@ -1,9 +1,10 @@
-import { ipcMain, net } from 'electron'
+import { ipcMain } from 'electron'
 import { writeFileSync, mkdirSync } from 'fs'
 import { join, resolve, dirname } from 'path'
 import { app } from 'electron'
 import yaml from 'js-yaml'
 import { getDb } from '../db'
+import { fetchJson, fetchText } from './github-fetch'
 import type { MarketSkill, Skill, SkillType } from '../../shared/types'
 
 const GH_API = 'https://api.github.com'
@@ -11,69 +12,6 @@ const GH_RAW = 'https://raw.githubusercontent.com'
 
 // Default search: repos tagged with skill-related topics
 const DEFAULT_QUERY = 'topic:claude-skill topic:ai-skill topic:llm-skill topic:claude-code-skill'
-
-const FETCH_TIMEOUT_MS = 15_000
-
-function withFetchTimeout<T>(promise: Promise<T>): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Network request timed out')), FETCH_TIMEOUT_MS)
-    )
-  ])
-}
-
-function fetchJson(url: string): Promise<unknown> {
-  return withFetchTimeout(new Promise((resolve, reject) => {
-    const req = net.request({ url, method: 'GET' })
-    req.setHeader('Accept', 'application/vnd.github+json')
-    req.setHeader('User-Agent', 'SkillNexus/1.0')
-    const chunks: Buffer[] = []
-    req.on('response', (res) => {
-      res.on('data', (c) => chunks.push(c))
-      res.on('end', () => {
-        try {
-          const body = Buffer.concat(chunks).toString('utf-8')
-          if (res.statusCode === 403) {
-            reject(new Error('GitHub API rate limit reached. Please wait a minute and try again.'))
-            return
-          }
-          if (res.statusCode && res.statusCode >= 400) {
-            reject(new Error(`GitHub API error: ${res.statusCode}`))
-            return
-          }
-          resolve(JSON.parse(body))
-        } catch (e) {
-          reject(e)
-        }
-      })
-      res.on('error', reject)
-    })
-    req.on('error', reject)
-    req.end()
-  }))
-}
-
-function fetchText(url: string): Promise<string> {
-  return withFetchTimeout(new Promise((resolve, reject) => {
-    const req = net.request({ url, method: 'GET' })
-    req.setHeader('User-Agent', 'SkillNexus/1.0')
-    const chunks: Buffer[] = []
-    req.on('response', (res) => {
-      res.on('data', (c) => chunks.push(c))
-      res.on('end', () => {
-        if (res.statusCode && res.statusCode >= 400) {
-          reject(new Error(`Failed to fetch file: ${res.statusCode}`))
-          return
-        }
-        resolve(Buffer.concat(chunks).toString('utf-8'))
-      })
-      res.on('error', reject)
-    })
-    req.on('error', reject)
-    req.end()
-  }))
-}
 
 function repoToMarketSkill(repo: Record<string, unknown>): MarketSkill {
   const owner = (repo.owner as Record<string, unknown>)?.login as string

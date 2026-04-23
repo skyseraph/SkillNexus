@@ -52,6 +52,24 @@ function langFromExt(ext: string): string {
   return map[ext.toLowerCase()] || 'text'
 }
 
+// ── Trust Badge ───────────────────────────────────────────────────────────────
+
+const TRUST_META: Record<number, { label: string; color: string }> = {
+  1: { label: 'T1 AI生成',   color: '#888' },
+  2: { label: 'T2 格式验证', color: '#f59e0b' },
+  3: { label: 'T3 已评测',   color: '#00d4aa' },
+  4: { label: 'T4 已批准',   color: '#6c63ff' }
+}
+
+function TrustBadge({ level }: { level: 1 | 2 | 3 | 4 }) {
+  const m = TRUST_META[level] ?? TRUST_META[1]
+  return (
+    <span className="trust-badge" style={{ color: m.color, borderColor: `${m.color}55`, background: `${m.color}11` }}>
+      {m.label}
+    </span>
+  )
+}
+
 // ── Skill Detail Drawer ───────────────────────────────────────────────────────
 
 function TreeNodeView({ node, depth, selectedPath, onSelect, expandedPaths, onToggle }: {
@@ -177,8 +195,9 @@ function ExportTab({ skill, toast }: { skill: Skill; toast?: (msg: string, type?
   )
 }
 
-function SkillDrawer({ skill, onClose, onUninstall, toast }: {
+function SkillDrawer({ skill, onClose, onUninstall, onTrustChange, toast }: {
   skill: Skill; onClose: () => void; onUninstall: (id: string) => void
+  onTrustChange?: (id: string, level: 1 | 2 | 3 | 4) => void
   toast?: (msg: string, type?: 'success' | 'error' | 'info') => void
 }) {
   const [files, setFiles] = useState<SkillFileEntry[]>([])
@@ -224,6 +243,14 @@ function SkillDrawer({ skill, onClose, onUninstall, toast }: {
             </div>
           </div>
           <div className="drawer-header-actions">
+            <TrustBadge level={(skill.trustLevel ?? 1) as 1|2|3|4} />
+            {(skill.trustLevel ?? 1) < 4 && (
+              <button className="btn btn-sm btn-ghost" onClick={async () => {
+                await window.api.skills.setTrustLevel(skill.id, 4)
+                onTrustChange?.(skill.id, 4)
+                toast?.('已批准为 T4', 'success')
+              }}>✓ 批准</button>
+            )}
             <button className={`btn btn-sm ${confirmDelete ? 'btn-danger' : 'btn-ghost'}`}
               onClick={() => { if (!confirmDelete) { setConfirmDelete(true); return } onUninstall(skill.id) }}
               onBlur={() => setConfirmDelete(false)}>
@@ -456,7 +483,7 @@ function SkillCtxMenu({ state, onClose, onCardClick, onUninstall, onNavigate }: 
   onClose: () => void
   onCardClick: (s: Skill) => void
   onUninstall: (id: string) => void
-  onNavigate?: (page: string) => void
+  onNavigate?: (page: string, skillId?: string) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -467,13 +494,14 @@ function SkillCtxMenu({ state, onClose, onCardClick, onUninstall, onNavigate }: 
     return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k) }
   }, [onClose])
 
-  const go = (page: string) => { onClose(); onNavigate?.(page) }
+  const go = (page: string) => { onClose(); onNavigate?.(page, state.skill.id) }
 
   return (
     <div ref={ref} className="ctx-menu" style={{ left: state.x, top: state.y }}>
       <button className="ctx-item" onMouseDown={e => { e.preventDefault(); onClose(); onCardClick(state.skill) }}>🔍 View Details</button>
       <button className="ctx-item" onMouseDown={e => { e.preventDefault(); go('eval') }}>📊 Eval</button>
       <button className="ctx-item" onMouseDown={e => { e.preventDefault(); go('testcase') }}>🧪 TestCase</button>
+      <button className="ctx-item" onMouseDown={e => { e.preventDefault(); go('studio') }}>🎨 Edit in Studio</button>
       <button className="ctx-item" onMouseDown={e => { e.preventDefault(); go('evo') }}>⚡ Evolve</button>
       <div className="ctx-sep" />
       <button className="ctx-item ctx-danger" onMouseDown={e => { e.preventDefault(); onClose(); onUninstall(state.skill.id) }}>🗑 Uninstall</button>
@@ -493,6 +521,7 @@ function SkillCard({ skill, onClick, onUninstall, onCtxMenu, toast }: { skill: S
           <span className="version-badge">v{skill.version}</span>
           <span className={`type-badge ${skill.skillType}`}>{skill.skillType === 'agent' ? 'Agent' : 'Single'}</span>
           {skill.tags.slice(0, 2).map(t => <span key={t} className="tag">#{t}</span>)}
+          <TrustBadge level={(skill.trustLevel ?? 1) as 1|2|3|4} />
         </div>
       </div>
       <div className="card-actions" onClick={e => e.stopPropagation()}>
@@ -519,6 +548,7 @@ function SkillRow({ skill, onClick, onUninstall, onCtxMenu, toast }: { skill: Sk
         <span className="version-badge">v{skill.version}</span>
         <span className={`type-badge ${skill.skillType}`}>{skill.skillType === 'agent' ? 'Agent' : 'Single'}</span>
         {skill.tags.slice(0, 3).map(t => <span key={t} className="tag">#{t}</span>)}
+        <TrustBadge level={(skill.trustLevel ?? 1) as 1|2|3|4} />
       </div>
       <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4 }}>
         <QuickExportBtn skill={skill} toast={toast} />
@@ -539,7 +569,7 @@ function MySkillsTab({ skills, loading, onInstallFile, onInstallDir, onCardClick
   onCardClick: (s: Skill) => void
   onScanDone: (added: Skill[]) => void
   onUninstall: (id: string) => void
-  onNavigate?: (page: string) => void
+  onNavigate?: (page: string, skillId?: string) => void
   toast?: (msg: string, type?: 'success' | 'error' | 'info') => void
 }) {
   const [search, setSearch] = useState('')
@@ -580,7 +610,7 @@ function MySkillsTab({ skills, loading, onInstallFile, onInstallDir, onCardClick
     const q = search.toLowerCase()
     const matchSearch = !q || s.name.toLowerCase().includes(q) || s.tags.some(t => t.toLowerCase().includes(q))
     const matchType = typeFilter === 'all' || s.skillType === typeFilter
-    const matchFormat = formatFilter === 'all' || (s as any).format === formatFilter
+    const matchFormat = formatFilter === 'all' || s.format === formatFilter
     const matchTags = activeTags.size === 0 || [...activeTags].every(t => s.tags.includes(t))
     return matchSearch && matchType && matchFormat && matchTags
   })
@@ -591,8 +621,8 @@ function MySkillsTab({ skills, loading, onInstallFile, onInstallDir, onCardClick
     onScanDone(all)
   }
 
-  const ccCount = skills.filter(s => (s as any).format === 'claude-code').length
-  const ocCount = skills.filter(s => (s as any).format === 'openclaw').length
+  const ccCount = skills.filter(s => s.format === 'claude-code').length
+  const ocCount = skills.filter(s => s.format === 'openclaw').length
   const handleCtxMenu = (e: React.MouseEvent, s: Skill) => {
     const x = Math.min(e.clientX, window.innerWidth - 180)
     const y = Math.min(e.clientY, window.innerHeight - 180)
@@ -832,7 +862,7 @@ function MarketplaceTab({ installedSkills, onInstalled }: {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, type?: 'success' | 'error' | 'info') => void; onNavigate?: (page: string) => void }) {
+export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, type?: 'success' | 'error' | 'info') => void; onNavigate?: (page: string, skillId?: string) => void }) {
   const [skills, setSkills] = useState<Skill[]>([])
   const [loading, setLoading] = useState(true)
   const [installing, setInstalling] = useState(false)
@@ -928,6 +958,10 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
           skill={drawerSkill}
           onClose={() => setDrawerSkill(null)}
           onUninstall={handleUninstall}
+          onTrustChange={(id, level) => {
+            setSkills(prev => prev.map(s => s.id === id ? { ...s, trustLevel: level } : s))
+            setDrawerSkill(prev => prev?.id === id ? { ...prev, trustLevel: level } : prev)
+          }}
           toast={toast}
         />
       )}
@@ -1001,6 +1035,7 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
         .view-btn:hover { color: var(--text); background: var(--surface); }
         .view-btn.active { background: var(--accent); color: #fff; }
         .version-badge { font-size: 10px; color: var(--text-muted); background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; }
+        .trust-badge { font-size: 10px; font-weight: 700; border: 1px solid; border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
         .type-badge { font-size: 10px; border-radius: 3px; padding: 1px 6px; }
         .type-badge.agent { background: rgba(108,99,255,0.15); color: var(--accent); border: 1px solid rgba(108,99,255,0.3); }
         .type-badge.single { background: rgba(0,212,170,0.1); color: var(--success); border: 1px solid rgba(0,212,170,0.2); }

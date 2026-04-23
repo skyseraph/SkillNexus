@@ -3,7 +3,7 @@ import { getDb } from '../db'
 import { getAIProvider } from '../services/ai-provider'
 import { getActiveModel } from './config.handler'
 import { getMainWindow } from '../index'
-import { runEvalJob, withTimeout, AI_TIMEOUT_MS, MAX_TEST_CASES } from '../services/eval-job'
+import { runEvalJob, runAgentEvalJob, withTimeout, AI_TIMEOUT_MS, MAX_TEST_CASES } from '../services/eval-job'
 import { writeFileSync, mkdirSync } from 'fs'
 import { join, resolve, dirname } from 'path'
 import { app } from 'electron'
@@ -33,7 +33,10 @@ export function registerEvalHandlers(): void {
     }
 
     setImmediate(() => {
-      runEvalJob(jobId, skillId, skill.markdown_content as string, testCases).catch((err) => {
+      const job = skill.skill_type === 'agent'
+        ? runAgentEvalJob(jobId, skillId, skill, testCases)
+        : runEvalJob(jobId, skillId, skill.markdown_content as string, testCases)
+      job.catch((err) => {
         win?.webContents.send('eval:progress', { jobId, progress: 100, message: `Fatal error: ${err instanceof Error ? err.message : String(err)}` })
       })
     })
@@ -41,12 +44,13 @@ export function registerEvalHandlers(): void {
     return jobId
   })
 
-  ipcMain.handle('eval:history', (_event, skillId: string) => {
+  ipcMain.handle('eval:history', (_event, skillId: string, limit = 20, offset = 0) => {
     const db = getDb()
+    const total = (db.prepare('SELECT COUNT(*) as cnt FROM eval_history WHERE skill_id = ?').get(skillId) as { cnt: number }).cnt
     const rows = db
-      .prepare('SELECT * FROM eval_history WHERE skill_id = ? ORDER BY created_at DESC LIMIT 50')
-      .all(skillId) as Record<string, unknown>[]
-    return rows.map((r) => ({
+      .prepare('SELECT * FROM eval_history WHERE skill_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?')
+      .all(skillId, limit, offset) as Record<string, unknown>[]
+    const items = rows.map((r) => ({
       id: r.id,
       skillId: r.skill_id,
       model: r.model,
@@ -59,6 +63,33 @@ export function registerEvalHandlers(): void {
       status: r.status,
       createdAt: r.created_at
     }))
+    return { items, total, limit, offset }
+  })
+
+  ipcMain.handle('eval:exportHistory', (_event, skillId: string) => {
+    const db = getDb()
+    const skill = db.prepare('SELECT name, version FROM skills WHERE id = ?').get(skillId) as Record<string, unknown> | undefined
+    const rows = db
+      .prepare('SELECT * FROM eval_history WHERE skill_id = ? ORDER BY created_at DESC')
+      .all(skillId) as Record<string, unknown>[]
+    return {
+      skill: { id: skillId, name: skill?.name, version: skill?.version },
+      exportedAt: new Date().toISOString(),
+      framework: 'AgentSkills G1-G5 + SkillNet (8 dimensions)',
+      dimensions: ['correctness', 'instruction_following', 'safety', 'completeness', 'robustness', 'executability', 'cost_awareness', 'maintainability'],
+      records: rows.map((r) => ({
+        id: r.id,
+        createdAt: new Date(r.created_at as number).toISOString(),
+        status: r.status,
+        model: r.model,
+        provider: r.provider,
+        durationMs: r.duration_ms,
+        totalScore: r.total_score,
+        scores: JSON.parse(r.scores as string),
+        input: r.input_prompt,
+        output: r.output
+      }))
+    }
   })
 
   ipcMain.handle('eval:startThreeCondition', async (
@@ -184,10 +215,14 @@ Output ONLY the Skill content.`,
         s.name AS skill_name,
         COUNT(e.id) AS eval_count,
         AVG(e.total_score) AS avg_total,
-        AVG(json_extract(e.scores, '$.correctness.score')) AS avg_correctness,
-        AVG(json_extract(e.scores, '$.clarity.score'))     AS avg_clarity,
-        AVG(json_extract(e.scores, '$.completeness.score')) AS avg_completeness,
-        AVG(json_extract(e.scores, '$.safety.score'))      AS avg_safety
+        AVG(json_extract(e.scores, '$.correctness.score'))         AS avg_correctness,
+        AVG(json_extract(e.scores, '$.instruction_following.score')) AS avg_instruction_following,
+        AVG(json_extract(e.scores, '$.safety.score'))              AS avg_safety,
+        AVG(json_extract(e.scores, '$.completeness.score'))        AS avg_completeness,
+        AVG(json_extract(e.scores, '$.robustness.score'))          AS avg_robustness,
+        AVG(json_extract(e.scores, '$.executability.score'))       AS avg_executability,
+        AVG(json_extract(e.scores, '$.cost_awareness.score'))      AS avg_cost_awareness,
+        AVG(json_extract(e.scores, '$.maintainability.score'))     AS avg_maintainability
       FROM skills s
       LEFT JOIN eval_history e ON e.skill_id = s.id AND e.status = 'success'
       WHERE s.root_dir NOT LIKE '%three-condition%'
@@ -208,14 +243,18 @@ Output ONLY the Skill content.`,
         .reverse()
 
       return {
-        skillId:         r.skill_id as string,
-        skillName:       (r.skill_name as string) ?? (r.skill_id as string),
-        evalCount:       (r.eval_count as number) ?? 0,
-        avgTotal:        (r.avg_total as number) ?? 0,
-        avgCorrectness:  (r.avg_correctness as number) ?? 0,
-        avgClarity:      (r.avg_clarity as number) ?? 0,
-        avgCompleteness: (r.avg_completeness as number) ?? 0,
-        avgSafety:       (r.avg_safety as number) ?? 0,
+        skillId:                  r.skill_id as string,
+        skillName:                (r.skill_name as string) ?? (r.skill_id as string),
+        evalCount:                (r.eval_count as number) ?? 0,
+        avgTotal:                 (r.avg_total as number) ?? 0,
+        avgCorrectness:           (r.avg_correctness as number) ?? 0,
+        avgInstructionFollowing:  (r.avg_instruction_following as number) ?? 0,
+        avgSafety:                (r.avg_safety as number) ?? 0,
+        avgCompleteness:          (r.avg_completeness as number) ?? 0,
+        avgRobustness:            (r.avg_robustness as number) ?? 0,
+        avgExecutability:         (r.avg_executability as number) ?? 0,
+        avgCostAwareness:         (r.avg_cost_awareness as number) ?? 0,
+        avgMaintainability:       (r.avg_maintainability as number) ?? 0,
         trend
       }
     })

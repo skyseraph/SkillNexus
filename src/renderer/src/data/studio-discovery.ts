@@ -8,6 +8,7 @@ export interface DiscoverySkill {
   tags: string[]
   score5D: SkillScore5D
   content: string
+  skillType?: 'single' | 'agent'
 }
 
 export interface DiscoveryRepo {
@@ -743,6 +744,147 @@ tags: [agile, product, user-story]
 - "以便"部分强调业务价值，不是技术实现
 - 验收标准要可测试、可验证
 - 故事点估算: 1/2/3/5/8（斐波那契）`
+  },
+  {
+    id: 'research-agent',
+    name: 'Research Agent',
+    description: '多步骤研究 Agent：搜索 → 提炼 → 综合报告，支持工具调用',
+    stars: 412,
+    tags: ['agent', 'research', 'web_search'],
+    skillType: 'agent',
+    score5D: { safety: 8.5, completeness: 9.0, executability: 8.8, maintainability: 8.0, costAwareness: 0, orchestration: 9.2 },
+    content: `---
+name: Research Agent
+version: 1.0.0
+format: markdown
+skill_type: agent
+tags: [agent, research, web_search]
+tools: [web_search, summarize]
+subskills: [search-step, synthesis-step]
+---
+
+# Research Agent
+
+对给定主题执行多步骤深度研究，输出结构化报告。
+
+# Agent 目标
+
+接收研究主题，通过多轮搜索和信息提炼，生成包含关键发现、数据支撑和结论的综合报告。
+
+# 执行步骤
+
+1. **分解主题**：将研究主题拆解为 3-5 个子问题
+2. **搜索**：对每个子问题调用 web_search，获取最新信息
+3. **提炼**：对每条搜索结果调用 summarize，提取关键事实
+4. **综合**：整合所有子问题的发现，识别共识与分歧
+5. **输出报告**：按结构化模板生成最终报告
+
+# 工具使用规范
+
+- web_search: 每个子问题搜索 2-3 次，使用不同关键词
+- summarize: 对超过 500 字的内容进行压缩提炼
+
+# 输出格式
+
+## 研究报告：{主题}
+
+### 关键发现
+- [发现1]
+- [发现2]
+
+### 数据支撑
+[具体数据和来源]
+
+### 结论
+[综合判断]`
+  },
+  {
+    id: 'code-review-agent',
+    name: 'Code Review Agent',
+    description: '自动化代码审查 Agent：安全扫描 → 质量分析 → 改进建议',
+    stars: 356,
+    tags: ['agent', 'code-review', 'security'],
+    skillType: 'agent',
+    score5D: { safety: 9.5, completeness: 9.0, executability: 9.2, maintainability: 8.5, costAwareness: 0, orchestration: 8.8 },
+    content: `---
+name: Code Review Agent
+version: 1.0.0
+format: markdown
+skill_type: agent
+tags: [agent, code-review, security]
+tools: [code_exec, file_read]
+subskills: [security-scan, quality-check, suggestion-writer]
+---
+
+# Code Review Agent
+
+对代码变更执行全面的自动化审查，覆盖安全、质量和可维护性三个维度。
+
+# Agent 目标
+
+接收代码文件或 diff，输出分层的审查报告，包含阻塞问题、改进建议和正面反馈。
+
+# 执行步骤
+
+1. **读取代码**：调用 file_read 获取待审查文件内容
+2. **安全扫描**：检查 OWASP Top 10、注入漏洞、硬编码密钥
+3. **质量分析**：检查复杂度、重复代码、命名规范、测试覆盖
+4. **生成建议**：对每个问题生成具体的修复代码示例
+5. **输出报告**：按严重程度分层展示
+
+# 工具使用规范
+
+- file_read: 读取源文件，支持多文件批量读取
+- code_exec: 运行静态分析工具（如 eslint、bandit）
+
+# 输出格式
+
+## 🔴 阻塞问题（必须修复）
+## 🟡 改进建议（建议修复）
+## 🟢 正面反馈`
+  },
+  {
+    id: 'content-pipeline-agent',
+    name: 'Content Pipeline Agent',
+    description: '内容生产流水线 Agent：大纲 → 草稿 → 润色 → 发布格式',
+    stars: 298,
+    tags: ['agent', 'writing', 'pipeline'],
+    skillType: 'agent',
+    score5D: { safety: 8.0, completeness: 8.8, executability: 9.0, maintainability: 8.5, costAwareness: 0, orchestration: 8.5 },
+    content: `---
+name: Content Pipeline Agent
+version: 1.0.0
+format: markdown
+skill_type: agent
+tags: [agent, writing, pipeline]
+tools: [web_search, summarize]
+subskills: [outline-writer, draft-writer, editor, formatter]
+---
+
+# Content Pipeline Agent
+
+将内容主题经过多阶段流水线处理，最终输出适合发布的高质量内容。
+
+# Agent 目标
+
+接收内容主题和目标受众，经过大纲规划、草稿撰写、编辑润色、格式化四个阶段，输出可直接发布的内容。
+
+# 执行步骤
+
+1. **研究主题**：调用 web_search 收集最新信息和数据
+2. **生成大纲**：基于研究结果规划内容结构（3-5个主要章节）
+3. **撰写草稿**：按大纲逐节展开，每节 200-400 字
+4. **编辑润色**：检查逻辑连贯性、语言流畅度、事实准确性
+5. **格式化输出**：根据目标平台（博客/社媒/文档）调整格式
+
+# 工具使用规范
+
+- web_search: 步骤1使用，搜索 3-5 个相关关键词
+- summarize: 对超长草稿段落进行压缩
+
+# 输出格式
+
+输出完整的格式化内容，附带元数据（标题、摘要、标签）`
   },
   {
     id: 'system-prompt-optimizer',

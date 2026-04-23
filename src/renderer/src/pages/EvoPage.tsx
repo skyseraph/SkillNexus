@@ -1,18 +1,25 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import type { Skill, EvalResult, EvoRunResult } from '../../../shared/types'
+import type { Skill, EvalResult, EvalHistoryPage, EvoRunResult } from '../../../shared/types'
 
 const STRATEGIES = [
-  { id: 'improve_weak', label: '修复薄弱维度', icon: '🎯', hint: '针对评测得分最低的维度重点改进' },
-  { id: 'expand',       label: '扩展能力边界', icon: '🚀', hint: '增加新能力、更详细的说明和更广的适用场景' },
-  { id: 'simplify',     label: '精简聚焦',     icon: '✂️', hint: '提炼核心，让 Skill 更简洁、更易遵循' },
-  { id: 'add_examples', label: '补充示例',     icon: '📚', hint: '在 Skill 内添加具体示例和边界情况说明' }
+  { id: 'improve_weak',   label: '修复薄弱维度', icon: '🎯', hint: '针对评测得分最低的维度重点改进' },
+  { id: 'expand',         label: '扩展能力边界', icon: '🚀', hint: '增加新能力、更详细的说明和更广的适用场景' },
+  { id: 'simplify',       label: '精简聚焦',     icon: '✂️', hint: '提炼核心，让 Skill 更简洁、更易遵循' },
+  { id: 'add_examples',   label: '补充示例',     icon: '📚', hint: '在 Skill 内添加具体示例和边界情况说明' },
+  { id: 'rewrite_weak',   label: '重写薄弱段落', icon: '🔧', hint: '找到导致失败的段落，原地重写，不添加新节' },
+  { id: 'fix_regression', label: '修复回归',     icon: '🛡️', hint: '上次进化引入了回归，恢复有害改动并寻找更安全的改进' }
 ]
 
 const DIM_COLORS: Record<string, string> = {
-  correctness:  '#6c63ff',
-  clarity:      '#00d4aa',
-  completeness: '#f59e0b',
-  safety:       '#ef4444'
+  correctness:           '#6c63ff',
+  clarity:               '#00d4aa',
+  completeness:          '#f59e0b',
+  safety:                '#ef4444',
+  instruction_following: '#3b82f6',
+  robustness:            '#8b5cf6',
+  executability:         '#10b981',
+  cost_awareness:        '#f97316',
+  maintainability:       '#ec4899'
 }
 
 // ── Score comparison bar ──────────────────────────────────────────────────────
@@ -44,9 +51,10 @@ function DimCompareRow({ dim, before, after }: { dim: string; before: number; af
 
 // ── Aggregate scores from eval history ───────────────────────────────────────
 
-function avgScores(history: EvalResult[]): Record<string, number> {
+function avgScores(history: EvalResult[] | EvalHistoryPage): Record<string, number> {
+  const items: EvalResult[] = Array.isArray(history) ? history : history.items
   const totals: Record<string, { sum: number; count: number }> = {}
-  for (const r of history) {
+  for (const r of items) {
     for (const [dim, s] of Object.entries(r.scores)) {
       if (!totals[dim]) totals[dim] = { sum: 0, count: 0 }
       totals[dim].sum += s.score
@@ -74,9 +82,9 @@ type Phase =
 
 // ── Main EvoPage ──────────────────────────────────────────────────────────────
 
-export default function EvoPage() {
+export default function EvoPage({ initialSkillId }: { initialSkillId?: string } = {}) {
   const [skills, setSkills] = useState<Skill[]>([])
-  const [selectedId, setSelectedId] = useState('')
+  const [selectedId, setSelectedId] = useState(initialSkillId ?? '')
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null)
   const [origHistory, setOrigHistory] = useState<EvalResult[]>([])
   const [strategy, setStrategy] = useState('improve_weak')
@@ -89,10 +97,21 @@ export default function EvoPage() {
   const [apiKeySet, setApiKeySet] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
+  const [evolvedSkills, setEvolvedSkills] = useState<Skill[]>([])
+
+  const refreshEvolved = useCallback(() => {
+    window.api.skills.getEvolved().then(setEvolvedSkills)
+  }, [])
+
+  const handleDeleteEvolved = useCallback(async (id: string) => {
+    await window.api.skills.uninstall(id)
+    refreshEvolved()
+  }, [refreshEvolved])
 
   useEffect(() => {
     window.api.skills.getAll().then(setSkills)
     window.api.config.get().then((c) => setApiKeySet(c.providers.length > 0))
+    refreshEvolved()
   }, [])
 
   const loadSkill = useCallback(async (id: string) => {
@@ -106,8 +125,8 @@ export default function EvoPage() {
     const skill = skills.find((s) => s.id === id) ?? null
     setSelectedSkill(skill)
     const history = await window.api.eval.history(id)
-    setOrigHistory(history)
-    setOrigScores(avgScores(history))
+    setOrigHistory(history.items)
+    setOrigScores(avgScores(history.items))
   }, [skills])
 
   useEffect(() => { loadSkill(selectedId) }, [selectedId, loadSkill])
@@ -126,8 +145,8 @@ export default function EvoPage() {
         window.api.eval.history(selectedId),
         window.api.eval.history(result.evolvedSkill.id)
       ])
-      const oScores = avgScores(origH)
-      const eScores = avgScores(evolvedH)
+      const oScores = avgScores(origH.items)
+      const eScores = avgScores(evolvedH.items)
       if (Object.keys(eScores).length > 0 || attempts >= maxAttempts) {
         clearInterval(interval)
         cleanupRef.current = null
@@ -177,6 +196,7 @@ export default function EvoPage() {
     try {
       const result = await window.api.evo.installAndEval(selectedId, evolvedContent)
       setEvoResult(result)
+      refreshEvolved()
       if (result.evolvedJobId) {
         // Listen for progress on both jobs
         cleanupRef.current?.()
@@ -371,6 +391,28 @@ export default function EvoPage() {
 
       {error && <div className="error-banner">⚠️ {error}</div>}
 
+      {/* Evolved skills management */}
+      {evolvedSkills.length > 0 && (
+        <div className="evo-card">
+          <div className="card-title">已安装的进化版本（{evolvedSkills.length}）</div>
+          <div className="evolved-list">
+            {evolvedSkills.map((s) => (
+              <div key={s.id} className="evolved-row">
+                <div className="evolved-info">
+                  <span className="evolved-name">{s.name}</span>
+                  <span className="evolved-meta">v{s.version} · {new Date(s.installedAt).toLocaleDateString()}</span>
+                </div>
+                <button
+                  className="btn btn-ghost btn-sm evolved-del"
+                  onClick={() => handleDeleteEvolved(s.id)}
+                  title="删除"
+                >✕</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <style>{`
         .evo-root { display: flex; flex-direction: column; gap: 20px; }
         .evo-header h1 { font-size: 24px; font-weight: 700; }
@@ -450,6 +492,15 @@ export default function EvoPage() {
 
         .installed-info { background: rgba(74,222,128,0.08); border: 1px solid var(--success); border-radius: var(--radius); padding: 10px 14px; color: var(--success); font-size: 13px; margin-bottom: 16px; }
         .result-actions { display: flex; gap: 8px; }
+
+        /* Evolved list */
+        .evolved-list { display: flex; flex-direction: column; gap: 6px; }
+        .evolved-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; }
+        .evolved-info { display: flex; flex-direction: column; gap: 2px; }
+        .evolved-name { font-size: 13px; font-weight: 600; }
+        .evolved-meta { font-size: 11px; color: var(--text-muted); }
+        .evolved-del { color: var(--danger); opacity: 0.6; padding: 2px 8px; }
+        .evolved-del:hover { opacity: 1; }
       `}</style>
     </div>
   )

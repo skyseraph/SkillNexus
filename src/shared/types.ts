@@ -22,7 +22,8 @@ export interface SkillScore5D {
   completeness: number     // 0-10
   executability: number    // 0-10
   maintainability: number  // 0-10
-  costAwareness: number    // 0-10
+  costAwareness: number    // 0-10, single skill
+  orchestration?: number   // 0-10, agent skill only
 }
 
 export interface SkillFileEntry {
@@ -69,10 +70,16 @@ export interface SkillRankEntry {
   skillName: string
   evalCount: number
   avgTotal: number
+  // AgentSkills G1-G5
   avgCorrectness: number
-  avgClarity: number
-  avgCompleteness: number
+  avgInstructionFollowing: number
   avgSafety: number
+  avgCompleteness: number
+  avgRobustness: number
+  // SkillNet
+  avgExecutability: number
+  avgCostAwareness: number
+  avgMaintainability: number
   trend: number[]
 }
 
@@ -158,16 +165,58 @@ export const LLM_PROVIDER_PRESETS: LLMProviderPreset[] = [
   { id: 'lmstudio',    name: 'LM Studio',          baseUrl: 'http://localhost:1234',                        defaultModel: 'local-model',                    category: 'local',       websiteUrl: 'https://lmstudio.ai',                   keyPlaceholder: '',            requiresKey: false },
 ]
 
+export interface GithubSkillResult {
+  id: string        // owner/repo + "/" + path
+  name: string      // filename without .md
+  repoName: string  // owner/repo
+  description: string
+  stars: number
+  url: string       // html_url on github.com
+  rawUrl: string    // raw.githubusercontent.com URL
+  tags: string[]    // repo topics
+}
+
 export interface AppConfig {
   providers: LLMProvider[]         // all saved providers (preset-derived + custom)
   activeProviderId: string         // id of the active provider
   toolPaths?: Record<string, string>
   enabledTools?: Record<string, boolean>
+  githubToken?: string
+  toolApiKeys?: { tavily?: string }
 }
 
 export interface AppConfigPublic {
   providers: Array<Omit<LLMProvider, 'apiKey'> & { apiKeySet: boolean }>
   activeProviderId: string
+  toolApiKeysSet?: { tavily: boolean }
+}
+
+export interface EvalHistoryPage {
+  items: EvalResult[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface EvalExportRecord {
+  id: string
+  createdAt: string
+  status: 'success' | 'error'
+  model: string
+  provider: string
+  durationMs: number
+  totalScore: number
+  scores: Record<string, EvalScore>
+  input: string
+  output: string
+}
+
+export interface EvalExport {
+  skill: { id: string; name: unknown; version: unknown }
+  exportedAt: string
+  framework: string
+  dimensions: string[]
+  records: EvalExportRecord[]
 }
 
 export interface EvoRunResult {
@@ -197,10 +246,12 @@ export interface IpcChannels {
   'skills:importScanned': (filePath: string) => Promise<Skill>
   'skills:export': (skillId: string, toolId: string, mode: 'copy' | 'symlink') => Promise<void>
   'skills:getToolTargets': () => Promise<ToolTarget[]>
+  'skills:setTrustLevel': (id: string, level: 1 | 2 | 3 | 4) => Promise<void>
   'marketplace:search': (query: string) => Promise<MarketSkill[]>
   'marketplace:install': (skill: MarketSkill) => Promise<Skill>
   'eval:start': (skillId: string, testCaseIds: string[]) => Promise<string>
-  'eval:history': (skillId: string) => Promise<EvalResult[]>
+  'eval:history': (skillId: string, limit?: number, offset?: number) => Promise<EvalHistoryPage>
+  'eval:exportHistory': (skillId: string) => Promise<EvalExport>
   'eval:historyAll': () => Promise<SkillRankEntry[]>
   'eval:startThreeCondition': (skillId: string, testCaseIds: string[]) => Promise<ThreeConditionResult>
   'studio:generate': (prompt: string) => Promise<string>
@@ -216,6 +267,8 @@ export interface IpcChannels {
   'studio:extract': (conversation: string) => Promise<void>
   'studio:scoreSkill': (content: string) => Promise<SkillScore5D>
   'studio:similarSkills': (content: string) => Promise<Skill[]>
+  'studio:searchGithub': (query: string) => Promise<GithubSkillResult[]>
+  'studio:fetchGithubContent': (rawUrl: string) => Promise<string>
   'config:get': () => Promise<AppConfigPublic>
   'config:set': (config: Partial<AppConfig>) => Promise<void>
   'config:test': (providerId: string) => Promise<{ ok: boolean; error?: string }>

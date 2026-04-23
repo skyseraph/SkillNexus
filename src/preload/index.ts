@@ -1,9 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Skill, SkillFileEntry, TestCase, EvalResult, AppConfigPublic, AppConfig, ScannedSkill, ScanResult, ToolTarget, MarketSkill, EvoRunResult, LLMProvider, ThreeConditionResult, SkillRankEntry, SkillScore5D } from '../shared/types'
+import type { Skill, SkillFileEntry, TestCase, EvalResult, EvalHistoryPage, EvalExport, AppConfigPublic, AppConfig, ScannedSkill, ScanResult, ToolTarget, MarketSkill, EvoRunResult, LLMProvider, ThreeConditionResult, SkillRankEntry, SkillScore5D, GithubSkillResult } from '../shared/types'
 
 const api = {
   skills: {
     getAll: (): Promise<Skill[]> => ipcRenderer.invoke('skills:getAll'),
+    getEvolved: (): Promise<Skill[]> => ipcRenderer.invoke('skills:getEvolved'),
     install: (filePath: string): Promise<Skill> => ipcRenderer.invoke('skills:install', filePath),
     installDir: (dirPath: string): Promise<Skill> => ipcRenderer.invoke('skills:installDir', dirPath),
     uninstall: (id: string): Promise<void> => ipcRenderer.invoke('skills:uninstall', id),
@@ -14,7 +15,8 @@ const api = {
     importScanned: (filePath: string): Promise<Skill> => ipcRenderer.invoke('skills:importScanned', filePath),
     export: (skillId: string, toolId: string, mode: 'copy' | 'symlink'): Promise<void> =>
       ipcRenderer.invoke('skills:export', skillId, toolId, mode),
-    getToolTargets: (): Promise<ToolTarget[]> => ipcRenderer.invoke('skills:getToolTargets')
+    getToolTargets: (): Promise<ToolTarget[]> => ipcRenderer.invoke('skills:getToolTargets'),
+    setTrustLevel: (id: string, level: 1 | 2 | 3 | 4): Promise<void> => ipcRenderer.invoke('skills:setTrustLevel', id, level)
   },
   marketplace: {
     search: (query: string): Promise<MarketSkill[]> => ipcRenderer.invoke('marketplace:search', query),
@@ -23,8 +25,10 @@ const api = {
   eval: {
     start: (skillId: string, testCaseIds: string[]): Promise<string> =>
       ipcRenderer.invoke('eval:start', skillId, testCaseIds),
-    history: (skillId: string): Promise<EvalResult[]> =>
-      ipcRenderer.invoke('eval:history', skillId),
+    history: (skillId: string, limit = 20, offset = 0): Promise<EvalHistoryPage> =>
+      ipcRenderer.invoke('eval:history', skillId, limit, offset),
+    exportHistory: (skillId: string): Promise<EvalExport> =>
+      ipcRenderer.invoke('eval:exportHistory', skillId),
     historyAll: (): Promise<SkillRankEntry[]> =>
       ipcRenderer.invoke('eval:historyAll'),
     startThreeCondition: (skillId: string, testCaseIds: string[]): Promise<ThreeConditionResult> =>
@@ -49,6 +53,12 @@ const api = {
       ipcRenderer.invoke('studio:scoreSkill', content),
     similarSkills: (content: string): Promise<Skill[]> =>
       ipcRenderer.invoke('studio:similarSkills', content),
+    searchGithub: (query: string): Promise<GithubSkillResult[]> =>
+      ipcRenderer.invoke('studio:searchGithub', query),
+    fetchGithubContent: (rawUrl: string): Promise<string> =>
+      ipcRenderer.invoke('studio:fetchGithubContent', rawUrl),
+    recentEvalHistory: (limit: number): Promise<{ skillName: string; inputPrompt: string; output: string; createdAt: number }[]> =>
+      ipcRenderer.invoke('studio:recentEvalHistory', limit),
     onChunk: (cb: (data: { chunk: string; done: boolean; noSkill?: boolean }) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, data: { chunk: string; done: boolean; noSkill?: boolean }) => cb(data)
       ipcRenderer.on('studio:chunk', handler)

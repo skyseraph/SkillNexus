@@ -1,13 +1,14 @@
 import { ipcMain } from 'electron'
 import { getAIProvider } from '../services/ai-provider'
-import { getActiveModel } from './config.handler'
+import { getActiveModel, getConfig } from './config.handler'
 import { getDb } from '../db'
 import { writeFileSync, mkdirSync } from 'fs'
 import { join, resolve, basename, dirname } from 'path'
 import { app } from 'electron'
 import yaml from 'js-yaml'
 import { withTimeout, AI_TIMEOUT_MS } from '../services/eval-job'
-import type { SkillScore5D } from '../../shared/types'
+import { fetchJson, fetchText } from './github-fetch'
+import type { SkillScore5D, GithubSkillResult } from '../../shared/types'
 
 const SKILL_FORMAT_HINT = `A Skill has this structure:
 ---
@@ -27,11 +28,15 @@ ${SKILL_FORMAT_HINT}
 
 Generate ONLY the Skill content, no extra commentary.`
 
-const EVOLVE_SYSTEM_PROMPT = `You are an expert Skill optimizer. You receive an existing AI Skill and must produce an improved version.
+const EVOLVE_SYSTEM_PROMPT = `You are an expert Skill optimizer. You receive an existing AI Skill, its real evaluation evidence, and an evolution strategy. Your job: diagnose the root cause of underperformance, then produce a strictly better version of the Skill.
 
 ${SKILL_FORMAT_HINT}
 
-Output ONLY the complete improved Skill. No commentary outside the Skill itself.`
+## Hard Rules
+- TASK-AGNOSTIC: do NOT hard-code specific inputs, file names, or example values from the evidence. The Skill guides an LLM across MANY tasks.
+- NO REGRESSION: a fix that improves one dimension by harming another is NOT an improvement.
+- SURGICAL: prefer rewriting existing sections over appending new ones. Net addition should be under ~40 lines.
+- Output ONLY the complete improved Skill. No extra commentary outside the Skill itself.`
 
 const EXAMPLES_SYSTEM_PROMPT = `You are an expert Skill author. Given input/output examples of an AI task, infer and write a comprehensive Skill that would produce similar outputs.
 
@@ -40,10 +45,12 @@ ${SKILL_FORMAT_HINT}
 Output ONLY the complete Skill. No extra commentary.`
 
 const STRATEGY_HINTS: Record<string, string> = {
-  improve_weak: 'Focus specifically on improving the weakest-scoring dimensions.',
-  expand: 'Expand the skill with new capabilities, more detailed instructions, and broader use case coverage.',
-  simplify: 'Simplify and distill the skill to its essential core, making it more focused and concise.',
-  add_examples: 'Add concrete examples, sample inputs/outputs, and edge-case guidance within the skill.'
+  improve_weak:   'Focus on the weakest-scoring dimensions shown in the evidence. Fix the root cause — do not just add instructions that address the symptoms.',
+  expand:         'Expand capability: add coverage for edge cases and broader use cases the evidence shows are missing. Do not remove existing coverage.',
+  simplify:       'Simplify and distill to the essential core. Remove redundancy, tighten wording, improve scannability. Preserve all capability.',
+  add_examples:   'Add 2-4 concrete input/output examples and edge-case guidance inside the Skill. Examples must be illustrative, not copied from eval evidence.',
+  rewrite_weak:   'Identify the section(s) most responsible for failing tasks and rewrite them in place. Do not add new sections unless absolutely necessary.',
+  fix_regression: 'The previous evolution caused a regression. Carefully compare old and new versions, revert the harmful change, and find a safer improvement.'
 }
 
 const EXTRACT_SYSTEM_PROMPT = `You are an expert Skill author. Analyze the conversation below and extract a reusable Skill ONLY if it contains stable, durable user preferences, constraints, or workflows that would benefit future interactions.
@@ -68,6 +75,18 @@ Dimensions:
 Respond with ONLY valid JSON in this exact format:
 {"safety":8,"completeness":7,"executability":9,"maintainability":8,"costAwareness":6}`
 
+const SCORE_AGENT_SYSTEM_PROMPT = `You are an Agent Skill quality evaluator. Score the given Agent Skill on 5 dimensions, each from 0 to 10.
+
+Dimensions:
+- safety: Does it avoid harmful, biased, or dangerous instructions?
+- completeness: Does it cover the agent task thoroughly with clear instructions?
+- executability: Can an AI follow it without ambiguity?
+- maintainability: Is it well-structured, readable, and easy to update?
+- orchestration: Are the steps logically ordered, tools properly declared, and sub-skill coordination clear?
+
+Respond with ONLY valid JSON in this exact format:
+{"safety":8,"completeness":7,"executability":9,"maintainability":8,"orchestration":7}`
+
 export function registerStudioHandlers(): void {
   ipcMain.handle('studio:generate', async (_event, prompt: string) => {
     const provider = getAIProvider()
@@ -85,8 +104,8 @@ export function registerStudioHandlers(): void {
     if (!skill) throw new Error(`Skill ${skillId} not found`)
 
     const history = db.prepare(
-      'SELECT scores FROM eval_history WHERE skill_id = ? ORDER BY created_at DESC LIMIT 20'
-    ).all(skillId) as { scores: string }[]
+      'SELECT scores, input_prompt, output, status FROM eval_history WHERE skill_id = ? ORDER BY created_at DESC LIMIT 20'
+    ).all(skillId) as { scores: string; input_prompt: string; output: string; status: string }[]
 
     // Aggregate avg score per dimension
     const totals: Record<string, { sum: number; count: number }> = {}
@@ -105,9 +124,41 @@ export function registerStudioHandlers(): void {
       .map(([dim, { sum, count }]) => ({ dim, avg: sum / count }))
       .sort((a, b) => a.avg - b.avg)
 
-    const scoresSummary = dimAvgs.length > 0
-      ? `Evaluation scores (${history.length} evals): ${dimAvgs.map(d => `${d.dim}: ${d.avg.toFixed(1)}/10`).join(', ')}`
-      : 'No evaluation history available.'
+    // Build evidence: score summary + worst-performing samples
+    let evidenceBlock = ''
+    if (dimAvgs.length > 0) {
+      evidenceBlock += `## Evaluation Evidence (${history.length} runs)\n`
+      evidenceBlock += `Score by dimension (sorted worst→best):\n`
+      evidenceBlock += dimAvgs.map(d => `  ${d.dim}: ${d.avg.toFixed(1)}/10`).join('\n')
+      evidenceBlock += '\n\n'
+
+      // Include up to 3 worst-scoring samples as concrete evidence
+      const failingSamples = history
+        .filter(r => r.status === 'success')
+        .map(r => {
+          try {
+            const scores = JSON.parse(r.scores) as Record<string, { score: number }>
+            const avg = Object.values(scores).reduce((s, v) => s + v.score, 0) / Object.values(scores).length
+            return { avg, input: r.input_prompt, output: r.output }
+          } catch { return null }
+        })
+        .filter(Boolean)
+        .sort((a, b) => (a!.avg - b!.avg))
+        .slice(0, 3)
+
+      if (failingSamples.length > 0) {
+        evidenceBlock += `## Failing Samples (lowest scoring)\n`
+        for (let i = 0; i < failingSamples.length; i++) {
+          const s = failingSamples[i]!
+          evidenceBlock += `### Sample ${i + 1} (avg score: ${s.avg.toFixed(1)}/10)\n`
+          evidenceBlock += `Input: ${s.input.slice(0, 300)}${s.input.length > 300 ? '...' : ''}\n`
+          const outputPreview = s.output.slice(0, 400)
+          evidenceBlock += `Output: ${outputPreview}${s.output.length > 400 ? '...' : ''}\n\n`
+        }
+      }
+    } else {
+      evidenceBlock = '## Evaluation Evidence\nNo evaluation history available.\n\n'
+    }
 
     const strategyHint = STRATEGY_HINTS[strategy] ?? STRATEGY_HINTS.improve_weak
 
@@ -119,7 +170,8 @@ export function registerStudioHandlers(): void {
 
     const userMessage =
       `Current Skill (v${currentVersion}):\n\n${skill.markdown_content as string}\n\n` +
-      `${scoresSummary}\n\nEvolution strategy: ${strategyHint}\n\n` +
+      `${evidenceBlock}\n` +
+      `## Evolution Strategy\n${strategyHint}\n\n` +
       `Produce the improved Skill at version ${nextVersion}:`
 
     const provider = getAIProvider()
@@ -244,14 +296,26 @@ export function registerStudioHandlers(): void {
   // Score a Skill on 5 dimensions (SkillNet-style)
   ipcMain.handle('studio:scoreSkill', async (_event, content: string): Promise<SkillScore5D> => {
     const provider = getAIProvider()
+    const isAgent = /^---[\s\S]*?skill_type:\s*agent/m.test(content)
+    const systemPrompt = isAgent ? SCORE_AGENT_SYSTEM_PROMPT : SCORE_SYSTEM_PROMPT
     const result = await withTimeout(
-      provider.call({ model: getActiveModel(), systemPrompt: SCORE_SYSTEM_PROMPT, userMessage: content }),
+      provider.call({ model: getActiveModel(), systemPrompt, userMessage: content }),
       AI_TIMEOUT_MS,
       'studio:scoreSkill'
     )
     try {
       const parsed = JSON.parse(result.content.trim()) as Record<string, number>
       const clamp = (v: unknown) => Math.min(10, Math.max(0, Number(v) || 0))
+      if (isAgent) {
+        return {
+          safety:          clamp(parsed.safety),
+          completeness:    clamp(parsed.completeness),
+          executability:   clamp(parsed.executability),
+          maintainability: clamp(parsed.maintainability),
+          costAwareness:   0,
+          orchestration:   clamp(parsed.orchestration)
+        }
+      }
       return {
         safety:         clamp(parsed.safety),
         completeness:   clamp(parsed.completeness),
@@ -302,5 +366,57 @@ export function registerStudioHandlers(): void {
         installedAt: r.installed_at as number,
         updatedAt: r.updated_at as number
       }))
+  })
+
+  const GH_RAW = 'https://raw.githubusercontent.com'
+
+  function codeItemToResult(item: Record<string, unknown>): GithubSkillResult {
+    const repo = item.repository as Record<string, unknown>
+    const htmlUrl = item.html_url as string
+    const rawUrl = htmlUrl
+      .replace('https://github.com/', `${GH_RAW}/`)
+      .replace('/blob/', '/')
+    return {
+      id: `${repo.full_name as string}/${item.path as string}`,
+      name: (item.name as string).replace(/\.md$/i, ''),
+      repoName: repo.full_name as string,
+      description: (repo.description as string) || '',
+      stars: (repo.stargazers_count as number) || 0,
+      url: htmlUrl,
+      rawUrl,
+      tags: (repo.topics as string[]) || []
+    }
+  }
+
+  ipcMain.handle('studio:searchGithub', async (_event, query: string): Promise<GithubSkillResult[]> => {
+    const token = getConfig().githubToken
+    const q = encodeURIComponent(`${query.trim()} extension:md`)
+    const url = `https://api.github.com/search/code?q=${q}&per_page=30`
+    const data = await fetchJson(url, token) as { items?: Record<string, unknown>[] }
+    return (data.items || []).map(codeItemToResult)
+  })
+
+  ipcMain.handle('studio:fetchGithubContent', async (_event, rawUrl: string): Promise<string> => {
+    if (!rawUrl.startsWith(`${GH_RAW}/`)) {
+      throw new Error('Security: only raw.githubusercontent.com URLs are permitted')
+    }
+    return fetchText(rawUrl, getConfig().githubToken)
+  })
+
+  ipcMain.handle('studio:recentEvalHistory', (_event, limit: number) => {
+    const db = getDb()
+    const rows = db.prepare(`
+      SELECT eh.input_prompt, eh.output, eh.created_at, s.name as skill_name
+      FROM eval_history eh
+      LEFT JOIN skills s ON s.id = eh.skill_id
+      ORDER BY eh.created_at DESC
+      LIMIT ?
+    `).all(Math.min(limit || 20, 50)) as { input_prompt: string; output: string; created_at: number; skill_name: string }[]
+    return rows.map(r => ({
+      skillName: r.skill_name || 'Unknown',
+      inputPrompt: r.input_prompt,
+      output: r.output,
+      createdAt: r.created_at
+    }))
   })
 }

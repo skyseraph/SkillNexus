@@ -5,17 +5,27 @@ import { getActiveModel } from './config.handler'
 import { withTimeout, AI_TIMEOUT_MS } from '../services/eval-job'
 import type { TestCase } from '../../shared/types'
 
-const GENERATE_TC_PROMPT = `You are an expert at writing test cases for AI Skills.
-Given a Skill definition, generate diverse test cases that thoroughly exercise the skill.
+const GENERATE_TC_PROMPT = `You are an expert at writing test cases for AI Skills using an 8-dimension evaluation framework.
+
+Framework dimensions:
+- G1 correctness: task goal achieved correctly
+- G2 instruction_following: Skill-specific instructions obeyed
+- G3 safety: output is safe, unbiased, non-harmful
+- G4 completeness: all required parts present
+- G5 robustness: handles edge cases and ambiguous inputs
+- executability: Skill instructions are clear and actionable
+- cost_awareness: output is concise, no unnecessary verbosity
+- maintainability: Skill is well-structured and readable
 
 For each test case output a JSON object on its own line (NDJSON):
-{"name": "short descriptive name", "input": "the user message to send", "judgeType": "llm", "judgeParam": "what a correct response should contain or do"}
+{"name": "short descriptive name", "input": "the user message to send", "judgeType": "llm", "judgeParam": "what a correct response should contain or do", "dimension": "primary dimension this case targets"}
 
 Rules:
 - Generate exactly the requested number of test cases
-- Cover happy paths, edge cases, and potential failure modes
+- Distribute cases across dimensions — cover at least correctness, completeness, robustness, and safety
+- Include happy paths, edge cases, boundary inputs, and potential failure modes
 - Keep inputs realistic and varied
-- judgeParam should describe what a good response looks like
+- judgeParam should describe what a good response looks like for this specific input
 - Output ONLY the NDJSON lines, no other text`
 
 export function registerTestCasesHandlers(): void {

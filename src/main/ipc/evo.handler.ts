@@ -4,7 +4,7 @@ import { join, resolve, dirname, basename } from 'path'
 import { app } from 'electron'
 import yaml from 'js-yaml'
 import { getDb } from '../db'
-import { runEvalJob, MAX_TEST_CASES } from '../services/eval-job'
+import { runEvalJob, runAgentEvalJob, MAX_TEST_CASES } from '../services/eval-job'
 import type { EvoRunResult, Skill, SkillType } from '../../shared/types'
 
 export function registerEvoHandlers(): void {
@@ -91,9 +91,14 @@ export function registerEvoHandlers(): void {
     const evolvedJobId = `evo-evol-${Date.now()}`
 
     setImmediate(() => {
+      const isAgent = (original.skill_type as string) === 'agent'
       Promise.allSettled([
-        runEvalJob(originalJobId, originalSkillId, original.markdown_content as string, testCases),
-        runEvalJob(evolvedJobId, evolvedId, markdownContent, testCases)
+        isAgent
+          ? runAgentEvalJob(originalJobId, originalSkillId, original, testCases)
+          : runEvalJob(originalJobId, originalSkillId, original.markdown_content as string, testCases),
+        isAgent
+          ? runAgentEvalJob(evolvedJobId, evolvedId, { ...original, markdown_content: markdownContent, skill_type: 'agent' }, testCases)
+          : runEvalJob(evolvedJobId, evolvedId, markdownContent, testCases)
       ]).catch(() => {})
     })
 

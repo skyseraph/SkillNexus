@@ -202,6 +202,17 @@ export function registerSkillsHandlers(): void {
     return rows.map(rowToSkill)
   })
 
+  // List evolved skills only
+  ipcMain.handle('skills:getEvolved', () => {
+    const db = getDb()
+    const rows = db.prepare(`
+      SELECT * FROM skills
+      WHERE root_dir LIKE '%evolved%'
+      ORDER BY installed_at DESC
+    `).all() as Record<string, unknown>[]
+    return rows.map(rowToSkill)
+  })
+
   // Install single .md file
   ipcMain.handle('skills:install', (_event, filePath: string) => {
     assertPathAllowed(filePath)
@@ -375,6 +386,12 @@ export function registerSkillsHandlers(): void {
       parsed.yamlFrontmatter, parsed.markdownContent, resolve(filePath), rootDir, 'single', 1, now, now)
 
     return { id, ...parsed, rootDir, skillType: 'single' as SkillType, trustLevel: 1 as const, installedAt: now, updatedAt: now }
+  })
+
+  // Set trust level (T1-T4)
+  ipcMain.handle('skills:setTrustLevel', (_event, id: string, level: 1 | 2 | 3 | 4) => {
+    if (![1, 2, 3, 4].includes(level)) throw new Error('Invalid trust level')
+    getDb().prepare('UPDATE skills SET trust_level = ?, updated_at = ? WHERE id = ?').run(level, Date.now(), id)
   })
 
   // Export a skill to an AI tool's directory
