@@ -2,9 +2,9 @@
 
 <div align="center">
 
-**AI Skill 全生命周期管理平台**
+**Skill Studio**
 
-一个基于 Electron 的桌面应用，提供 AI Skill 的生成、测试、评测、进化和管理能力
+一个基于 Electron 的桌面应用，提供 AI Skill创作乐园，包括Skill生成、测试、评测、进化和管理能力
 
 [English](#english) | [中文](#中文)
 
@@ -16,7 +16,7 @@
 
 ### 📖 项目简介
 
-SkillNexus 是一个专为 AI Skill 设计的全生命周期管理工具。Skill 是一种 Markdown 格式的 AI 指令文件（带 YAML frontmatter），可安装到 Claude Code、Cursor、Windsurf 等 AI 工具中，增强其能力。
+SkillNexus 是一个专为 AI Skill 设计的全生命周期创作工具。Skill 是一种 Markdown 格式的 AI 指令文件（带 YAML frontmatter），可安装到 Claude Code、Cursor、Windsurf 等 AI 工具中，增强其能力。
 
 **核心工作流**：
 ```
@@ -250,7 +250,7 @@ CREATE TABLE eval_history (
 
 ### 📖 Overview
 
-SkillNexus is a comprehensive lifecycle management platform for AI Skills. A Skill is a Markdown-formatted AI instruction file (with YAML frontmatter) that can be installed into AI tools like Claude Code, Cursor, and Windsurf to enhance their capabilities.
+SkillNexus is a comprehensive lifecycle Creation platform for AI Skills. A Skill is a Markdown-formatted AI instruction file (with YAML frontmatter) that can be installed into AI tools like Claude Code, Cursor, and Windsurf to enhance their capabilities.
 
 **Core Workflow**:
 ```
