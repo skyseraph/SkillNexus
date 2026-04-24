@@ -1,6 +1,9 @@
 import { getAIProvider } from './ai-provider'
 import { getActiveModel } from '../ipc/config.handler'
 import { getDb } from '../db'
+import { getMainWindow } from '../index'
+import { join } from 'path'
+import { app } from 'electron'
 import { CoEvoSkillEngine } from './sdk/coevoskill-engine'
 import { ElectronDataStore } from './adapters/electron-data-store'
 import { ElectronProgressReporter } from './adapters/electron-progress'
@@ -12,8 +15,8 @@ export async function runCoEvo(config: { skillId: string; maxRounds?: number }):
   const engine = new CoEvoSkillEngine(
     getAIProvider(), getActiveModel(),
     new ElectronDataStore(db),
-    new ElectronProgressReporter(null),
-    new ElectronSkillStorage(db, '')
+    new ElectronProgressReporter(getMainWindow()),
+    new ElectronSkillStorage(db, join(app.getPath('userData'), 'skills', 'evolved'))
   )
   return engine.run(config)
 }

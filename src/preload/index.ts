@@ -120,6 +120,11 @@ const api = {
   jobs: {
     list: (filter?: 'all' | 'eval' | 'evo'): Promise<JobEntry[]> =>
       ipcRenderer.invoke('jobs:list', filter)
+  },
+  demo: {
+    enter: (): Promise<void> => ipcRenderer.invoke('demo:enter'),
+    exit: (): Promise<void> => ipcRenderer.invoke('demo:exit'),
+    isActive: (): Promise<boolean> => ipcRenderer.invoke('demo:isActive')
   }
 }
 

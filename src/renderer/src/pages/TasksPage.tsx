@@ -300,7 +300,8 @@ export default function TasksPage({ onNavigate }: TasksPageProps) {
       <style>{`
         .tasks-root { padding: 24px; height: 100%; overflow-y: auto; box-sizing: border-box; }
         .tasks-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-        .tasks-title { font-size: 20px; font-weight: 700; color: var(--text); }
+        .tasks-title { font-size: 24px; font-weight: 700; color: var(--text); display: block; }
+        .tasks-subtitle { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
         .tasks-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
         .tasks-tabs { display: flex; gap: 4px; }
         .tasks-tab { padding: 5px 14px; font-size: 12px; font-weight: 500; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; transition: all var(--transition); }
@@ -382,7 +383,10 @@ export default function TasksPage({ onNavigate }: TasksPageProps) {
       `}</style>
 
       <div className="tasks-header">
-        <span className="tasks-title">Tasks</span>
+        <div>
+          <span className="tasks-title">Tasks</span>
+          <p className="tasks-subtitle">评测与进化任务历史 · 版本对比 · 执行记录</p>
+        </div>
       </div>
 
       <div className="tasks-toolbar">

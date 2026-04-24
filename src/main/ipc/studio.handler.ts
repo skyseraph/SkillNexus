@@ -8,6 +8,8 @@ import { app } from 'electron'
 import yaml from 'js-yaml'
 import { withTimeout, AI_TIMEOUT_MS } from '../services/eval-job'
 import { fetchJson, fetchText } from './github-fetch'
+import { isDemoMode } from '../demo'
+import { runDemoEvolve } from '../services/demo/demo-runner'
 import type { SkillScore5D, GithubSkillResult, EvoConfig, EvoAnalysis } from '../../shared/types'
 
 const SKILL_FORMAT_HINT = `A Skill has this structure:
@@ -137,6 +139,7 @@ export function registerStudioHandlers(): void {
   })
 
   ipcMain.handle('studio:evolve', async (event, skillId: string, config: EvoConfig | string) => {
+    if (isDemoMode()) return runDemoEvolve(event)
     // Accept both new EvoConfig object and legacy string strategy for backwards compat
     const evoConfig: EvoConfig = typeof config === 'string'
       ? { paradigm: 'evidence' }

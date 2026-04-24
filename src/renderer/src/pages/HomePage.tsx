@@ -925,6 +925,10 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
 
   return (
     <div className="home-root">
+      <div className="home-page-header">
+        <h1>SkillNexus</h1>
+        <p className="home-subtitle">让能力可量化、可管理、可成长</p>
+      </div>
       <div className="page-tabs">
         <button className={`page-tab ${activeTab === 'mine' ? 'active' : ''}`} onClick={() => setActiveTab('mine')}>
           My Skills {skills.length > 0 && <span className="tab-badge">{skills.length}</span>}
@@ -968,6 +972,9 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
 
       <style>{`
         .home-root { display: flex; flex-direction: column; height: 100%; overflow: hidden; margin: -24px; }
+        .home-page-header { padding: 20px 24px 16px; flex-shrink: 0; }
+        .home-page-header h1 { font-size: 24px; font-weight: 700; }
+        .home-subtitle { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
 
         /* Page tabs */
         .page-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 24px; flex-shrink: 0; background: var(--bg); }

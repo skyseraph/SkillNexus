@@ -99,9 +99,65 @@ input:focus, textarea:focus, select:focus {
   border-color: var(--text-muted);
 }
 
+.btn-ghost.danger {
+  color: var(--danger);
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+.btn-ghost.danger:hover {
+  background: rgba(248, 113, 113, 0.08);
+  border-color: var(--danger);
+}
+
 .btn-danger {
   background: var(--danger);
   color: #fff;
+}
+
+.btn-secondary {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  border-color: var(--text-muted);
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  font-size: 15px;
+  transition: background var(--transition), color var(--transition);
+}
+
+.btn-icon:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+.btn-icon-sm {
+  width: 26px;
+  height: 26px;
+  font-size: 13px;
+}
+
+.btn-sm {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
+.btn-xs {
+  padding: 3px 8px;
+  font-size: 11px;
 }
 
 ::-webkit-scrollbar {

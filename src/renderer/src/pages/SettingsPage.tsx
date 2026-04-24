@@ -191,7 +191,10 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
 
   return (
     <div className="settings-page">
-      <div className="page-header"><h1>Settings</h1></div>
+      <div className="page-header">
+        <h1>Settings</h1>
+        <p className="settings-subtitle">LLM 配置 · 工具路径 · 主题偏好</p>
+      </div>
 
       {/* ── LLM Providers ── */}
       <section className="settings-section">
@@ -383,6 +386,7 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
         .settings-page { max-width: 680px; }
         .page-header { margin-bottom: 28px; }
         .page-header h1 { font-size: 24px; font-weight: 700; }
+        .settings-subtitle { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
         .settings-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; margin-bottom: 20px; }
         .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
         .settings-section h2 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 0; }

@@ -11,30 +11,56 @@
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  padding: 16px 0;
+  padding: 0;
 }
 
 .sidebar-logo {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 20px 20px;
+  padding: 16px 16px 14px;
   border-bottom: 1px solid var(--border);
 }
 
-.logo-icon {
-  font-size: 20px;
+.logo-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: -0.5px;
+}
+
+.logo-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
 .logo-text {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--text);
+  line-height: 1;
+}
+
+.logo-tagline {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.02em;
 }
 
 .nav-list {
   list-style: none;
-  padding: 12px 8px;
+  padding: 10px 8px;
   flex: 1;
 }
 
@@ -43,11 +69,11 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 9px 12px;
   border-radius: var(--radius);
   background: transparent;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 13px;
   transition: background var(--transition), color var(--transition);
   text-align: left;
   position: relative;
@@ -58,9 +84,28 @@
   color: var(--text);
 }
 
+.nav-item:hover .nav-icon {
+  opacity: 1;
+}
+
 .nav-item.active {
   background: var(--surface2);
   color: var(--accent);
+}
+
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
+}
+
+.nav-item.active .nav-icon {
+  opacity: 1;
 }
 
 .nav-item.nav-warn {
@@ -68,9 +113,12 @@
 }
 
 .nav-icon {
-  font-size: 16px;
+  font-size: 14px;
   width: 20px;
   text-align: center;
+  font-style: normal;
+  line-height: 1;
+  opacity: 0.7;
 }
 
 .warn-dot {
@@ -84,7 +132,7 @@
 }
 
 .sidebar-bottom {
-  padding: 8px 8px 4px;
+  padding: 8px 8px 12px;
   border-top: 1px solid var(--border);
 }
 

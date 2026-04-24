@@ -12,6 +12,11 @@ import { runSkillX } from '../services/skillx'
 import { runSkillClaw } from '../services/skillclaw'
 import { getConfig, getActiveModel } from './config.handler'
 import { getAIProvider } from '../services/ai-provider'
+import { isDemoMode } from '../demo'
+import {
+  DEMO_EVO_RUN_RESULT, DEMO_EVOSKILL_RESULT, DEMO_COEVO_RESULT,
+  DEMO_SKILLX_RESULT, DEMO_SKILLCLAW_RESULT, DEMO_PARETO_POINTS, DEMO_TRANSFER_REPORT
+} from '../services/demo/demo-data'
 import type { EvoRunResult, EvoSkillResult, ParetoPoint, CoEvoResult, TransferReport, SkillXResult, SkillClawResult, Skill, SkillType } from '../../shared/types'
 
 export function registerEvoHandlers(): void {
@@ -21,6 +26,8 @@ export function registerEvoHandlers(): void {
     originalSkillId: string,
     evolvedContent: string
   ): Promise<EvoRunResult> => {
+    if (isDemoMode()) return DEMO_EVO_RUN_RESULT
+
     const db = getDb()
 
     const original = db.prepare('SELECT * FROM skills WHERE id = ?').get(originalSkillId) as Record<string, unknown> | undefined
@@ -130,10 +137,14 @@ export function registerEvoHandlers(): void {
     _event,
     config: { skillId: string; maxIterations?: number }
   ): Promise<EvoSkillResult> => {
+    if (isDemoMode()) return DEMO_EVOSKILL_RESULT
     if (!config.skillId) throw new Error('skillId is required')
     const db = getDb()
     const exists = db.prepare('SELECT id FROM skills WHERE id = ?').get(config.skillId)
     if (!exists) throw new Error(`Skill ${config.skillId} not found`)
+    if (config.maxIterations !== undefined) {
+      config.maxIterations = Math.max(1, Math.min(10, config.maxIterations))
+    }
     return runEvoSkill(config)
   })
 
@@ -141,6 +152,7 @@ export function registerEvoHandlers(): void {
     _event,
     skillId: string
   ): ParetoPoint[] => {
+    if (isDemoMode()) return DEMO_PARETO_POINTS
     const db = getDb()
     const exists = db.prepare('SELECT id FROM skills WHERE id = ?').get(skillId)
     if (!exists) throw new Error(`Skill ${skillId} not found`)
@@ -151,10 +163,14 @@ export function registerEvoHandlers(): void {
     _event,
     config: { skillId: string; maxRounds?: number }
   ): Promise<CoEvoResult> => {
+    if (isDemoMode()) return DEMO_COEVO_RESULT
     if (!config.skillId) throw new Error('skillId is required')
     const db = getDb()
     const exists = db.prepare('SELECT id FROM skills WHERE id = ?').get(config.skillId)
     if (!exists) throw new Error(`Skill ${config.skillId} not found`)
+    if (config.maxRounds !== undefined) {
+      config.maxRounds = Math.max(1, Math.min(10, config.maxRounds))
+    }
     return runCoEvo(config)
   })
 
@@ -163,6 +179,7 @@ export function registerEvoHandlers(): void {
     skillId: string,
     models: string[]
   ): Promise<TransferReport> => {
+    if (isDemoMode()) return DEMO_TRANSFER_REPORT
     const db = getDb()
     const skillRow = db.prepare('SELECT markdown_content FROM skills WHERE id = ?').get(skillId) as
       { markdown_content: string } | undefined
@@ -171,6 +188,7 @@ export function registerEvoHandlers(): void {
     const cfg = getConfig()
     const allowedIds = new Set(cfg.providers.map(p => p.id))
     const validModels = models.filter(m => allowedIds.has(m))
+    if (!models || models.length === 0) throw new Error('models array must not be empty')
     if (validModels.length === 0) throw new Error('No valid configured provider IDs provided')
 
     const testCases = db.prepare(
@@ -203,11 +221,14 @@ export function registerEvoHandlers(): void {
     _event,
     config: { skillId: string; minScore?: number; sampleLimit?: number }
   ): Promise<SkillXResult> => {
+    if (isDemoMode()) return DEMO_SKILLX_RESULT
     if (!config.skillId) throw new Error('skillId is required')
     const db = getDb()
     if (!db.prepare('SELECT id FROM skills WHERE id = ?').get(config.skillId)) {
       throw new Error(`Skill ${config.skillId} not found`)
     }
+    if (config.minScore !== undefined) config.minScore = Math.max(0, Math.min(10, config.minScore))
+    if (config.sampleLimit !== undefined) config.sampleLimit = Math.max(1, Math.min(50, config.sampleLimit))
     return runSkillX(config)
   })
 
@@ -215,11 +236,13 @@ export function registerEvoHandlers(): void {
     _event,
     config: { skillId: string; windowSize?: number }
   ): Promise<SkillClawResult> => {
+    if (isDemoMode()) return DEMO_SKILLCLAW_RESULT
     if (!config.skillId) throw new Error('skillId is required')
     const db = getDb()
     if (!db.prepare('SELECT id FROM skills WHERE id = ?').get(config.skillId)) {
       throw new Error(`Skill ${config.skillId} not found`)
     }
+    if (config.windowSize !== undefined) config.windowSize = Math.max(5, Math.min(100, config.windowSize))
     return runSkillClaw(config)
   })
 }

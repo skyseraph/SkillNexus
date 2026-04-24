@@ -418,6 +418,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
   const [transferRunning, setTransferRunning] = useState(false)
   const [transferModels, setTransferModels] = useState<string[]>([])
   const [availableProviders, setAvailableProviders] = useState<{ id: string; name: string }[]>([])
+  const [demoMode, setDemoMode] = useState(false)
   const cleanupRef = useRef<(() => void) | null>(null)
 
   // Sync state → session ref
@@ -431,6 +432,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
       setApiKeySet(c.providers.length > 0)
       setAvailableProviders(c.providers.map(p => ({ id: p.id, name: p.name || p.id })))
     })
+    window.api.demo.isActive().then(setDemoMode)
   }, [])
 
   const loadSkill = useCallback(async (id: string, keepPhase = false) => {
@@ -637,6 +639,18 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
 
   return (
     <div className="evo-root">
+      {demoMode && (
+        <div className="demo-banner">
+          🎬 Demo 模式已开启 — 无需 API Key，所有进化操作使用预置数据
+          <button className="demo-banner-exit" onClick={async () => { await window.api.demo.exit(); setDemoMode(false) }}>退出 Demo</button>
+        </div>
+      )}
+      <div className="evo-page-header">
+        <div>
+          <h1>Skill Evo</h1>
+          <p className="evo-subtitle">证据驱动进化 · 多代迭代优化 · 量化验证对比</p>
+        </div>
+      </div>
       <div className="evo-layout">
 
         {/* ── Left column ─────────────────────────────── */}
@@ -801,6 +815,15 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>正在停止...</span>
                   )}
                 </>
+              )}
+
+              {!demoMode && (
+                <div className="demo-entry">
+                  没有 API Key？
+                  <button className="demo-entry-btn" onClick={async () => { await window.api.demo.enter(); setDemoMode(true) }}>
+                    体验 Demo 模式
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -1146,6 +1169,9 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
 
       <style>{`
         .evo-root { display: flex; flex-direction: column; height: 100%; }
+        .evo-page-header { margin-bottom: 20px; }
+        .evo-page-header h1 { font-size: 24px; font-weight: 700; }
+        .evo-subtitle { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
         .evo-layout { display: grid; grid-template-columns: 220px 1fr; gap: 20px; flex: 1; min-height: 0; }
         .evo-left { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
         .evo-right { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
@@ -1153,6 +1179,13 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
         .evo-select { width: 100%; }
         .text-muted { color: var(--text-muted); font-size: 13px; }
         .error-banner { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: var(--radius); padding: 12px 16px; color: var(--danger); font-size: 13px; }
+
+        .demo-banner { display: flex; align-items: center; gap: 12px; background: rgba(249,115,22,0.12); border-bottom: 1px solid rgba(249,115,22,0.35); padding: 8px 20px; font-size: 13px; color: #f97316; flex-shrink: 0; }
+        .demo-banner-exit { margin-left: auto; font-size: 12px; padding: 3px 10px; border-radius: var(--radius); border: 1px solid rgba(249,115,22,0.5); background: transparent; color: #f97316; cursor: pointer; }
+        .demo-banner-exit:hover { background: rgba(249,115,22,0.15); }
+        .demo-entry { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+        .demo-entry-btn { font-size: 12px; padding: 3px 10px; border-radius: var(--radius); border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; }
+        .demo-entry-btn:hover { border-color: #f97316; color: #f97316; }
 
         .evo-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; }
         .card-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 16px; }

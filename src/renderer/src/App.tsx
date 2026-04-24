@@ -15,12 +15,12 @@ type Page = 'home' | 'eval' | 'studio' | 'evo' | 'tasks' | 'trending' | 'setting
 export type Theme = 'dark' | 'light' | 'system'
 
 const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
-  { id: 'home',     label: 'Home',     icon: '⚡' },
-  { id: 'studio',   label: 'Studio',   icon: '🎨' },
-  { id: 'eval',     label: 'Eval',     icon: '📊' },
-  { id: 'evo',      label: 'Evo',      icon: '🔬' },
-  { id: 'tasks',    label: 'Tasks',    icon: '📋' },
-  { id: 'trending', label: 'Trending', icon: '🔥' }
+  { id: 'home',     label: 'Home',     icon: '◈' },
+  { id: 'studio',   label: 'Studio',   icon: '✦' },
+  { id: 'eval',     label: 'Eval',     icon: '◎' },
+  { id: 'evo',      label: 'Evo',      icon: '⟳' },
+  { id: 'tasks',    label: 'Tasks',    icon: '≡' },
+  { id: 'trending', label: 'Trending', icon: '↑' }
 ]
 
 function applyTheme(theme: Theme) {
@@ -75,8 +75,11 @@ export default function App() {
     <div className="app-layout">
       <nav className="sidebar">
         <div className="sidebar-logo">
-          <span className="logo-icon">⚡</span>
-          <span className="logo-text">SkillNexus</span>
+          <div className="logo-mark">S</div>
+          <div className="logo-text-group">
+            <span className="logo-text">SkillNexus</span>
+            <span className="logo-tagline">Skill 创造平台</span>
+          </div>
         </div>
         <ul className="nav-list">
           {NAV_ITEMS.map((item) => (

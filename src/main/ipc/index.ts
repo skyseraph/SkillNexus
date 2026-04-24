@@ -7,6 +7,7 @@ import { registerConfigHandlers } from './config.handler'
 import { registerMarketplaceHandlers } from './marketplace.handler'
 import { registerEvoHandlers } from './evo.handler'
 import { registerJobsHandlers } from './jobs.handler'
+import { isDemoMode, enterDemoMode, exitDemoMode } from '../demo'
 
 export function registerAllIpcHandlers(): void {
   registerConfigHandlers()
@@ -17,6 +18,10 @@ export function registerAllIpcHandlers(): void {
   registerMarketplaceHandlers()
   registerEvoHandlers()
   registerJobsHandlers()
+
+  ipcMain.handle('demo:enter', () => { enterDemoMode() })
+  ipcMain.handle('demo:exit', () => { exitDemoMode() })
+  ipcMain.handle('demo:isActive', () => isDemoMode())
 
   // SEC-R4: only allow https?:// protocol
   ipcMain.handle('shell:openExternal', (_event, url: string) => {
