@@ -15,6 +15,7 @@ export interface Skill {
   trustLevel: TrustLevel // 1=AI-generated, 2=format+safety, 3=eval-tested, 4=user-approved
   installedAt: number
   updatedAt: number
+  evolutionNotes?: string
 }
 
 export interface SkillScore5D {
@@ -225,6 +226,119 @@ export interface EvoRunResult {
   evolvedJobId: string
 }
 
+export interface EvoAnalysis {
+  rootCause: string
+  generalityTest: string
+  regressionRisk: string
+}
+
+export type EvoPhase =
+  | 'idle'
+  | 'configured'
+  | 'analyzing'
+  | 'generating'
+  | 'reviewing'
+  | 'evaluating'
+  | 'deciding'
+
+export type EvoParadigm = 'evidence' | 'strategy' | 'capability'
+
+export interface EvoSession {
+  phase: EvoPhase
+  selectedId: string
+  paradigm: EvoParadigm
+  targets: string[]
+  analysisData: EvoAnalysis | null
+  evolvedContent: string
+  evoResult: EvoRunResult | null
+  origScores: Record<string, number>
+  evolvedScores: Record<string, number>
+  evalProgress: number
+  error: string | null
+}
+
+export interface EvoConfig {
+  paradigm: EvoParadigm
+  targets?: string[]
+  engine?: EvolutionEngine
+  maxIterations?: number
+}
+
+export type EvolutionEngine =
+  | 'skvm-evidence'
+  | 'skvm-strategy'
+  | 'skvm-capability'
+  | 'evoskill'
+  | 'coevoskill'
+  | 'skillx'
+  | 'skillmoo'
+  | 'skillclaw'
+  | 'manual'
+
+export interface EvoChainEntry {
+  id: string
+  name: string
+  version: string
+  installedAt: number
+  paradigm?: string
+  engine?: EvolutionEngine
+  generation?: number
+  avgScore?: number
+  paretoScores?: Record<string, number>
+  transferReport?: Record<string, number>
+  evolutionNotes?: EvoAnalysis
+  isRoot: boolean
+}
+
+// ─── Evo v2 result types ──────────────────────────────────────────────────────
+
+export interface ParetoPoint {
+  id: string
+  label: string
+  x: number  // accuracy (0-10)
+  y: number  // secondary objective (normalized 0-10)
+}
+
+export interface EvoSkillResult {
+  frontierIds: string[]
+  bestId: string
+  iterations: number
+  finalAvgScore: number
+}
+
+export interface CoEvoResult {
+  evolvedContent: string
+  escalationLevel: 1 | 2 | 3
+  rounds: number
+  passedAll: boolean
+}
+
+export interface TransferReport {
+  results: Record<string, number>  // modelId → pass rate (0-1)
+}
+
+export interface SkillXEntry {
+  level: 1 | 2 | 3
+  levelName: 'planning' | 'functional' | 'atomic'
+  content: string
+  sourceCount: number
+}
+
+export interface SkillXResult {
+  entries: SkillXEntry[]
+  evolvedSkillId: string
+  evolvedContent: string
+  totalSourceSamples: number
+}
+
+export interface SkillClawResult {
+  sessionsAnalyzed: number
+  commonFailures: string[]
+  evolvedSkillId: string
+  evolvedContent: string
+  improvementSummary: string
+}
+
 export interface ThreeConditionResult {
   jobIdA: string           // no-skill baseline
   jobIdB: string           // current skill
@@ -232,6 +346,24 @@ export interface ThreeConditionResult {
   noSkillId: string
   generatedSkillId: string
   generatedSkillContent: string
+}
+
+export interface JobEntry {
+  id: string
+  type: 'eval' | 'evo'
+  skillId: string
+  skillName: string
+  // eval fields
+  totalScore?: number
+  status?: 'success' | 'error'
+  durationMs?: number
+  // evo fields
+  engine?: EvolutionEngine
+  parentSkillId?: string
+  parentSkillName?: string
+  avgScore?: number
+  evalCount?: number
+  createdAt: number
 }
 
 export interface IpcChannels {
@@ -247,6 +379,7 @@ export interface IpcChannels {
   'skills:export': (skillId: string, toolId: string, mode: 'copy' | 'symlink') => Promise<void>
   'skills:getToolTargets': () => Promise<ToolTarget[]>
   'skills:setTrustLevel': (id: string, level: 1 | 2 | 3 | 4) => Promise<void>
+  'skills:getContent': (skillId: string) => Promise<string>
   'marketplace:search': (query: string) => Promise<MarketSkill[]>
   'marketplace:install': (skill: MarketSkill) => Promise<Skill>
   'eval:start': (skillId: string, testCaseIds: string[]) => Promise<string>
@@ -261,6 +394,13 @@ export interface IpcChannels {
   'testcases:delete': (id: string) => Promise<void>
   'testcases:generate': (skillId: string, count: number) => Promise<TestCase[]>
   'evo:installAndEval': (originalSkillId: string, evolvedContent: string) => Promise<EvoRunResult>
+  'evo:runEvoSkill': (config: { skillId: string; maxIterations?: number }) => Promise<EvoSkillResult>
+  'evo:getParetoFrontier': (skillId: string) => Promise<ParetoPoint[]>
+  'evo:runCoEvo': (config: { skillId: string; maxRounds?: number }) => Promise<CoEvoResult>
+  'evo:runTransferTest': (skillId: string, models: string[]) => Promise<TransferReport>
+  'evo:runSkillX': (config: { skillId: string; minScore?: number; sampleLimit?: number }) => Promise<SkillXResult>
+  'evo:runSkillClaw': (config: { skillId: string; windowSize?: number }) => Promise<SkillClawResult>
+  'jobs:list': (filter?: 'all' | 'eval' | 'evo') => Promise<JobEntry[]>
   'studio:evolve': (skillId: string, strategy: string) => Promise<void>
   'studio:generateFromExamples': (examples: Array<{ input: string; output: string }>, description?: string) => Promise<void>
   'studio:generateStream': (prompt: string) => Promise<void>

@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import HomePage from './pages/HomePage'
 import EvalPage from './pages/EvalPage'
 import StudioPage from './pages/StudioPage'
 import EvoPage from './pages/EvoPage'
 import TrendingPage from './pages/TrendingPage'
+import TasksPage from './pages/TasksPage'
 import SettingsPage from './pages/SettingsPage'
 import ToastContainer from './components/ToastContainer'
 import { useToast } from './hooks/useToast'
 import './App.css'
+import type { EvoSession } from '../../shared/types'
 
-type Page = 'home' | 'eval' | 'studio' | 'evo' | 'trending' | 'settings'
+type Page = 'home' | 'eval' | 'studio' | 'evo' | 'tasks' | 'trending' | 'settings'
 export type Theme = 'dark' | 'light' | 'system'
 
 const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
@@ -17,6 +19,7 @@ const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
   { id: 'studio',   label: 'Studio',   icon: '🎨' },
   { id: 'eval',     label: 'Eval',     icon: '📊' },
   { id: 'evo',      label: 'Evo',      icon: '🔬' },
+  { id: 'tasks',    label: 'Tasks',    icon: '📋' },
   { id: 'trending', label: 'Trending', icon: '🔥' }
 ]
 
@@ -32,6 +35,7 @@ export default function App() {
   const [apiKeySet, setApiKeySet] = useState<boolean | null>(null)
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('theme') as Theme) ?? 'dark')
   const { toasts, toast, dismiss } = useToast()
+  const evoSessionRef = useRef<EvoSession | null>(null)
 
   const handleNavigate = (p: string, skillId?: string) => {
     setPage(p as Page)
@@ -60,7 +64,8 @@ export default function App() {
       case 'home': return <HomePage toast={toast} onNavigate={handleNavigate} />
       case 'eval': return <EvalPage initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} />
       case 'studio': return <StudioPage initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} />
-      case 'evo': return <EvoPage initialSkillId={navSkillId ?? undefined} />
+      case 'evo': return <EvoPage session={evoSessionRef} initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} />
+      case 'tasks': return <TasksPage onNavigate={handleNavigate} />
       case 'trending': return <TrendingPage />
       case 'settings': return <SettingsPage onConfigSaved={checkApiKey} theme={theme} onThemeChange={setTheme} toast={toast} />
     }

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Skill, SkillFileEntry, TestCase, EvalResult, EvalHistoryPage, EvalExport, AppConfigPublic, AppConfig, ScannedSkill, ScanResult, ToolTarget, MarketSkill, EvoRunResult, LLMProvider, ThreeConditionResult, SkillRankEntry, SkillScore5D, GithubSkillResult } from '../shared/types'
+import type { Skill, SkillFileEntry, TestCase, EvalResult, EvalHistoryPage, EvalExport, AppConfigPublic, AppConfig, ScannedSkill, ScanResult, ToolTarget, MarketSkill, EvoRunResult, LLMProvider, ThreeConditionResult, SkillRankEntry, SkillScore5D, GithubSkillResult, EvoAnalysis, EvoConfig, EvoChainEntry, EvoSkillResult, ParetoPoint, CoEvoResult, TransferReport, SkillXResult, SkillClawResult, JobEntry } from '../shared/types'
 
 const api = {
   skills: {
@@ -16,7 +16,9 @@ const api = {
     export: (skillId: string, toolId: string, mode: 'copy' | 'symlink'): Promise<void> =>
       ipcRenderer.invoke('skills:export', skillId, toolId, mode),
     getToolTargets: (): Promise<ToolTarget[]> => ipcRenderer.invoke('skills:getToolTargets'),
-    setTrustLevel: (id: string, level: 1 | 2 | 3 | 4): Promise<void> => ipcRenderer.invoke('skills:setTrustLevel', id, level)
+    setTrustLevel: (id: string, level: 1 | 2 | 3 | 4): Promise<void> => ipcRenderer.invoke('skills:setTrustLevel', id, level),
+    getEvoChain: (skillId: string): Promise<EvoChainEntry[]> => ipcRenderer.invoke('skills:getEvoChain', skillId),
+    getContent: (skillId: string): Promise<string> => ipcRenderer.invoke('skills:getContent', skillId)
   },
   marketplace: {
     search: (query: string): Promise<MarketSkill[]> => ipcRenderer.invoke('marketplace:search', query),
@@ -42,7 +44,7 @@ const api = {
   studio: {
     generate: (prompt: string): Promise<string> => ipcRenderer.invoke('studio:generate', prompt),
     generateStream: (prompt: string): Promise<void> => ipcRenderer.invoke('studio:generateStream', prompt),
-    evolve: (skillId: string, strategy: string): Promise<void> => ipcRenderer.invoke('studio:evolve', skillId, strategy),
+    evolve: (skillId: string, config: EvoConfig): Promise<void> => ipcRenderer.invoke('studio:evolve', skillId, config),
     generateFromExamples: (examples: Array<{ input: string; output: string }>, description?: string): Promise<void> =>
       ipcRenderer.invoke('studio:generateFromExamples', examples, description),
     install: (content: string, name: string): Promise<Skill> =>
@@ -63,6 +65,16 @@ const api = {
       const handler = (_event: Electron.IpcRendererEvent, data: { chunk: string; done: boolean; noSkill?: boolean }) => cb(data)
       ipcRenderer.on('studio:chunk', handler)
       return () => ipcRenderer.removeListener('studio:chunk', handler)
+    },
+    onAnalysis: (cb: (data: EvoAnalysis) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: EvoAnalysis) => cb(data)
+      ipcRenderer.on('studio:analysis', handler)
+      return () => ipcRenderer.removeListener('studio:analysis', handler)
+    },
+    onProgress: (cb: (data: { stage: string; iteration: number; total: number; done?: boolean }) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: { stage: string; iteration: number; total: number; done?: boolean }) => cb(data)
+      ipcRenderer.on('studio:progress', handler)
+      return () => ipcRenderer.removeListener('studio:progress', handler)
     }
   },
   testcases: {
@@ -76,7 +88,19 @@ const api = {
   },
   evo: {
     installAndEval: (originalSkillId: string, evolvedContent: string): Promise<EvoRunResult> =>
-      ipcRenderer.invoke('evo:installAndEval', originalSkillId, evolvedContent)
+      ipcRenderer.invoke('evo:installAndEval', originalSkillId, evolvedContent),
+    runEvoSkill: (config: { skillId: string; maxIterations?: number }): Promise<EvoSkillResult> =>
+      ipcRenderer.invoke('evo:runEvoSkill', config),
+    getParetoFrontier: (skillId: string): Promise<ParetoPoint[]> =>
+      ipcRenderer.invoke('evo:getParetoFrontier', skillId),
+    runCoEvo: (config: { skillId: string; maxRounds?: number }): Promise<CoEvoResult> =>
+      ipcRenderer.invoke('evo:runCoEvo', config),
+    runTransferTest: (skillId: string, models: string[]): Promise<TransferReport> =>
+      ipcRenderer.invoke('evo:runTransferTest', skillId, models),
+    runSkillX: (config: { skillId: string; minScore?: number; sampleLimit?: number }): Promise<SkillXResult> =>
+      ipcRenderer.invoke('evo:runSkillX', config),
+    runSkillClaw: (config: { skillId: string; windowSize?: number }): Promise<SkillClawResult> =>
+      ipcRenderer.invoke('evo:runSkillClaw', config)
   },
   config: {
     get: (): Promise<AppConfigPublic> => ipcRenderer.invoke('config:get'),
@@ -92,6 +116,10 @@ const api = {
   },
   shell: {
     openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url)
+  },
+  jobs: {
+    list: (filter?: 'all' | 'eval' | 'evo'): Promise<JobEntry[]> =>
+      ipcRenderer.invoke('jobs:list', filter)
   }
 }
 

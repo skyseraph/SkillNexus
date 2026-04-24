@@ -209,3 +209,25 @@ __marimo__/
 
 ref/*
 doc/*
+progress.md
+CLAUDE.md
+refs/CLAUDE copy.md
+refs/index.html
+refs/spec.md
+openspec/*.*
+openspec/changes/*
+openspec/changes/studio-redesign/prototype.html
+openspec/specs/*
+.claude/*.*
+.claude/skills/*
+.claude/commands/*
+.plans/*.*
+.plans/skill-nexus/*
+.vscode/*.*
+out/main/index.js
+out/preload/index.js
+out/renderer/index.html
+out/renderer/assets/index-B_AXYFK0.css
+out/renderer/assets/index-k4WdKCLc.js
+node_modules/
+.DS_Store

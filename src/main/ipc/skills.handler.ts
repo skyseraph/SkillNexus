@@ -5,7 +5,7 @@ import { basename, resolve, extname, join, relative, dirname } from 'path'
 import { app } from 'electron'
 import yaml from 'js-yaml'
 import { getConfig } from './config.handler'
-import type { Skill, SkillFileEntry, SkillType, ToolTarget, ScannedSkill, ScanResult } from '../../shared/types'
+import type { Skill, SkillFileEntry, SkillType, ToolTarget, ScannedSkill, ScanResult, EvoChainEntry, EvoAnalysis } from '../../shared/types'
 
 // ── Security: allowed root directories ───────────────────────────────────────
 const ALLOWED_PATH_PREFIXES = () => [
@@ -394,6 +394,12 @@ export function registerSkillsHandlers(): void {
     getDb().prepare('UPDATE skills SET trust_level = ?, updated_at = ? WHERE id = ?').run(level, Date.now(), id)
   })
 
+  ipcMain.handle('skills:getContent', (_event, skillId: string): string => {
+    const row = getDb().prepare('SELECT markdown_content FROM skills WHERE id = ?').get(skillId) as { markdown_content: string } | undefined
+    if (!row) throw new Error(`Skill ${skillId} not found`)
+    return row.markdown_content
+  })
+
   // Export a skill to an AI tool's directory
   ipcMain.handle('skills:export', (_event, skillId: string, toolId: string, mode: 'copy' | 'symlink') => {
     const db = getDb()
@@ -421,5 +427,75 @@ export function registerSkillsHandlers(): void {
       try { unlinkSync(destPath) } catch { /* not found */ }
       symlinkSync(srcPath, destPath)
     }
+  })
+
+  ipcMain.handle('skills:getEvoChain', (_event, skillId: string): EvoChainEntry[] => {
+    const db = getDb()
+    const chain: EvoChainEntry[] = []
+    let cursorId: string | null = skillId
+    const visited = new Set<string>()
+
+    for (let depth = 0; depth < 20 && cursorId; depth++) {
+      if (visited.has(cursorId)) break
+      visited.add(cursorId)
+
+      const row = db.prepare(
+        'SELECT id, name, version, installed_at, parent_skill_id, evolution_notes FROM skills WHERE id = ?'
+      ).get(cursorId) as { id: string; name: string; version: string; installed_at: number; parent_skill_id: string | null; evolution_notes: string | null } | undefined
+
+      if (!row) break
+
+      // Aggregate avg score from eval_history for this node
+      const evalRows = db.prepare(
+        'SELECT scores FROM eval_history WHERE skill_id = ? AND status = ? ORDER BY created_at DESC LIMIT 20'
+      ).all(row.id, 'success') as { scores: string }[]
+
+      let avgScore: number | undefined
+      if (evalRows.length > 0) {
+        let totalSum = 0
+        let totalCount = 0
+        for (const er of evalRows) {
+          try {
+            const scores = JSON.parse(er.scores) as Record<string, { score: number }>
+            const vals = Object.values(scores)
+            if (vals.length > 0) {
+              totalSum += vals.reduce((s, v) => s + v.score, 0) / vals.length
+              totalCount++
+            }
+          } catch { /* corrupt */ }
+        }
+        if (totalCount > 0) avgScore = totalSum / totalCount
+      }
+
+      // Parse evolution_notes if present
+      let evolutionNotes: EvoAnalysis | undefined
+      let paradigm: string | undefined
+      if (row.evolution_notes) {
+        try {
+          const parsed = JSON.parse(row.evolution_notes) as Record<string, string>
+          evolutionNotes = {
+            rootCause: parsed.rootCause ?? '',
+            generalityTest: parsed.generalityTest ?? '',
+            regressionRisk: parsed.regressionRisk ?? ''
+          }
+          if (parsed.paradigm) paradigm = parsed.paradigm
+        } catch { /* corrupt */ }
+      }
+
+      chain.unshift({
+        id: row.id,
+        name: row.name,
+        version: row.version,
+        installedAt: row.installed_at,
+        paradigm,
+        avgScore,
+        evolutionNotes,
+        isRoot: !row.parent_skill_id
+      })
+
+      cursorId = row.parent_skill_id
+    }
+
+    return chain
   })
 }

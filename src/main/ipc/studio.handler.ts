@@ -8,7 +8,7 @@ import { app } from 'electron'
 import yaml from 'js-yaml'
 import { withTimeout, AI_TIMEOUT_MS } from '../services/eval-job'
 import { fetchJson, fetchText } from './github-fetch'
-import type { SkillScore5D, GithubSkillResult } from '../../shared/types'
+import type { SkillScore5D, GithubSkillResult, EvoConfig, EvoAnalysis } from '../../shared/types'
 
 const SKILL_FORMAT_HINT = `A Skill has this structure:
 ---
@@ -32,11 +32,19 @@ const EVOLVE_SYSTEM_PROMPT = `You are an expert Skill optimizer. You receive an 
 
 ${SKILL_FORMAT_HINT}
 
+## Required Analysis (output as an HTML comment block BEFORE the Skill frontmatter)
+Before writing the improved Skill, output a comment block in this exact format:
+<!--ANALYSIS
+ROOT_CAUSE: <one sentence — the underlying instruction gap, stated as a principle not "task X failed">
+GENERALITY_TEST: <a DIFFERENT task not in the evidence that would also benefit from this fix — if you can't name one, your fix is overfitting>
+REGRESSION_RISK: <which currently-passing dimensions might be affected, and why your fix won't harm them>
+-->
+
 ## Hard Rules
 - TASK-AGNOSTIC: do NOT hard-code specific inputs, file names, or example values from the evidence. The Skill guides an LLM across MANY tasks.
 - NO REGRESSION: a fix that improves one dimension by harming another is NOT an improvement.
 - SURGICAL: prefer rewriting existing sections over appending new ones. Net addition should be under ~40 lines.
-- Output ONLY the complete improved Skill. No extra commentary outside the Skill itself.`
+- Output the ANALYSIS comment block first, then the complete improved Skill. No other commentary.`
 
 const EXAMPLES_SYSTEM_PROMPT = `You are an expert Skill author. Given input/output examples of an AI task, infer and write a comprehensive Skill that would produce similar outputs.
 
@@ -51,6 +59,36 @@ const STRATEGY_HINTS: Record<string, string> = {
   add_examples:   'Add 2-4 concrete input/output examples and edge-case guidance inside the Skill. Examples must be illustrative, not copied from eval evidence.',
   rewrite_weak:   'Identify the section(s) most responsible for failing tasks and rewrite them in place. Do not add new sections unless absolutely necessary.',
   fix_regression: 'The previous evolution caused a regression. Carefully compare old and new versions, revert the harmful change, and find a safer improvement.'
+}
+
+function buildParadigmHint(config: EvoConfig, dimAvgs: { dim: string; avg: number }[]): string {
+  if (config.paradigm === 'evidence') {
+    return 'Paradigm: Evidence-Driven Rewrite — use the evaluation evidence above to diagnose the root cause precisely. Apply a surgical fix targeting the weakest dimensions without harming others.'
+  }
+  if (config.paradigm === 'strategy') {
+    const targets = config.targets && config.targets.length > 0
+      ? config.targets
+      : ['修复弱维度', '提升清晰度']
+    const prioritized = dimAvgs.length > 0
+      ? targets.sort((a) => (a.includes('弱维度') || a.includes('weak') ? -1 : 1))
+      : targets
+    return `Paradigm: Strategy Matrix — optimize for the following targets in priority order:\n${prioritized.map((t, i) => `  ${i + 1}. ${t}`).join('\n')}\nBalance all targets; if they conflict, prioritize earlier items in the list.`
+  }
+  if (config.paradigm === 'capability') {
+    return 'Paradigm: Capability-Aware Compilation — analyze the capability thresholds (L1/L2/L3) embedded in this Skill. Identify requirements that set the bar too high for typical models and rewrite them with graceful degradation, preserving the intent while lowering the execution barrier.'
+  }
+  return STRATEGY_HINTS.improve_weak
+}
+
+function parseAnalysisBlock(text: string): EvoAnalysis | null {
+  const match = text.match(/<!--ANALYSIS\s*([\s\S]*?)-->/)
+  if (!match) return null
+  const body = match[1]
+  const rootCause = body.match(/ROOT_CAUSE:\s*(.+)/)?.[1]?.trim() ?? ''
+  const generalityTest = body.match(/GENERALITY_TEST:\s*(.+)/)?.[1]?.trim() ?? ''
+  const regressionRisk = body.match(/REGRESSION_RISK:\s*(.+)/)?.[1]?.trim() ?? ''
+  if (!rootCause && !generalityTest && !regressionRisk) return null
+  return { rootCause, generalityTest, regressionRisk }
 }
 
 const EXTRACT_SYSTEM_PROMPT = `You are an expert Skill author. Analyze the conversation below and extract a reusable Skill ONLY if it contains stable, durable user preferences, constraints, or workflows that would benefit future interactions.
@@ -98,20 +136,34 @@ export function registerStudioHandlers(): void {
     return result.content
   })
 
-  ipcMain.handle('studio:evolve', async (event, skillId: string, strategy: string) => {
+  ipcMain.handle('studio:evolve', async (event, skillId: string, config: EvoConfig | string) => {
+    // Accept both new EvoConfig object and legacy string strategy for backwards compat
+    const evoConfig: EvoConfig = typeof config === 'string'
+      ? { paradigm: 'evidence' }
+      : config
     const db = getDb()
     const skill = db.prepare('SELECT * FROM skills WHERE id = ?').get(skillId) as Record<string, unknown> | undefined
     if (!skill) throw new Error(`Skill ${skillId} not found`)
 
     const history = db.prepare(
-      'SELECT scores, input_prompt, output, status FROM eval_history WHERE skill_id = ? ORDER BY created_at DESC LIMIT 20'
+      'SELECT scores, input_prompt, output, status FROM eval_history WHERE skill_id = ? ORDER BY created_at DESC LIMIT 40'
     ).all(skillId) as { scores: string; input_prompt: string; output: string; status: string }[]
 
-    // Aggregate avg score per dimension
+    // Parse all rows once; skip corrupt entries
+    interface ParsedRow {
+      scores: Record<string, { score: number }>
+      avg: number
+      input: string
+      output: string
+    }
+    const parsed: ParsedRow[] = []
     const totals: Record<string, { sum: number; count: number }> = {}
     for (const row of history) {
+      if (row.status !== 'success') continue
       try {
         const scores = JSON.parse(row.scores) as Record<string, { score: number }>
+        const avg = Object.values(scores).reduce((s, v) => s + v.score, 0) / Object.values(scores).length
+        parsed.push({ scores, avg, input: row.input_prompt, output: row.output })
         for (const [dim, s] of Object.entries(scores)) {
           if (!totals[dim]) totals[dim] = { sum: 0, count: 0 }
           totals[dim].sum += s.score
@@ -124,43 +176,96 @@ export function registerStudioHandlers(): void {
       .map(([dim, { sum, count }]) => ({ dim, avg: sum / count }))
       .sort((a, b) => a.avg - b.avg)
 
-    // Build evidence: score summary + worst-performing samples
+    // Build evidence block
     let evidenceBlock = ''
     if (dimAvgs.length > 0) {
-      evidenceBlock += `## Evaluation Evidence (${history.length} runs)\n`
+      evidenceBlock += `## Evaluation Evidence (${parsed.length} runs)\n`
       evidenceBlock += `Score by dimension (sorted worst→best):\n`
       evidenceBlock += dimAvgs.map(d => `  ${d.dim}: ${d.avg.toFixed(1)}/10`).join('\n')
       evidenceBlock += '\n\n'
 
-      // Include up to 3 worst-scoring samples as concrete evidence
-      const failingSamples = history
-        .filter(r => r.status === 'success')
-        .map(r => {
-          try {
-            const scores = JSON.parse(r.scores) as Record<string, { score: number }>
-            const avg = Object.values(scores).reduce((s, v) => s + v.score, 0) / Object.values(scores).length
-            return { avg, input: r.input_prompt, output: r.output }
-          } catch { return null }
-        })
-        .filter(Boolean)
-        .sort((a, b) => (a!.avg - b!.avg))
-        .slice(0, 3)
-
-      if (failingSamples.length > 0) {
-        evidenceBlock += `## Failing Samples (lowest scoring)\n`
-        for (let i = 0; i < failingSamples.length; i++) {
-          const s = failingSamples[i]!
-          evidenceBlock += `### Sample ${i + 1} (avg score: ${s.avg.toFixed(1)}/10)\n`
-          evidenceBlock += `Input: ${s.input.slice(0, 300)}${s.input.length > 300 ? '...' : ''}\n`
-          const outputPreview = s.output.slice(0, 400)
-          evidenceBlock += `Output: ${outputPreview}${s.output.length > 400 ? '...' : ''}\n\n`
+      // Per-dimension failing samples: for the 2 weakest dimensions, show the
+      // 1-2 samples where that specific dimension scored lowest. This gives the
+      // optimizer targeted evidence rather than just overall-lowest samples.
+      const worstDims = dimAvgs.slice(0, 2)
+      for (const { dim, avg: dimAvg } of worstDims) {
+        const dimSamples = parsed
+          .filter(r => r.scores[dim] !== undefined)
+          .sort((a, b) => (a.scores[dim]?.score ?? 10) - (b.scores[dim]?.score ?? 10))
+          .slice(0, 2)
+        if (dimSamples.length === 0) continue
+        evidenceBlock += `## Failing Samples — dimension: ${dim} (avg ${dimAvg.toFixed(1)}/10)\n`
+        for (let i = 0; i < dimSamples.length; i++) {
+          const s = dimSamples[i]!
+          const dimScore = s.scores[dim]?.score ?? 0
+          evidenceBlock += `### Sample ${i + 1} (${dim}: ${dimScore.toFixed(1)}/10, overall: ${s.avg.toFixed(1)}/10)\n`
+          evidenceBlock += `Input: ${s.input.slice(0, 800)}${s.input.length > 800 ? '...' : ''}\n`
+          evidenceBlock += `Output: ${s.output.slice(0, 1000)}${s.output.length > 1000 ? '...' : ''}\n\n`
         }
+      }
+
+      // One high-scoring sample as a "success pattern" reference
+      const bestSample = parsed.sort((a, b) => b.avg - a.avg)[0]
+      if (bestSample && bestSample.avg >= 7) {
+        evidenceBlock += `## Passing Sample (success pattern — avg ${bestSample.avg.toFixed(1)}/10)\n`
+        evidenceBlock += `Input: ${bestSample.input.slice(0, 500)}${bestSample.input.length > 500 ? '...' : ''}\n`
+        evidenceBlock += `Output: ${bestSample.output.slice(0, 600)}${bestSample.output.length > 600 ? '...' : ''}\n\n`
       }
     } else {
       evidenceBlock = '## Evaluation Evidence\nNo evaluation history available.\n\n'
     }
 
-    const strategyHint = STRATEGY_HINTS[strategy] ?? STRATEGY_HINTS.improve_weak
+    const strategyHint = buildParadigmHint(evoConfig, dimAvgs)
+
+    // Build evolution chain history to prevent the optimizer from oscillating
+    // or repeating diagnoses that already failed in prior rounds.
+    interface ChainEntry { name: string; version: string; dimAvgs: { dim: string; avg: number }[] }
+    const chainHistory: ChainEntry[] = []
+    let cursorId: string | null = skillId
+    // Walk up to 4 ancestors (oldest first after reverse)
+    for (let depth = 0; depth < 4 && cursorId; depth++) {
+      const ancestor = db.prepare('SELECT id, name, version, parent_skill_id FROM skills WHERE id = ?').get(cursorId) as
+        { id: string; name: string; version: string; parent_skill_id: string | null } | undefined
+      if (!ancestor) break
+      // Compute avg scores for this ancestor from its eval history
+      const ancestorHistory = db.prepare(
+        'SELECT scores FROM eval_history WHERE skill_id = ? AND status = ? ORDER BY created_at DESC LIMIT 20'
+      ).all(ancestor.id, 'success') as { scores: string }[]
+      const aTotals: Record<string, { sum: number; count: number }> = {}
+      for (const row of ancestorHistory) {
+        try {
+          const scores = JSON.parse(row.scores) as Record<string, { score: number }>
+          for (const [dim, s] of Object.entries(scores)) {
+            if (!aTotals[dim]) aTotals[dim] = { sum: 0, count: 0 }
+            aTotals[dim].sum += s.score
+            aTotals[dim].count++
+          }
+        } catch { /* corrupt */ }
+      }
+      const aDimAvgs = Object.entries(aTotals)
+        .map(([dim, { sum, count }]) => ({ dim, avg: sum / count }))
+        .sort((a, b) => a.avg - b.avg)
+      chainHistory.push({ name: ancestor.name, version: ancestor.version, dimAvgs: aDimAvgs })
+      cursorId = ancestor.parent_skill_id
+    }
+    chainHistory.reverse() // oldest → newest
+
+    let historyBlock = ''
+    if (chainHistory.length > 1) {
+      historyBlock = '## Evolution Chain History (oldest → current)\n'
+      historyBlock += 'Use this to avoid repeating failed diagnoses and to understand what has already been tried.\n\n'
+      for (const entry of chainHistory) {
+        const isCurrent = entry.version === (skill.version as string)
+        const label = isCurrent ? '← current' : ''
+        historyBlock += `### ${entry.name} v${entry.version} ${label}\n`
+        if (entry.dimAvgs.length > 0) {
+          historyBlock += entry.dimAvgs.map(d => `  ${d.dim}: ${d.avg.toFixed(1)}/10`).join('\n') + '\n'
+        } else {
+          historyBlock += '  (no eval data)\n'
+        }
+        historyBlock += '\n'
+      }
+    }
 
     // Bump minor version
     const currentVersion = (skill.version as string) || '1.0.0'
@@ -171,13 +276,46 @@ export function registerStudioHandlers(): void {
     const userMessage =
       `Current Skill (v${currentVersion}):\n\n${skill.markdown_content as string}\n\n` +
       `${evidenceBlock}\n` +
+      (historyBlock ? `${historyBlock}\n` : '') +
       `## Evolution Strategy\n${strategyHint}\n\n` +
       `Produce the improved Skill at version ${nextVersion}:`
 
     const provider = getAIProvider()
+
+    // Stream split: buffer until complete <!--ANALYSIS...-->  block is detected
+    // (up to 2000 chars), then emit studio:analysis event once and forward
+    // remaining chunks as studio:chunk.
+    let buffer = ''
+    let analysisSent = false
+    const ANALYSIS_SEARCH_LIMIT = 2000
+
     await provider.stream(
       { model: getActiveModel(), systemPrompt: EVOLVE_SYSTEM_PROMPT, userMessage },
-      (chunk) => event.sender.send('studio:chunk', { chunk, done: false })
+      (chunk) => {
+        if (analysisSent) {
+          event.sender.send('studio:chunk', { chunk, done: false })
+          return
+        }
+        buffer += chunk
+        const closeIdx = buffer.indexOf('-->')
+        if (closeIdx !== -1) {
+          // Full ANALYSIS block is in buffer
+          const analysis = parseAnalysisBlock(buffer)
+          if (analysis) {
+            event.sender.send('studio:analysis', analysis)
+          }
+          analysisSent = true
+          // Forward everything after the closing --> as chunk
+          const remainder = buffer.slice(closeIdx + 3).trimStart()
+          if (remainder) {
+            event.sender.send('studio:chunk', { chunk: remainder, done: false })
+          }
+        } else if (buffer.length > ANALYSIS_SEARCH_LIMIT) {
+          // Give up waiting for ANALYSIS — forward buffer as-is
+          analysisSent = true
+          event.sender.send('studio:chunk', { chunk: buffer, done: false })
+        }
+      }
     )
     event.sender.send('studio:chunk', { chunk: '', done: true })
   })

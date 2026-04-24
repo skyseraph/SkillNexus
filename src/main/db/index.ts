@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS skills (
   root_dir TEXT NOT NULL DEFAULT '',
   skill_type TEXT NOT NULL DEFAULT 'single',
   installed_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  updated_at INTEGER NOT NULL,
+  parent_skill_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS test_cases (
@@ -53,7 +54,13 @@ CREATE INDEX IF NOT EXISTS idx_eval_history_created_at ON eval_history(created_a
 const MIGRATIONS = [
   `ALTER TABLE skills ADD COLUMN root_dir TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE skills ADD COLUMN skill_type TEXT NOT NULL DEFAULT 'single'`,
-  `ALTER TABLE skills ADD COLUMN trust_level INTEGER NOT NULL DEFAULT 1`
+  `ALTER TABLE skills ADD COLUMN trust_level INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE skills ADD COLUMN parent_skill_id TEXT`,
+  `ALTER TABLE skills ADD COLUMN evolution_notes TEXT`,
+  `ALTER TABLE skills ADD COLUMN evolution_engine TEXT`,
+  `ALTER TABLE skills ADD COLUMN evolution_generation INTEGER`,
+  `ALTER TABLE skills ADD COLUMN pareto_scores TEXT`,
+  `ALTER TABLE skills ADD COLUMN transfer_report TEXT`
 ]
 
 export function initDatabase(): Database.Database {
