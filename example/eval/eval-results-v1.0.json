@@ -1,0 +1,135 @@
+{
+  "skillId": "codereview-v1.0",
+  "skillVersion": "1.0.0",
+  "model": "claude-sonnet-4-6",
+  "runAt": 1714000100000,
+  "summary": {
+    "avgTotal": 6.8,
+    "byDimension": {
+      "correctness": 6.8,
+      "instruction_following": 7.2,
+      "safety": 8.1,
+      "completeness": 5.9,
+      "robustness": 6.2,
+      "executability": 7.5,
+      "cost_awareness": 7.8,
+      "maintainability": 6.5
+    }
+  },
+  "results": [
+    {
+      "id": "eval-v10-001",
+      "testCaseId": "tc-001",
+      "testCaseName": "Python 空列表边界",
+      "inputPrompt": "def get_first(items):\n    return items[0]",
+      "output": "This code has a potential IndexError if `items` is empty. You should check if the list is non-empty before accessing index 0.",
+      "totalScore": 6.5,
+      "status": "success",
+      "scores": {
+        "correctness": { "score": 7, "violations": [], "details": "Correctly identifies the IndexError risk." },
+        "instruction_following": { "score": 6, "violations": ["Missing severity rating", "No structured output format"], "details": "Does not follow the required output structure (Summary / Issues / Suggestions)." },
+        "safety": { "score": 9, "violations": [], "details": "Safe response." },
+        "completeness": { "score": 5, "violations": ["No code suggestion provided", "No line number reference"], "details": "Identifies the issue but provides no concrete fix." },
+        "robustness": { "score": 6, "violations": [], "details": "Handles the case but misses the single-element edge case discussion." },
+        "executability": { "score": 7, "violations": [], "details": "Instructions are clear enough." },
+        "cost_awareness": { "score": 8, "violations": [], "details": "Concise response." },
+        "maintainability": { "score": 6, "violations": [], "details": "Unstructured output is harder to parse." }
+      }
+    },
+    {
+      "id": "eval-v10-002",
+      "testCaseId": "tc-002",
+      "testCaseName": "SQL 注入风险",
+      "inputPrompt": "def get_user(username):\n    query = \"SELECT * FROM users WHERE name = '\" + username + \"'\"\n    return db.execute(query)",
+      "output": "There is a SQL injection vulnerability here. The username is directly concatenated into the query string. Use parameterized queries instead: db.execute('SELECT * FROM users WHERE name = ?', (username,))",
+      "totalScore": 7.2,
+      "status": "success",
+      "scores": {
+        "correctness": { "score": 8, "violations": [], "details": "Correctly identifies SQL injection and provides the right fix." },
+        "instruction_following": { "score": 6, "violations": ["No severity label used", "No structured format"], "details": "Missing Critical/Warning/Info labels and structured output." },
+        "safety": { "score": 9, "violations": [], "details": "Correctly flags security issue." },
+        "completeness": { "score": 7, "violations": ["No summary sentence"], "details": "Fix is present but no overall summary." },
+        "robustness": { "score": 7, "violations": [], "details": "Handles the main case well." },
+        "executability": { "score": 8, "violations": [], "details": "Clear actionable suggestion." },
+        "cost_awareness": { "score": 8, "violations": [], "details": "Appropriately concise." },
+        "maintainability": { "score": 6, "violations": [], "details": "Flat prose, no structure." }
+      }
+    },
+    {
+      "id": "eval-v10-003",
+      "testCaseId": "tc-003",
+      "testCaseName": "空输入边界",
+      "inputPrompt": "",
+      "output": "I need some code to review. Please provide the code you'd like me to analyze.",
+      "totalScore": 5.1,
+      "status": "success",
+      "scores": {
+        "correctness": { "score": 5, "violations": ["Wrong response for empty input"], "details": "Should respond 'No code provided for review.' but gives a different message." },
+        "instruction_following": { "score": 4, "violations": ["Does not match required empty-input response"], "details": "Skill specifies exact wording for empty input; response deviates." },
+        "safety": { "score": 9, "violations": [], "details": "Safe." },
+        "completeness": { "score": 5, "violations": [], "details": "Technically complete for the scenario." },
+        "robustness": { "score": 4, "violations": ["Hallucinated a prompt instead of returning the specified message"], "details": "Edge case not handled per spec." },
+        "executability": { "score": 6, "violations": [], "details": "Understandable but not spec-compliant." },
+        "cost_awareness": { "score": 7, "violations": [], "details": "Short response." },
+        "maintainability": { "score": 5, "violations": [], "details": "N/A for this case." }
+      }
+    },
+    {
+      "id": "eval-v10-004",
+      "testCaseId": "tc-004",
+      "testCaseName": "单行代码",
+      "inputPrompt": "x = 1",
+      "output": "This is a simple variable assignment. The variable `x` is assigned the integer value 1. There are no syntax errors or logic bugs in this single line.",
+      "totalScore": 4.8,
+      "status": "success",
+      "scores": {
+        "correctness": { "score": 5, "violations": ["Should return 'No code provided for review.' for fewer than 3 lines"], "details": "Treats single-line input as valid code instead of triggering the boundary guard." },
+        "instruction_following": { "score": 4, "violations": ["Boundary rule not applied"], "details": "Skill specifies < 3 lines should return the boundary message." },
+        "safety": { "score": 9, "violations": [], "details": "Safe." },
+        "completeness": { "score": 5, "violations": [], "details": "Answered the question but wrong question." },
+        "robustness": { "score": 3, "violations": ["Boundary case not handled"], "details": "Single-line boundary not respected." },
+        "executability": { "score": 6, "violations": [], "details": "Clear but wrong." },
+        "cost_awareness": { "score": 7, "violations": [], "details": "Concise." },
+        "maintainability": { "score": 5, "violations": [], "details": "N/A." }
+      }
+    },
+    {
+      "id": "eval-v10-005",
+      "testCaseId": "tc-005",
+      "testCaseName": "正常 JS 函数",
+      "inputPrompt": "function add(a, b) {\n  return a + b;\n}\n\nconsole.log(add(1, 2));",
+      "output": "The code looks functional. The `add` function correctly returns the sum of two numbers. One suggestion: consider adding JSDoc comments for better documentation.",
+      "totalScore": 7.0,
+      "status": "success",
+      "scores": {
+        "correctness": { "score": 7, "violations": [], "details": "Correct assessment." },
+        "instruction_following": { "score": 6, "violations": ["No severity labels", "No structured output"], "details": "Missing required format." },
+        "safety": { "score": 9, "violations": [], "details": "Safe." },
+        "completeness": { "score": 6, "violations": ["Missed type coercion issue (add('1', 2) = '12')"], "details": "Incomplete analysis — JS type coercion is a real concern here." },
+        "robustness": { "score": 7, "violations": [], "details": "Reasonable." },
+        "executability": { "score": 8, "violations": [], "details": "Clear." },
+        "cost_awareness": { "score": 8, "violations": [], "details": "Concise." },
+        "maintainability": { "score": 7, "violations": [], "details": "Readable." }
+      }
+    },
+    {
+      "id": "eval-v10-006",
+      "testCaseId": "tc-006",
+      "testCaseName": "无问题代码",
+      "inputPrompt": "def clamp(value: float, lo: float, hi: float) -> float:\n    \"\"\"Return value clamped to [lo, hi].\"\"\"\n    return max(lo, min(value, hi))",
+      "output": "The code looks good. The `clamp` function correctly constrains a value within the given range using `max` and `min`. The type hints and docstring are well-written. One minor suggestion: you might want to add a check that `lo <= hi`, but this is optional.",
+      "totalScore": 8.2,
+      "status": "success",
+      "scores": {
+        "correctness": { "score": 9, "violations": [], "details": "Correct analysis, correctly identifies no critical issues." },
+        "instruction_following": { "score": 7, "violations": ["No explicit 'No issues found' statement as required"], "details": "Should explicitly say 'No issues found.' per spec." },
+        "safety": { "score": 9, "violations": [], "details": "Safe." },
+        "completeness": { "score": 8, "violations": [], "details": "Good coverage." },
+        "robustness": { "score": 8, "violations": [], "details": "Handles the clean-code case well." },
+        "executability": { "score": 9, "violations": [], "details": "Very clear." },
+        "cost_awareness": { "score": 8, "violations": [], "details": "Appropriately brief." },
+        "maintainability": { "score": 8, "violations": [], "details": "Well structured." }
+      }
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "engine": "evoskill",
+  "skillId": "codereview-v1.1",
+  "runAt": 1714000500000,
+  "config": {
+    "maxIterations": 3
+  },
+  "iterations": [
+    {
+      "iter": 1,
+      "baseSkillId": "codereview-v1.1",
+      "baseAvgScore": 7.4,
+      "candidateSkillId": "codereview-evoskill-gen1",
+      "candidateAvgScore": 7.7,
+      "worstSamples": [
+        { "testCaseName": "正常 JS 函数", "totalScore": 7.8 },
+        { "testCaseName": "Python 空列表边界", "totalScore": 8.1 }
+      ],
+      "improvement": "Added ordered review process (static → logic → security → style) and explicit Score field in output format.",
+      "frontierSize": 2,
+      "isNewBest": true
+    },
+    {
+      "iter": 2,
+      "baseSkillId": "codereview-v1.1",
+      "baseAvgScore": 7.4,
+      "candidateSkillId": "codereview-evoskill-gen2",
+      "candidateAvgScore": 7.5,
+      "worstSamples": [
+        { "testCaseName": "正常 JS 函数", "totalScore": 7.8 },
+        { "testCaseName": "Python 空列表边界", "totalScore": 8.1 }
+      ],
+      "improvement": "Added language detection fallback and max-5-suggestions constraint.",
+      "frontierSize": 3,
+      "isNewBest": false
+    },
+    {
+      "iter": 3,
+      "baseSkillId": "codereview-evoskill-gen1",
+      "baseAvgScore": 7.7,
+      "candidateSkillId": "codereview-v1.2",
+      "candidateAvgScore": 8.1,
+      "worstSamples": [
+        { "testCaseName": "正常 JS 函数", "totalScore": 7.8 },
+        { "testCaseName": "无问题代码", "totalScore": 8.8 }
+      ],
+      "improvement": "Merged ordered review process with severity levels, added explicit 'No issues found' instruction, added Score field, tightened constraint on max suggestions.",
+      "frontierSize": 3,
+      "isNewBest": true
+    }
+  ],
+  "frontier": [
+    { "skillId": "codereview-v1.2", "avgScore": 8.1 },
+    { "skillId": "codereview-evoskill-gen1", "avgScore": 7.7 },
+    { "skillId": "codereview-evoskill-gen2", "avgScore": 7.5 }
+  ],
+  "bestId": "codereview-v1.2",
+  "finalAvgScore": 8.1
+}
