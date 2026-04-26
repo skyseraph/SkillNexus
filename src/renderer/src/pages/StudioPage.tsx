@@ -740,6 +740,8 @@ function QuickRunPane({ editorContent, apiKeySet }: { editorContent: string; api
   const [running, setRunning] = useState(false)
   const cleanupRef = useRef<(() => void) | null>(null)
 
+  const isAgentContent = /^---[\s\S]*?skill_type:\s*agent/m.test(editorContent)
+
   const handleRun = () => {
     if (!input.trim() || running) return
     setRunning(true)
@@ -770,20 +772,24 @@ function QuickRunPane({ editorContent, apiKeySet }: { editorContent: string; api
   return (
     <div className="studio-v2-quickrun">
       <div className="studio-v2-quickrun-label">⚡ 快速运行 <span className="studio-v2-quickrun-hint">安装前体验效果</span></div>
-      <div className="studio-v2-qt-row">
-        <textarea
-          rows={2}
-          placeholder="输入测试内容，直接体验 Skill 效果..."
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          disabled={running || apiKeySet === false}
-        />
-        <button className="studio-v2-btn primary" onClick={handleRun}
-          disabled={running || !input.trim() || apiKeySet === false}>
-          {running ? '运行中...' : '▶ 运行'}
-        </button>
-      </div>
-      {output && (
+      {isAgentContent ? (
+        <div className="studio-v2-agent-run-hint">🤖 Agent Skill 需要工具调用支持，请先安装后在 Eval 页面运行评测。</div>
+      ) : (
+        <div className="studio-v2-qt-row">
+          <textarea
+            rows={2}
+            placeholder="输入测试内容，直接体验 Skill 效果..."
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            disabled={running || apiKeySet === false}
+          />
+          <button className="studio-v2-btn primary" onClick={handleRun}
+            disabled={running || !input.trim() || apiKeySet === false}>
+            {running ? '运行中...' : '▶ 运行'}
+          </button>
+        </div>
+      )}
+      {!isAgentContent && output && (
         <div className="studio-v2-quickrun-output">
           <div className="studio-v2-qt-output-label">输出{running && <span className="studio-v2-streaming-dot"> ●</span>}</div>
           <pre>{output}{running ? '▌' : ''}</pre>
@@ -1727,6 +1733,7 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
         .studio-v2-quickrun { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
         .studio-v2-quickrun-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px; }
         .studio-v2-quickrun-hint { font-size: 10px; font-weight: 400; color: var(--text-muted); text-transform: none; letter-spacing: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; }
+        .studio-v2-agent-run-hint { font-size: 12px; color: var(--text-muted); background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
         .studio-v2-quickrun-output { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
         .studio-v2-quickrun-output pre { font-size: 12px; font-family: monospace; white-space: pre-wrap; word-break: break-all; color: var(--text); line-height: 1.6; margin: 0; }
 

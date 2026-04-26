@@ -1029,6 +1029,7 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
   const [progress, setProgress] = useState(0)
   const [progressMsg, setProgressMsg] = useState('')
   const [apiKeySet, setApiKeySet] = useState<boolean | null>(null)
+  const [tavilyKeySet, setTavilyKeySet] = useState<boolean | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [compareSet, setCompareSet] = useState<Set<string>>(new Set())
   const [showCompareModal, setShowCompareModal] = useState(false)
@@ -1045,7 +1046,10 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
 
   useEffect(() => {
     window.api.skills.getAll().then(setSkills)
-    window.api.config.get().then((c) => setApiKeySet(c.providers.length > 0))
+    window.api.config.get().then((c) => {
+      setApiKeySet(c.providers.length > 0)
+      setTavilyKeySet(c.toolApiKeysSet?.tavily ?? false)
+    })
   }, [])
 
   const refreshHistory = useCallback((page = 0) => {
@@ -1159,6 +1163,9 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
           )}
         </div>
       </div>
+      {skills.find(s => s.id === selectedSkill)?.skillType === 'agent' && !tavilyKeySet && (
+        <div className="gen-warn">⚠️ Agent Skill 使用 web_search 工具需要 Tavily API Key，请前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 配置。</div>
+      )}
 
       {/* Page tabs: TestCase | Eval | Chart */}
       <div className="page-tabs">
