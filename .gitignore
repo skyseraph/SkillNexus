@@ -234,3 +234,5 @@ out/renderer/assets/index-k4WdKCLc.js
 node_modules/
 .DS_Store
 e2e/
+test-results/
+*.tsbuildinfo
