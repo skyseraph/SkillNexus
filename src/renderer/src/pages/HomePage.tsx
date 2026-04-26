@@ -576,7 +576,7 @@ function ScanModal({ onClose, onImport }: {
                   <label key={s.filePath} className={`scan-item ${s.alreadyInstalled ? 'installed' : ''}`}>
                     <input type="checkbox" disabled={s.alreadyInstalled || importing}
                       checked={selected.has(s.filePath)} onChange={() => toggle(s.filePath)} />
-                    <span className="scan-name">📝 {s.name}</span>
+                    <span className="scan-name">{s.skillType === 'agent' ? '🤖' : '📝'} {s.name}{s.skillType === 'agent' && <span className="type-badge agent" style={{ marginLeft: 6 }}>Agent</span>}</span>
                     <span className="scan-path">{s.filePath}</span>
                     {s.alreadyInstalled && <span className="scan-badge">Already imported</span>}
                     {importStatus[s.filePath] === true && <span className="scan-badge ok">✓ Imported</span>}

@@ -377,16 +377,18 @@ export function registerSkillsHandlers(): void {
         if (!st.isFile()) continue
 
         let name = basename(entry, extname(entry))
+        let skillType: SkillType = 'single'
         try {
           const content = readFileSync(filePath, 'utf-8')
           const match = content.match(/^---\n([\s\S]*?)\n---/)
           if (match) {
             const fm = yaml.load(match[1]) as Record<string, unknown>
             if (fm?.name) name = fm.name as string
+            if ((fm?.skill_type as string) === 'agent') skillType = 'agent'
           }
         } catch { /* use filename as name */ }
 
-        skills.push({ name, filePath, toolId, toolName: r.name, alreadyInstalled: installedPaths.has(filePath) })
+        skills.push({ name, filePath, toolId, toolName: r.name, alreadyInstalled: installedPaths.has(filePath), skillType })
       }
     }
     return { skills, scannedDirs }

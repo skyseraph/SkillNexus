@@ -102,6 +102,7 @@ export interface ScannedSkill {
   toolId: string
   toolName: string
   alreadyInstalled: boolean
+  skillType: SkillType
 }
 
 export interface ScanResult {
