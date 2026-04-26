@@ -366,11 +366,7 @@ export function registerStudioHandlers(): void {
       throw new Error('Invalid skill name: path traversal detected')
     }
 
-    try {
-      mkdirSync(skillsDir, { recursive: true })
-    } catch { /* already exists */ }
-
-    writeFileSync(filePath, content, 'utf-8')
+    mkdirSync(skillsDir, { recursive: true })
 
     const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/)
     let frontmatter: Record<string, unknown> = {}
@@ -384,8 +380,23 @@ export function registerStudioHandlers(): void {
     const db = getDb()
     const now = Date.now()
     const id = `skill-${now}-${Math.random().toString(36).slice(2, 8)}`
-    const rootDir = dirname(filePath)
+    const skillType = (frontmatter.skill_type as string) === 'agent' ? 'agent' : 'single'
     const skillName = (frontmatter.name as string) || safeName
+
+    let resolvedFilePath: string
+    let rootDir: string
+
+    if (skillType === 'agent') {
+      rootDir = resolve(join(skillsDir, safeName))
+      resolvedFilePath = resolve(join(rootDir, 'agent.md'))
+      if (!resolvedFilePath.startsWith(resolve(skillsDir))) throw new Error('Invalid agent path')
+      mkdirSync(rootDir, { recursive: true })
+      writeFileSync(resolvedFilePath, content, 'utf-8')
+    } else {
+      resolvedFilePath = filePath
+      rootDir = dirname(filePath)
+      writeFileSync(resolvedFilePath, content, 'utf-8')
+    }
 
     db.prepare(`
       INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, trust_level, installed_at, updated_at)
@@ -398,9 +409,9 @@ export function registerStudioHandlers(): void {
       JSON.stringify((frontmatter.tags as string[]) || []),
       match ? match[1] : '',
       markdownContent,
-      filePath,
+      resolvedFilePath,
       rootDir,
-      'single',
+      skillType,
       1,
       now,
       now
@@ -414,9 +425,9 @@ export function registerStudioHandlers(): void {
       tags: (frontmatter.tags as string[]) || [],
       yamlFrontmatter: match ? match[1] : '',
       markdownContent,
-      filePath,
+      filePath: resolvedFilePath,
       rootDir,
-      skillType: 'single',
+      skillType,
       trustLevel: 1,
       installedAt: now,
       updatedAt: now

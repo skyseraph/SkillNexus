@@ -932,7 +932,6 @@ function MarketplaceTab() {
           <div className="csf-item">审核机制，保障 Skill 质量</div>
           <div className="csf-item">社区评测数据聚合</div>
           <div className="csf-item">版本管理与自动更新</div>
-          <div className="csf-item">Agent Skill 完整支持</div>
         </div>
       </div>
     </div>

@@ -63,6 +63,7 @@ export function registerEvoHandlers(): void {
 
     const evolvedName = (frontmatter.name as string) || `${original.name as string} (evolved)`
     const safeName = basename(evolvedName.replace(/[^a-zA-Z0-9_\- ]/g, '')).replace(/\s+/g, '-').toLowerCase() || 'evolved-skill'
+    const skillType: SkillType = (frontmatter.skill_type as string) === 'agent' ? 'agent' : 'single'
     const filePath = resolve(join(skillsDir, `${safeName}-${Date.now()}.md`))
     writeFileSync(filePath, strippedContent, 'utf-8')
 
@@ -80,7 +81,7 @@ export function registerEvoHandlers(): void {
       JSON.stringify((frontmatter.tags as string[]) || []),
       match ? match[1] : '',
       markdownContent,
-      filePath, rootDir, 'single', 1, originalSkillId, evolutionNotes, now, now
+      filePath, rootDir, skillType, 1, originalSkillId, evolutionNotes, now, now
     )
 
     const evolvedSkill: Skill = {
@@ -93,7 +94,7 @@ export function registerEvoHandlers(): void {
       markdownContent,
       filePath,
       rootDir,
-      skillType: 'single' as SkillType,
+      skillType,
       trustLevel: 1,
       installedAt: now,
       updatedAt: now
