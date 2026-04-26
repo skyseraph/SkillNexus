@@ -354,6 +354,9 @@ export function registerStudioHandlers(): void {
   })
 
   ipcMain.handle('studio:install', async (_event, content: string, name: string) => {
+    if (!content || !content.trim()) {
+      throw new Error('Skill content cannot be empty')
+    }
     const skillsDir = join(app.getPath('userData'), 'skills')
     // SEC-04: sanitize name — strip any path separators, keep only safe chars
     const safeName = basename(name.replace(/[^a-zA-Z0-9_\- ]/g, '')).replace(/\s+/g, '-').toLowerCase() || 'skill'
@@ -382,7 +385,7 @@ export function registerStudioHandlers(): void {
     const now = Date.now()
     const id = `skill-${now}-${Math.random().toString(36).slice(2, 8)}`
     const rootDir = dirname(filePath)
-    const skillName = (frontmatter.name as string) || name
+    const skillName = (frontmatter.name as string) || safeName
 
     db.prepare(`
       INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, trust_level, installed_at, updated_at)
