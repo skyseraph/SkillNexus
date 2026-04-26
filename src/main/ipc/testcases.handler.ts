@@ -49,6 +49,7 @@ export function registerTestCasesHandlers(): void {
     'testcases:create',
     (_event, tc: Omit<TestCase, 'id' | 'createdAt'>) => {
       const db = getDb()
+      if (!db.prepare('SELECT 1 FROM skills WHERE id = ?').get(tc.skillId)) throw new Error(`Skill "${tc.skillId}" 不存在`)
       const now = Date.now()
       const id = `tc-${now}-${Math.random().toString(36).slice(2, 8)}`
       db.prepare(`
@@ -70,6 +71,10 @@ export function registerTestCasesHandlers(): void {
       if (items.length > 200) throw new Error('单次最多导入 200 条')
 
       const db = getDb()
+
+      const skillExists = db.prepare('SELECT 1 FROM skills WHERE id = ?').get(skillId)
+      if (!skillExists) throw new Error(`Skill "${skillId}" 不存在，请先安装该 Skill 再导入测试用例`)
+
       const imported: TestCase[] = []
       const errors: string[] = []
       const VALID_JUDGE = new Set(['llm', 'grep', 'command'])
@@ -80,7 +85,8 @@ export function registerTestCasesHandlers(): void {
 
         if (typeof item !== 'object' || item === null) { errors.push(`${idx}：不是对象`); continue }
         if (!item.name || typeof item.name !== 'string' || !String(item.name).trim()) { errors.push(`${idx}：name 缺失或为空`); continue }
-        if (!item.input || typeof item.input !== 'string' || !String(item.input).trim()) { errors.push(`${idx}：input 缺失或为空`); continue }
+        // allow empty string input — valid for boundary test cases
+        if (typeof item.input !== 'string') { errors.push(`${idx}：input 必须是字符串`); continue }
 
         const judgeType = VALID_JUDGE.has(String(item.judgeType ?? ''))
           ? (item.judgeType as TestCase['judgeType'])
