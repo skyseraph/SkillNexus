@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import type { Skill, SkillFileEntry, ToolTarget, ScannedSkill, ScanResult, EvoChainEntry } from '../../../shared/types'
+import type { Skill, SkillFileEntry, ToolTarget, ScannedSkill, ScanResult, EvoChainEntry, JobEntry } from '../../../shared/types'
 import { useTrack } from '../hooks/useTrack'
 
 type ViewMode = 'grid' | 'list'
@@ -200,7 +200,7 @@ function SkillDrawer({ skill, onClose, onUninstall, onTrustChange, toast, onNavi
   skill: Skill; onClose: () => void; onUninstall: (id: string) => void
   onTrustChange?: (id: string, level: 1 | 2 | 3 | 4) => void
   toast?: (msg: string, type?: 'success' | 'error' | 'info') => void
-  onNavigate?: (page: string, skillId?: string) => void
+  onNavigate?: (page: string, skillId?: string, jobId?: string) => void
 }) {
   const [files, setFiles] = useState<SkillFileEntry[]>([])
   const [filesLoading, setFilesLoading] = useState(true)
@@ -209,10 +209,17 @@ function SkillDrawer({ skill, onClose, onUninstall, onTrustChange, toast, onNavi
   const [activeTab, setActiveTab] = useState<'files' | 'history' | 'export'>('files')
   const [evoChain, setEvoChain] = useState<EvoChainEntry[]>([])
   const [evoChainOpen, setEvoChainOpen] = useState(true)
+  const [evalJobs, setEvalJobs] = useState<JobEntry[]>([])
+  const [evalJobsLoading, setEvalJobsLoading] = useState(false)
 
   useEffect(() => {
     if (activeTab === 'history') {
       window.api.skills.getEvoChain(skill.id).then(setEvoChain).catch(() => setEvoChain([]))
+      setEvalJobsLoading(true)
+      window.api.jobs.list('eval')
+        .then(jobs => setEvalJobs(jobs.filter(j => j.skillId === skill.id)))
+        .catch(() => setEvalJobs([]))
+        .finally(() => setEvalJobsLoading(false))
     }
   }, [activeTab, skill.id])
 
@@ -253,6 +260,13 @@ function SkillDrawer({ skill, onClose, onUninstall, onTrustChange, toast, onNavi
           </div>
           <div className="drawer-header-actions">
             <TrustBadge level={(skill.trustLevel ?? 1) as 1|2|3|4} />
+            {onNavigate && (
+              <button
+                className="btn btn-sm btn-ghost"
+                title="在 Eval 页面评测此 Skill"
+                onClick={() => { onClose(); onNavigate('eval', skill.id) }}
+              >◎ 评测</button>
+            )}
             {(skill.trustLevel ?? 1) < 4 && (
               <button
                 className="btn btn-sm btn-ghost"
@@ -317,6 +331,57 @@ function SkillDrawer({ skill, onClose, onUninstall, onTrustChange, toast, onNavi
                   <pre className="code-block">---{'\n'}{skill.yamlFrontmatter}{'\n'}---</pre>
                 </div>
               )}
+
+              <div className="detail-section">
+                <div className="meta-label" style={{ marginBottom: 8 }}>
+                  评测历史
+                  {evalJobs.length > 0 && <span className="evo-chain-count">{evalJobs.length} 条</span>}
+                </div>
+                {evalJobsLoading ? (
+                  <div className="tree-loading">Loading...</div>
+                ) : evalJobs.length === 0 ? (
+                  <div className="evo-chain-empty">
+                    <span>暂无评测记录</span>
+                    <span className="evo-chain-empty-hint">
+                      {onNavigate
+                        ? <button className="link-btn" style={{ fontSize: 11 }} onClick={() => { onClose(); onNavigate('eval', skill.id) }}>在 Eval 页面运行评测 →</button>
+                        : '在 Eval 页面运行评测后，此处将展示历史记录'}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="eval-job-list">
+                    {evalJobs.map(job => (
+                      <div
+                        key={job.id}
+                        className="eval-job-row"
+                        onClick={() => { if (onNavigate) { onClose(); onNavigate('tasks', undefined, job.id) } }}
+                      >
+                        <div className="eval-job-row-left">
+                          <span className="eval-job-icon">◎</span>
+                          <div className="eval-job-info">
+                            <div className="eval-job-cases">
+                              {job.totalCases ?? 1} 用例
+                              {job.failedCases != null && job.failedCases > 0 && (
+                                <span className="eval-job-fail-badge">{job.failedCases} 失败</span>
+                              )}
+                            </div>
+                            <div className="eval-job-date">{new Date(job.createdAt).toLocaleString()}</div>
+                          </div>
+                        </div>
+                        <div className="eval-job-row-right">
+                          {job.avgJobScore != null && (
+                            <span className={`eval-job-score ${job.avgJobScore >= 8 ? 'score-high' : job.avgJobScore >= 6 ? 'score-mid' : 'score-low'}`}>
+                              {job.avgJobScore.toFixed(1)}
+                            </span>
+                          )}
+                          <span className="eval-job-arrow">→</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {evoChain.length >= 1 && (
                 <div className="detail-section">
                   <div className="evo-chain-header" onClick={() => setEvoChainOpen(o => !o)}>
@@ -1199,6 +1264,23 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
         .evo-chain-empty-hint { font-size: 11px; color: var(--text-muted); opacity: .7; line-height: 1.5; }
         .link-btn { background: none; border: none; color: var(--accent); font-size: inherit; cursor: pointer; padding: 0; text-decoration: underline; }
         .link-btn:hover { opacity: 0.8; }
+
+        /* Eval job history list */
+        .eval-job-list { display: flex; flex-direction: column; gap: 4px; }
+        .eval-job-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; transition: all var(--transition, 0.15s); gap: 8px; }
+        .eval-job-row:hover { border-color: var(--accent); background: rgba(108,99,255,0.06); }
+        .eval-job-row-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .eval-job-icon { font-size: 14px; color: var(--text-muted); flex-shrink: 0; }
+        .eval-job-info { min-width: 0; }
+        .eval-job-cases { font-size: 12px; font-weight: 500; color: var(--text); display: flex; align-items: center; gap: 6px; }
+        .eval-job-fail-badge { font-size: 10px; padding: 1px 5px; border-radius: 4px; background: rgba(248,113,113,0.15); color: #f87171; }
+        .eval-job-date { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+        .eval-job-row-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+        .eval-job-score { font-size: 13px; font-weight: 700; }
+        .eval-job-score.score-high { color: var(--success, #22c55e); }
+        .eval-job-score.score-mid { color: #f59e0b; }
+        .eval-job-score.score-low { color: #f87171; }
+        .eval-job-arrow { font-size: 12px; color: var(--text-muted); }
 
         /* Export tab */
         .export-tab { padding: 20px; overflow-y: auto; flex: 1; }

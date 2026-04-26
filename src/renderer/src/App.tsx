@@ -33,6 +33,7 @@ function applyTheme(theme: Theme) {
 export default function App() {
   const [page, setPage] = useState<Page>('home')
   const [navSkillId, setNavSkillId] = useState<string | null>(null)
+  const [navJobId, setNavJobId] = useState<string | null>(null)
   // Track nav version per page — incrementing forces remount when navigating with a skillId
   const [navVersion, setNavVersion] = useState<Record<string, number>>({})
   const [apiKeySet, setApiKeySet] = useState<boolean | null>(null)
@@ -42,15 +43,16 @@ export default function App() {
   // Track which pages have been visited (for lazy mount)
   const [mounted, setMounted] = useState<Set<Page>>(new Set(['home']))
 
-  const handleNavigate = (p: string, skillId?: string) => {
+  const handleNavigate = (p: string, skillId?: string, jobId?: string) => {
     const newPage = p as Page
     setPage(newPage)
     setMounted(prev => new Set([...prev, newPage]))
-    if (skillId) {
-      // Force remount of target page when navigating with a specific skillId
+    if (skillId || jobId) {
+      // Force remount of target page when navigating with a specific skillId or jobId
       setNavVersion(prev => ({ ...prev, [newPage]: (prev[newPage] ?? 0) + 1 }))
     }
     setNavSkillId(skillId ?? null)
+    setNavJobId(jobId ?? null)
   }
 
   const checkApiKey = () => {
@@ -133,7 +135,7 @@ export default function App() {
             {mounted.has('evo') && <EvoPage key={v('evo')} session={evoSessionRef} initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} />}
           </div>
           <div style={{ display: page === 'tasks' ? undefined : 'none', height: '100%' }}>
-            {mounted.has('tasks') && <TasksPage onNavigate={handleNavigate} />}
+            {mounted.has('tasks') && <TasksPage key={v('tasks')} initialJobId={navJobId ?? undefined} onNavigate={handleNavigate} />}
           </div>
           <div style={{ display: page === 'trending' ? undefined : 'none', height: '100%' }}>
             {mounted.has('trending') && <TrendingPage onNavigate={handleNavigate} />}

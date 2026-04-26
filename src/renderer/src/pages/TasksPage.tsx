@@ -3,7 +3,8 @@ import type { JobEntry, EvolutionEngine, EvalResult } from '../../../shared/type
 import { exportEvalReport, exportEvoReport } from '../utils/report-export'
 
 interface TasksPageProps {
-  onNavigate: (page: string, skillId?: string) => void
+  onNavigate: (page: string, skillId?: string, jobId?: string) => void
+  initialJobId?: string
 }
 
 type Filter = 'all' | 'eval' | 'evo'
@@ -717,7 +718,7 @@ function DeleteConfirm({ job, onConfirm, onCancel }: { job: JobEntry; onConfirm:
 }
 
 // ── main page ─────────────────────────────────────────────────────────────────
-export default function TasksPage({ onNavigate }: TasksPageProps) {
+export default function TasksPage({ onNavigate, initialJobId }: TasksPageProps) {
   const [jobs, setJobs] = useState<JobEntry[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [evalSubFilter, setEvalSubFilter] = useState<EvalSubFilter>('all')
@@ -725,12 +726,12 @@ export default function TasksPage({ onNavigate }: TasksPageProps) {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [activeJobId, setActiveJobId] = useState<string | null>(null)
+  const [activeJobId, setActiveJobId] = useState<string | null>(initialJobId ?? null)
   const [diffModal, setDiffModal] = useState<{ jobA: JobEntry; jobB: JobEntry; contentA: string; contentB: string } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<JobEntry | null>(null)
 
   const load = useCallback(async (f: Filter) => {
-    setLoading(true); setSelected(new Set()); setActiveJobId(null)
+    setLoading(true); setSelected(new Set())
     try { setJobs(await window.api.jobs.list(f)) }
     finally { setLoading(false) }
   }, [])
@@ -813,8 +814,7 @@ export default function TasksPage({ onNavigate }: TasksPageProps) {
     ? successEvals.reduce((s, j) => s + (j.avgJobScore ?? 0), 0) / successEvals.length
     : null
 
-  const activeJob = activeJobId ? filtered.find(j => j.id === activeJobId) ?? null : null
-
+  const activeJob = activeJobId ? (filtered.find(j => j.id === activeJobId) ?? jobs.find(j => j.id === activeJobId) ?? null) : null
   return (
     <div className="tasks-root">
       <style>{`
