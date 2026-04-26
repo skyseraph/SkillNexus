@@ -4,6 +4,33 @@ import { LLM_PROVIDER_PRESETS } from '../../../shared/types'
 import type { Theme } from '../App'
 import { useTrack } from '../hooks/useTrack'
 
+function QRPlaceholder({ label, placeholder }: { label: string; placeholder: string }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <>
+      <div className="qr-thumb" onClick={() => setExpanded(true)} title={`点击放大 ${label} 二维码`}>
+        <div className="qr-placeholder-box">
+          <span className="qr-placeholder-icon">▦</span>
+          <span className="qr-placeholder-text">{placeholder}</span>
+        </div>
+        <span className="qr-label">{label}</span>
+      </div>
+      {expanded && (
+        <div className="modal-overlay" onClick={() => setExpanded(false)}>
+          <div className="qr-modal" onClick={e => e.stopPropagation()}>
+            <div className="qr-modal-title">{label} 二维码</div>
+            <div className="qr-modal-box">
+              <span className="qr-modal-icon">▦</span>
+              <span className="qr-modal-hint">请将实际二维码图片替换此占位符</span>
+            </div>
+            <button className="qr-modal-close" onClick={() => setExpanded(false)}>关闭</button>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 interface Props {
   onConfigSaved?: () => void
   theme: Theme
@@ -555,13 +582,21 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
               <a className="about-link" href="#" onClick={e => { e.preventDefault(); window.api.shell.openExternal('https://github.com/SkySeraph') }}>
                 <span className="about-link-icon">⌥</span> GitHub
               </a>
-              <a className="about-link" href="#" onClick={e => { e.preventDefault(); window.api.shell.openExternal('mailto:skyseraph00@163.com') }}>
-                <span className="about-link-icon">✉</span> skyseraph00@163.com
+              <a className="about-link" href="#" onClick={e => { e.preventDefault(); window.api.shell.openExternal('mailto:540033633@qq.com') }}>
+                <span className="about-link-icon">✉</span> 540033633@qq.com
               </a>
-              <a className="about-link" href="#" onClick={e => { e.preventDefault(); window.api.shell.openExternal('https://skyseraph.com') }}>
-                <span className="about-link-icon">🌐</span> skyseraph.com
+              <a className="about-link" href="#" onClick={e => { e.preventDefault(); window.api.shell.openExternal('https://skyseraph.github.io/') }}>
+                <span className="about-link-icon">🌐</span> skyseraph.github.io
               </a>
             </div>
+          </div>
+          <div className="about-qrcodes">
+            {[
+              { label: '微信', placeholder: 'WeChat' },
+              { label: '公众号', placeholder: 'Official' },
+            ].map(({ label, placeholder }) => (
+              <QRPlaceholder key={label} label={label} placeholder={placeholder} />
+            ))}
           </div>
         </div>
       </section>
@@ -655,7 +690,21 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
         .about-item { display: flex; flex-direction: column; gap: 3px; }
         .about-label { font-size: 11px; color: var(--text-muted); }
         .about-item span:last-child { font-size: 13px; font-weight: 500; }
-        .about-author-row { display: flex; align-items: center; gap: 12px; }
+        .about-author-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+        .about-qrcodes { display: flex; gap: 12px; flex-shrink: 0; }
+        .qr-thumb { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; }
+        .qr-placeholder-box { width: 56px; height: 56px; border: 1px dashed var(--border); border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: var(--surface2); transition: all var(--transition); }
+        .qr-thumb:hover .qr-placeholder-box { border-color: var(--accent); background: rgba(108,99,255,0.06); }
+        .qr-placeholder-icon { font-size: 22px; color: var(--text-muted); line-height: 1; }
+        .qr-placeholder-text { font-size: 8px; color: var(--text-muted); }
+        .qr-label { font-size: 11px; color: var(--text-muted); }
+        .qr-modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 16px; width: 240px; }
+        .qr-modal-title { font-size: 14px; font-weight: 600; color: var(--text); }
+        .qr-modal-box { width: 160px; height: 160px; border: 1px dashed var(--border); border-radius: 8px; background: var(--surface2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+        .qr-modal-icon { font-size: 64px; color: var(--text-muted); line-height: 1; }
+        .qr-modal-hint { font-size: 10px; color: var(--text-muted); text-align: center; padding: 0 12px; }
+        .qr-modal-close { padding: 5px 20px; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; transition: all var(--transition); }
+        .qr-modal-close:hover { border-color: var(--accent); color: var(--accent); }
         .about-author-info { display: flex; flex-direction: column; gap: 8px; }
         .about-author-name { font-size: 14px; font-weight: 600; color: var(--text); }
         .about-author-links { display: flex; gap: 12px; flex-wrap: wrap; }
