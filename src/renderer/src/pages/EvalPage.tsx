@@ -878,6 +878,12 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
                 </select>
                 <input placeholder="Judge param（可选）..." value={form.judgeParam} onChange={(e) => setForm((f) => ({ ...f, judgeParam: e.target.value }))} style={{ flex: 1 }} />
               </div>
+              {form.judgeType === 'command' && (
+                <div className="warn-banner" style={{ marginTop: 6, padding: '6px 10px', background: '#7c3a001a', border: '1px solid #f59e0b55', borderRadius: 6, fontSize: 12, color: '#f59e0b', display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                  <span>⚠️</span>
+                  <span><b>高级功能：</b>Command 判断类型会在本机直接执行 shell 命令，请确保 judge param 来自可信来源，避免使用破坏性命令（如 <code>rm</code>）。</span>
+                </div>
+              )}
               <div className="add-form-actions">
                 <button className="btn btn-ghost btn-sm" onClick={() => setAddOpen(false)}>取消</button>
                 <button className="btn btn-primary btn-sm" onClick={handleAdd} disabled={adding || !form.name.trim() || !form.input.trim()}>{adding ? '添加中...' : '添加'}</button>

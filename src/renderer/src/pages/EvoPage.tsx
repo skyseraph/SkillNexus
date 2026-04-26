@@ -764,6 +764,10 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
                   {plugins.length > 0 && (
                     <div className="engine-group">
                       <div className="engine-group-label">本地插件</div>
+                      <div style={{ fontSize: 11, color: '#f59e0b', background: '#7c3a001a', border: '1px solid #f59e0b44', borderRadius: 5, padding: '4px 8px', marginBottom: 6, display: 'flex', gap: 5, alignItems: 'flex-start' }}>
+                        <span>⚠️</span>
+                        <span>插件为第三方代码，将在本机以完整 Node.js 权限运行，请仅安装来自可信来源的插件。</span>
+                      </div>
                       <div className="engine-chip-row">
                         {plugins.map(p => {
                           const pluginEngineId = `plugin:${p.id}` as EvolutionEngine
