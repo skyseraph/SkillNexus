@@ -1,6 +1,7 @@
 ---
 name: CodeReview
 version: 1.1.0
+skill_type: single
 format: markdown
 tags: [code, review, quality]
 ---

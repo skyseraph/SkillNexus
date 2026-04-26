@@ -1,6 +1,7 @@
 ---
 name: CommitMessage
 version: 1.1.0
+skill_type: single
 format: markdown
 tags: [git, commit, productivity]
 ---
