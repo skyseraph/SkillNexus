@@ -1,489 +1,503 @@
-# SkillNexus
-
 <div align="center">
 
-# SkillNexus (Skill Studio)
+<img src="docs/images/logo.png" alt="SkillNexus Logo" width="120" />
 
-**Skill 创造平台：让能力可量化、可管理、可成长**
+# SkillNexus
 
-[English](#english) | [中文](#中文)
+**AI Skill 全生命周期创造平台 · The Full-Lifecycle AI Skill Studio**
+
+*让能力可量化、可管理、可成长 · Make AI skills measurable, manageable, and evolvable*
+
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](package.json)
+[![Tests](https://img.shields.io/badge/tests-693%20passing-brightgreen.svg)](#)
+[![Electron](https://img.shields.io/badge/Electron-31-47848F.svg)](https://electronjs.org)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](#)
+
+[中文](#-中文) · [English](#-english) · [快速开始 / Quick Start](#-快速开始--quick-start)
 
 </div>
 
 ---
 
-## 中文
+## 🇨🇳 中文
 
-### 📖 项目简介
+### 什么是 SkillNexus？
 
-SkillNexus 是一个专为 AI Skill 设计的全生命周期创造工具。Skill 是一种 Markdown 格式的 AI 指令文件（带 YAML frontmatter），可安装到 Claude Code、Cursor、Windsurf 等 AI 工具中，增强其能力。
+**Skill** 是 Claude Code 官方定义的模块化能力单元（[Agent Skills 开放标准](https://agentskills.io)）。每个 Skill 是一个独立目录，核心文件为 `SKILL.md`——Markdown 正文 + YAML frontmatter，包含三层结构：
 
-**核心工作流**：
+```
+SKILL.md
+  ├── frontmatter（始终加载，~100 tokens）
+  │     name / description / allowed-tools
+  ├── 指令正文（匹配任务时按需加载）
+  └── 关联文件（执行时按需引用）
+```
+
+Skill 安装到 `~/.claude/skills/`（个人全局）或 `.claude/skills/`（项目级），Claude Code 通过 `description` 字段**自动发现并激活**，也可通过 `/skill-name` 斜杠命令手动调用。同样的格式也被 Cursor、Windsurf、Gemini CLI 等 AI 工具所采用。
+
+**SkillNexus** 提供从生成到进化的完整闭环——你不只是在写提示词，你在系统地培育和进化 AI 能力。
+
 ```
 Home（管理）→ Studio（生成）→ TestCase（用例）→ Eval（评测）→ Evo（进化）→ Trending（榜单）
 ```
 
-### ✨ 核心功能
-
-#### 🏠 Home — Skill 管理
-- 安装单文件 `.md` 或 Agent Skill 目录
-- 扫描本地 AI 工具目录（Claude Code、Cursor、Windsurf 等）
-- 导出 Skill 到 AI 工具（复制或符号链接模式）
-- 文件树浏览和内容查看
-- GitHub Marketplace 搜索与安装
-- 支持 8+ AI 工具，可配置导出路径
-
-#### 🎨 Studio — Skill 生成与创造
-- **4 种生成模式**：
-  - 基于提示词（流式 AI 生成）
-  - 基于示例（输入/输出对）
-  - 对话提取（从聊天历史中提炼）
-  - 手动编辑
-- **发现面板**：浏览 SkillNet、GitHub 仓库、个人库
-- **外部方法**：Skill Creator、PromptPerfect、自定义 URL
-- **内联验证**：5 维度评分（安全性/完整性/可执行性/可维护性/成本意识）
-- **相似度检测**：防止重复安装
-- **快速测试**：内联运行 Skill，保存测试用例
-- **对比进化**：并排查看原始版本 vs 进化版本
-
-#### 🧪 TestCase — 测试用例管理
-- 手动 CRUD 测试用例
-- AI 自动生成（1-20 个用例，NDJSON 格式）
-- 3 种评判类型：LLM、grep、command
-- 按 Skill 组织
-
-#### 📊 Eval — 多维度评测
-- **4 个评测维度**：正确性、清晰度、完整性、安全性（0-10 分制）
-- **2 种模式**：
-  - 单次评测：针对测试用例运行 Skill
-  - 三条件对比：基线（无 Skill）vs 当前版本 vs AI 生成版本
-- 实时进度跟踪
-- 评测历史（每个 Skill 最近 50 条记录）
-- 支持并发评测
-
-#### 🧬 Evo — Skill 进化引擎
-- 基于评测反馈自动改进 Skill
-- 4 种进化策略：improve_weak、expand、simplify、add_examples
-- 将进化版本安装为新 Skill
-- 原始版本 vs 进化版本并行评测
-- 量化改进指标
-
-#### 🏆 Trending — 排行榜
-- 多维度 Skill 排名
-- 按总分或单个维度排序
-- 从评测历史聚合统计数据
-
-#### ⚙️ Settings — LLM 提供商配置
-- 支持 12+ AI 提供商（Anthropic、DeepSeek、Kimi、MiniMax、Ollama 等）
-- 自定义提供商设置（baseURL + API Key + 模型）
-- 预设提供商配置
-- API Key 安全存储（electron-store 加密）
-
-### 🛠️ 技术栈
-
-| 层级 | 技术 |
-|------|------|
-| **桌面框架** | Electron 31.0.0 + electron-vite 2.3.0 |
-| **前端** | React 18.3.0 + TypeScript 5.5.0 |
-| **主进程存储** | better-sqlite3 11.0.0（业务数据）+ electron-store 8.2.0（LLM 配置） |
-| **AI Provider** | Anthropic SDK 0.39.0（主要），兼容 OpenAI 格式（via baseURL），支持 12+ 预设 |
-| **IPC** | contextBridge + ipcMain.handle / ipcRenderer.invoke |
-| **测试** | Vitest 2.0.0（单元测试）+ Playwright（E2E，待接入） |
-| **构建工具** | Vite 5.3.0, electron-rebuild 3.6.0 |
-
-### 🚀 快速开始
-
-#### 前置要求
-- Node.js 18+
-- npm 或 yarn
-
-#### 安装依赖
-```bash
-npm install
-```
-
-#### 重建原生模块（首次运行或依赖更新后）
-```bash
-npm run rebuild
-```
-
-#### 开发模式
-```bash
-npm run dev
-```
-
-#### 构建生产版本
-```bash
-npm run build
-```
-
-#### 运行测试
-```bash
-npm test              # 运行一次
-npm run test:watch    # 监听模式
-```
-
-### 📁 项目结构
-
-```
-SkillNexus/
-├── src/
-│   ├── main/                    # Electron 主进程
-│   │   ├── index.ts             # 应用入口
-│   │   ├── db/                  # SQLite 数据库
-│   │   ├── ipc/                 # IPC 处理器
-│   │   └── services/            # AI Provider、评测引擎
-│   ├── renderer/                # React 前端
-│   │   └── src/
-│   │       ├── App.tsx          # 主路由
-│   │       ├── pages/           # 6 个主页面
-│   │       └── components/
-│   ├── preload/                 # Electron preload（contextBridge）
-│   └── shared/                  # 共享类型与工具
-├── openspec/                    # Spec 驱动开发文档
-│   ├── config.yaml              # 项目上下文
-│   ├── specs/                   # 永久功能规格
-│   └── changes/                 # 活跃变更提案
-├── CLAUDE.md                    # 项目规范与编码准则
-└── package.json
-```
-
-### 🔒 安全架构
-
-项目遵循 **7 条 IPC 安全不变量**（详见 `openspec/specs/01-ipc-security.md`）：
-
-1. **SEC-R1**: 文件路径必须经白名单校验
-2. **SEC-R2**: name 参数写文件前必须 sanitize
-3. **SEC-R3**: API Key 不暴露给渲染进程
-4. **SEC-R4**: shell.openExternal 仅接受 `https?://` 协议
-5. **SEC-R5**: 所有 AI 调用 30 秒超时
-6. **SEC-R6**: testCaseIds 数组长度 ≤ 50
-7. **SEC-R7**: skills:readFile 验证文件在 Skill rootDir 内
-
-违反任一规则将阻止代码合并。
-
-### 📐 开发工作流
-
-**Spec-First 方法论**（详见 `CLAUDE.md`）：
-
-1. **写 Spec** → `openspec/specs/<module>.md`
-2. **对齐确认** → 与用户确认方向
-3. **创建变更** → `openspec/changes/<name>/`（proposal + design + tasks）
-4. **实现** → 按 Spec 实现，偏差必须先更新 Spec
-5. **代码审查** → 按 4 个维度验收（安全合规、产品深度、可测试性、性能）
-
-**编码准则**（Karpathy Guidelines）：
-- 先想后写（不假设，暴露权衡）
-- 简单优先（最小化代码）
-- 外科手术式修改（只改必须改的）
-- 目标驱动执行（定义成功标准）
-
-### 📊 数据库模型
-
-```sql
--- Skills 元数据
-CREATE TABLE skills (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  format TEXT DEFAULT 'markdown',
-  version TEXT DEFAULT '1.0.0',
-  tags TEXT DEFAULT '[]',
-  yaml_frontmatter TEXT DEFAULT '',
-  markdown_content TEXT DEFAULT '',
-  file_path TEXT NOT NULL,
-  root_dir TEXT NOT NULL,
-  skill_type TEXT DEFAULT 'single',
-  installed_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
--- 测试用例
-CREATE TABLE test_cases (
-  id TEXT PRIMARY KEY,
-  skill_id TEXT NOT NULL REFERENCES skills(id),
-  name TEXT NOT NULL,
-  input TEXT NOT NULL,
-  judge_type TEXT DEFAULT 'llm',
-  judge_param TEXT DEFAULT '',
-  created_at INTEGER NOT NULL
-);
-
--- 评测历史
-CREATE TABLE eval_history (
-  id TEXT PRIMARY KEY,
-  skill_id TEXT NOT NULL,
-  model TEXT NOT NULL,
-  provider TEXT NOT NULL,
-  input_prompt TEXT NOT NULL,
-  output TEXT NOT NULL,
-  scores TEXT DEFAULT '{}',
-  total_score REAL DEFAULT 0,
-  duration_ms INTEGER DEFAULT 0,
-  status TEXT DEFAULT 'success',
-  created_at INTEGER NOT NULL
-);
-```
-
-### 🤝 贡献指南
-
-1. Fork 本仓库
-2. 创建功能分支（`git checkout -b feature/AmazingFeature`）
-3. 遵循 Spec-First 工作流（先写 Spec，再实现）
-4. 确保通过所有测试（`npm test`）
-5. 遵守 7 条 IPC 安全不变量
-6. 提交 Pull Request
-
-### 📄 许可证
-
-本项目采用 [Apache License 2.0](LICENSE) 许可证。
-
-### 🙏 致谢
-
-- [Andrej Karpathy](https://github.com/karpathy) - 编码准则灵感来源
-- [Claude Code](https://claude.ai/code) - AI 辅助开发工具
-- [SkillNet](https://github.com/skillnet) - Skill 生态系统参考
-- [agent-skill-autonomous](https://skyseraph.github.io/posts/2026/agent-skill-autonomous/)
+<!-- 截图占位：主界面 Overview gif
+![SkillNexus Overview](docs/images/overview.gif)
+-->
 
 ---
 
-## English
+### ✨ 核心功能
 
-### 📖 Overview
+#### 🏠 Home — Skill 管理中心
 
-SkillNexus is a comprehensive lifecycle Creation platform for AI Skills. A Skill is a Markdown-formatted AI instruction file (with YAML frontmatter) that can be installed into AI tools like Claude Code, Cursor, and Windsurf to enhance their capabilities.
+管理你所有的 Skill 资产，支持多来源、多 AI 工具。
 
-**Core Workflow**:
+- 安装本地 Skill 目录（`SKILL.md` + 关联文件）或单文件 `.md`（兼容旧格式）
+- **GitHub Marketplace** 一键搜索与安装
+- 扫描并导入本地 AI 工具目录（Claude Code、Cursor、Windsurf、Gemini CLI 等 12+ 工具）
+- 导出到 AI 工具（符号链接 / 文件复制两种模式）
+- 文件树浏览与内容预览
+- 进化链可视化（`parent_skill_id` 血脉追溯）
+
+<!-- 截图占位：Home 页面
+![Home Page](docs/images/home.png)
+-->
+
+---
+
+#### 🎨 Studio — Skill 生成与创作
+
+流式 AI 辅助生成，多模式满足不同创作场景。
+
+**4 种生成模式：**
+
+| 模式 | 说明 |
+|------|------|
+| 📝 基于提示词 | 描述你的需求，流式生成完整 Skill |
+| 📋 基于示例 | 提供输入/输出对，AI 归纳规律生成 Skill |
+| 💬 对话提取 | 从历史聊天记录中蒸馏出 Skill |
+| ✏️ 手动编辑 | 直接编写或精细调整 |
+
+**其他能力：**
+- 内联 5 维质量验证（安全性 / 完整性 / 可执行性 / 可维护性 / 成本意识）
+- 相似度检测，防止重复安装
+- 快速测试：在 Studio 内直接运行并保存测试用例
+- 流式进化对比：生成结果与原版本并排呈现
+
+<!-- 截图占位：Studio 页面
+![Studio Page](docs/images/studio.png)
+-->
+
+---
+
+#### 🧪 TestCase — 测试用例管理
+
+系统化管理 Skill 的评测数据集。
+
+- 手动 CRUD 测试用例
+- AI 批量生成（1–20 个，NDJSON 流式输出）
+- **3 种评判类型：**
+  - `llm` — LLM 作为裁判，8 维度语义评分
+  - `grep` — 正则匹配，精确验证输出格式
+  - `command` — 自定义 shell 脚本验证（⚠️ 需可信来源）
+
+---
+
+#### 📊 Eval — 8 维度评测引擎
+
+业界最细粒度的 Skill 评测框架，分为任务质量（G 系列）和 Skill 质量（S 系列）两组：
+
+| 维度 | 分类 | 说明 |
+|------|------|------|
+| G1 · Correctness | 任务质量 | 输出是否正确完成任务目标 |
+| G2 · Instruction Following | 任务质量 | 是否严格遵循 Skill 指定的格式和约束 |
+| G3 · Safety | 任务质量 | 输出是否安全、中立、无害 |
+| G4 · Completeness | 任务质量 | 是否涵盖所有必要内容 |
+| G5 · Robustness | 任务质量 | 对边界/模糊输入的鲁棒性 |
+| S1 · Executability | Skill 质量 | Skill 指令是否清晰可操作 |
+| S2 · Cost Awareness | Skill 质量 | 输出是否简洁，避免 token 浪费 |
+| S3 · Maintainability | Skill 质量 | Skill 结构是否清晰易维护 |
+
+**3 种评测模式：**
+- **单次评测**：针对测试用例集运行当前 Skill
+- **对比模式**：两个 Skill 版本并行 eval，可视化差异
+- **三条件模式**：无 Skill 基线 vs 当前 vs AI 生成版，量化 Skill 的实际增益
+
+实时进度推送 · 并发评判（最多 4 并发，避免速率限制）· 历史记录查询
+
+<!-- 截图占位：Eval 页面
+![Eval Page](docs/images/eval.png)
+-->
+
+---
+
+#### 🧬 Evo — 多策略进化引擎
+
+基于评测数据，自动改进你的 Skill。内置 8 种进化引擎，覆盖从轻量到深度的全场景：
+
+**Studio 交互式进化（流式实时）：**
+
+| 范式 | 策略 |
+|------|------|
+| `evidence` | 基于评测证据的外科手术式修复 |
+| `strategy` | 策略矩阵——用户指定优化目标 |
+| `capability` | 能力感知编译——降低 AI 执行门槛 |
+
+**自动化 SDK 引擎：**
+
+| 引擎 | 核心思路 |
+|------|---------|
+| **EvoSkill** | 最差样本驱动：找出低分用例针对性改进，多轮迭代 |
+| **CoEvoSkill** | 生成器-验证器循环：生成改进方案 + 对抗性测试验证 |
+| **SkillX** | 成功模式提取：从高分历史中归纳规律并编码进 Skill |
+| **SkillClaw** | 集体失败分析：跨会话聚类失败模式，找结构性缺陷 |
+| **SkillMOO** | 多目标 Pareto 优化：在质量与效率间找最优解集 |
+
+**Plugin 系统：** 将自定义进化算法放入 `{userData}/plugins/*.js` 即可接入，无需修改源码。
+
+<!-- 截图占位：Evo 页面
+![Evo Page](docs/images/evo.png)
+-->
+
+---
+
+#### 🏆 Trending — 能力榜单
+
+- 按总分或单维度排名所有 Skill
+- 从 eval_history 实时聚合统计
+- 发现高质量 Skill，指导进化方向
+
+#### ⚙️ Settings — AI Provider 配置
+
+支持 **13 个预设 Provider**，通过 Anthropic SDK `baseURL` 机制兼容任何 OpenAI/Anthropic 格式服务：
+
+| 类别 | Provider |
+|------|---------|
+| 官方 | Anthropic |
+| 国内官方 | MiniMax (CN/Global) · DeepSeek · Kimi · Zhipu GLM · 字节 · 阿里 · 百度 |
+| 聚合平台 | OpenRouter |
+| 本地模型 | Ollama |
+| 自定义 | 任意 baseURL + API Key |
+
+API Key 安全存储在 `electron-store`（加密），**不暴露给渲染进程**。
+
+---
+
+### 🏗️ 架构概览
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Renderer（React 18）                       │
+│     Home · Studio · Eval · Evo · Trending · Settings         │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ contextBridge（安全隔离）
+┌─────────────────────▼───────────────────────────────────────┐
+│                  Main Process（Node.js）                       │
+│  ┌──────────┐  ┌──────────────┐  ┌───────────────────────┐  │
+│  │ SQLite   │  │ electron-    │  │   AI Provider         │  │
+│  │ (业务DB) │  │ store(配置)  │  │   13 Provider 预设    │  │
+│  └──────────┘  └──────────────┘  └───────────────────────┘  │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │  Evolution SDK（可独立提取的零 Electron 依赖层）       │   │
+│  │  BaseEvolutionEngine ← IDataStore / ISkillStorage /  │   │
+│  │                        IProgressReporter             │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+> Evolution SDK 通过接口依赖注入与 Electron 完全解耦，详见 [`doc/design/core-decoupling.md`](doc/design/core-decoupling.md)。
+
+---
+
+### 🔒 安全架构
+
+遵循 **7 条 IPC 安全不变量**，违反任一规则阻止合并：
+
+| 规则 | 要求 |
+|------|------|
+| SEC-R1 | 文件路径入参经 `assertPathAllowed()` 白名单校验 |
+| SEC-R2 | name 写文件前 `basename + sanitize`，验证路径在目标目录内 |
+| SEC-R3 | `config:get` 返回 `AppConfigPublic`，省略 apiKey |
+| SEC-R4 | `shell.openExternal` 只接受 `https?://` 协议 |
+| SEC-R5 | 所有 AI 调用通过 `withTimeout(30s)` 包裹 |
+| SEC-R6 | `testCaseIds` 数组长度 ≤ 50 |
+| SEC-R7 | `skills:readFile` 验证文件在 Skill rootDir 内 |
+
+---
+
+### 🛠️ 技术栈
+
+| 层 | 技术 |
+|----|------|
+| 桌面框架 | Electron 31 + electron-vite 2.3 |
+| 前端 | React 18 + TypeScript 5.5 |
+| 业务存储 | better-sqlite3 11（SQLite） |
+| 配置存储 | electron-store 8（加密） |
+| AI SDK | @anthropic-ai/sdk 0.39（主），兼容 OpenAI via baseURL |
+| 测试 | Vitest 2（693 个测试，38 个测试文件） |
+| 代码规范 | ESLint + @typescript-eslint |
+
+---
+
+## 🇬🇧 English
+
+### What is SkillNexus?
+
+A **Skill** is a modular capability unit defined by the official Claude Code [Agent Skills open standard](https://agentskills.io). Each Skill is a directory containing a `SKILL.md` file — Markdown body + YAML frontmatter — with a three-layer progressive disclosure structure:
+
+```
+SKILL.md
+  ├── frontmatter  (always loaded, ~100 tokens)
+  │     name / description / allowed-tools
+  ├── instruction body  (loaded on task match)
+  └── linked files      (accessed on demand)
+```
+
+Skills are installed to `~/.claude/skills/` (personal/global) or `.claude/skills/` (project-scoped). Claude Code **auto-discovers** them via the `description` field and activates the right Skill automatically — or you can invoke them manually with `/skill-name`. The same format works across Cursor, Windsurf, Gemini CLI, and other AI tools.
+
+**SkillNexus** provides the complete closed loop from generation to evolution — you're not just writing prompts, you're systematically cultivating and evolving AI capabilities.
+
 ```
 Home (Manage) → Studio (Generate) → TestCase (Create) → Eval (Assess) → Evo (Evolve) → Trending (Rank)
 ```
 
-### ✨ Key Features
+<!-- Screenshot placeholder: Overview
+![SkillNexus Overview](docs/images/overview.gif)
+-->
+
+---
+
+### ✨ Features
 
 #### 🏠 Home — Skill Management
-- Install single `.md` files or Agent Skill directories
-- Scan local AI tool directories (Claude Code, Cursor, Windsurf, etc.)
-- Export skills to AI tools (copy or symlink modes)
-- Browse file trees and view content
-- GitHub Marketplace search & install
-- Supports 8+ AI tools with configurable export paths
 
-#### 🎨 Studio — Skill Generation & Authoring
-- **4 generation modes**:
-  - Prompt-based (streaming AI generation)
-  - Example-based (input/output pairs)
-  - Conversation extraction (distill from chat history)
-  - Manual editing
-- **Discovery Panel**: Browse SkillNet, GitHub repos, personal library
-- **External methods**: Skill Creator, PromptPerfect, custom URLs
-- **Inline validation**: 5D scoring (safety/completeness/executability/maintainability/costAwareness)
-- **Similarity detection**: Prevent duplicate installations
-- **Quick test**: Run skill inline, save test cases
-- **Compare evolution**: Side-by-side original vs. evolved versions
+- Install local Skill directories (`SKILL.md` + linked files) or single `.md` files (legacy format)
+- **GitHub Marketplace** one-click search & install
+- Scan & import from 12+ AI tool directories (Claude Code, Cursor, Windsurf, Gemini CLI…)
+- Export to AI tools via symlink or file copy
+- File tree browser with content preview
+- Evolution chain visualization (lineage via `parent_skill_id`)
 
-#### 🧪 TestCase — Test Case Management
+#### 🎨 Studio — Skill Generation
+
+**4 generation modes:**
+
+| Mode | Description |
+|------|-------------|
+| 📝 Prompt-based | Describe your need, stream-generate a complete Skill |
+| 📋 Example-based | Provide input/output pairs, AI generalizes a Skill |
+| 💬 Chat extraction | Distill a Skill from conversation history |
+| ✏️ Manual editing | Write or refine directly |
+
+- Inline 5D quality validation (safety / completeness / executability / maintainability / cost awareness)
+- Similarity detection to prevent duplicates
+- Quick test: run Skill inline and save test cases
+- Side-by-side comparison of original vs. evolved
+
+#### 🧪 TestCase — Test Suite Management
+
 - Manual CRUD for test cases
-- AI auto-generation (1-20 cases, NDJSON format)
-- 3 judge types: LLM, grep, command
-- Per-skill organization
+- AI batch generation (1–20 cases, NDJSON streaming)
+- 3 judge types: `llm` · `grep` · `command`
 
-#### 📊 Eval — Multi-Dimensional Evaluation
-- **4 evaluation dimensions**: correctness, clarity, completeness, safety (0-10 scale)
-- **2 modes**:
-  - Single evaluation: Run skill against test cases
-  - Three-condition comparison: Baseline (no skill) vs. Current vs. AI-generated
-- Real-time progress tracking
-- Evaluation history (last 50 records per skill)
-- Concurrent evaluation support
+#### 📊 Eval — 8-Dimension Evaluation Engine
 
-#### 🧬 Evo — Skill Evolution
-- Auto-improve skills based on evaluation feedback
-- 4 evolution strategies: improve_weak, expand, simplify, add_examples
-- Install evolved version as new skill
-- Parallel evaluation of original vs. evolved
-- Quantified improvement metrics
+Two groups: Task Quality (G-series) and Skill Quality (S-series):
 
-#### 🏆 Trending — Rankings & Leaderboards
-- Multi-dimensional skill rankings
-- Sort by total score or individual dimensions
-- Aggregated statistics from eval history
+| Dimension | Group | Description |
+|-----------|-------|-------------|
+| G1 · Correctness | Task | Did the output correctly accomplish the goal? |
+| G2 · Instruction Following | Task | Were format and constraints followed precisely? |
+| G3 · Safety | Task | Is the output safe, neutral, and harmless? |
+| G4 · Completeness | Task | Are all necessary parts covered? |
+| G5 · Robustness | Task | How well does it handle edge/ambiguous inputs? |
+| S1 · Executability | Skill | Are the Skill's instructions clear and actionable? |
+| S2 · Cost Awareness | Skill | Is the output concise and token-efficient? |
+| S3 · Maintainability | Skill | Is the Skill structure clear and easy to update? |
 
-#### ⚙️ Settings — LLM Provider Configuration
-- Support for 12+ AI providers (Anthropic, DeepSeek, Kimi, MiniMax, Ollama, etc.)
-- Custom provider setup (baseURL + API key + model)
-- Provider presets with sensible defaults
-- API key stored securely (electron-store encryption)
+**3 eval modes:** single · compare (A vs B) · three-condition (no-skill baseline vs current vs AI-generated)
 
-### 🛠️ Tech Stack
+#### 🧬 Evo — Multi-Strategy Evolution Engine
 
-| Layer | Technology |
-|-------|-----------|
-| **Desktop Framework** | Electron 31.0.0 + electron-vite 2.3.0 |
-| **Frontend** | React 18.3.0 + TypeScript 5.5.0 |
-| **Main Process Storage** | better-sqlite3 11.0.0 (business data) + electron-store 8.2.0 (LLM config) |
-| **AI Provider** | Anthropic SDK 0.39.0 (primary), compatible with OpenAI format via baseURL, supports 12+ presets |
-| **IPC** | contextBridge + ipcMain.handle / ipcRenderer.invoke |
-| **Testing** | Vitest 2.0.0 (unit tests) + Playwright (E2E, pending integration) |
-| **Build Tools** | Vite 5.3.0, electron-rebuild 3.6.0 |
+**Studio interactive (streaming):**
 
-### 🚀 Quick Start
+| Paradigm | Strategy |
+|----------|----------|
+| `evidence` | Surgical fixes driven by eval evidence |
+| `strategy` | Strategy matrix with user-defined objectives |
+| `capability` | Capability-aware compilation for lower execution barrier |
 
-#### Prerequisites
+**Automated SDK engines:**
+
+| Engine | Core Idea |
+|--------|-----------|
+| **EvoSkill** | Worst-sample-driven iteration |
+| **CoEvoSkill** | Generator–Verifier co-evolution loop |
+| **SkillX** | Extract & encode success patterns from high-score history |
+| **SkillClaw** | Cluster repeated failure patterns across sessions |
+| **SkillMOO** | Multi-objective Pareto optimization (quality vs. cost) |
+
+**Plugin system:** drop a `.js` file into `{userData}/plugins/` to add a custom engine—no source changes needed.
+
+#### 🏆 Trending — Leaderboard
+
+Rank all Skills by total score or individual dimensions, aggregated from eval history.
+
+#### ⚙️ Settings — LLM Provider
+
+13 preset providers (Anthropic, DeepSeek, Kimi, MiniMax, Zhipu, OpenRouter, Ollama…) plus fully custom baseURL. API keys stored encrypted, never exposed to the renderer.
+
+---
+
+### 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  Renderer (React 18)                         │
+│     Home · Studio · Eval · Evo · Trending · Settings         │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ contextBridge (secure isolation)
+┌─────────────────────▼───────────────────────────────────────┐
+│                  Main Process (Node.js)                       │
+│  ┌──────────┐  ┌──────────────┐  ┌───────────────────────┐  │
+│  │ SQLite   │  │ electron-    │  │   AI Provider         │  │
+│  │  (DB)    │  │ store(config)│  │   13 presets          │  │
+│  └──────────┘  └──────────────┘  └───────────────────────┘  │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │  Evolution SDK (zero Electron dependency)             │   │
+│  │  BaseEvolutionEngine ← IDataStore / ISkillStorage /  │   │
+│  │                        IProgressReporter             │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+> The Evolution SDK is fully decoupled from Electron via interface injection. See [`doc/design/core-decoupling.md`](doc/design/core-decoupling.md).
+
+---
+
+### 🔒 Security
+
+**7 IPC Security Invariants** — violating any one blocks merges:
+
+| Rule | Requirement |
+|------|-------------|
+| SEC-R1 | File paths validated against `assertPathAllowed()` whitelist |
+| SEC-R2 | `name` params sanitized with `basename` before file writes |
+| SEC-R3 | `config:get` returns `AppConfigPublic` — no `apiKey` field |
+| SEC-R4 | `shell.openExternal` only accepts `https?://` |
+| SEC-R5 | All AI calls wrapped with `withTimeout(30s)` |
+| SEC-R6 | `testCaseIds` array length ≤ 50 |
+| SEC-R7 | `skills:readFile` verifies file is within Skill's `rootDir` |
+
+---
+
+## 🚀 快速开始 / Quick Start
+
+### 前置要求 / Prerequisites
+
 - Node.js 18+
-- npm or yarn
+- npm
 
-#### Install Dependencies
+### 安装 / Install
+
 ```bash
+git clone https://github.com/skyseraph/SkillNexus.git
+cd SkillNexus
 npm install
+npm run rebuild   # rebuild native modules for Electron
 ```
 
-#### Rebuild Native Modules (first run or after dependency updates)
-```bash
-npm run rebuild
-```
+### 开发 / Dev
 
-#### Development Mode
 ```bash
 npm run dev
 ```
 
-#### Build for Production
+### 构建 / Build
+
 ```bash
 npm run build
 ```
 
-#### Run Tests
+### 测试 / Test
+
 ```bash
-npm test              # Run once
-npm run test:watch    # Watch mode
+npm test              # 运行一次 / run once
+npm run test:watch    # 监听模式 / watch mode
 ```
 
-### 📁 Project Structure
+---
+
+## 📁 项目结构 / Project Structure
 
 ```
 SkillNexus/
 ├── src/
-│   ├── main/                    # Electron main process
-│   │   ├── index.ts             # App entry point
-│   │   ├── db/                  # SQLite database
-│   │   ├── ipc/                 # IPC handlers
-│   │   └── services/            # AI Provider, eval engine
-│   ├── renderer/                # React frontend
-│   │   └── src/
-│   │       ├── App.tsx          # Main router
-│   │       ├── pages/           # 6 main pages
-│   │       └── components/
-│   ├── preload/                 # Electron preload (contextBridge)
-│   └── shared/                  # Shared types & utilities
-├── openspec/                    # Spec-driven development docs
-│   ├── config.yaml              # Project context
+│   ├── main/                    # Electron 主进程 / Main process
+│   │   ├── db/                  # SQLite schema & migrations
+│   │   ├── ipc/                 # IPC handlers (per module)
+│   │   └── services/
+│   │       ├── ai-provider/     # AIProvider abstraction (13 presets)
+│   │       ├── sdk/             # Evolution engine SDK (zero Electron deps)
+│   │       │   ├── base-engine.ts
+│   │       │   ├── evoskill-engine.ts
+│   │       │   ├── coevoskill-engine.ts
+│   │       │   ├── skillx-engine.ts
+│   │       │   ├── skillclaw-engine.ts
+│   │       │   └── skillmoo-engine.ts
+│   │       └── adapters/        # Platform adapters (IDataStore / ISkillStorage / IProgressReporter)
+│   ├── renderer/src/
+│   │   ├── pages/               # 7 pages: Home Studio Eval Evo Trending Tasks Settings
+│   │   └── components/
+│   ├── preload/                 # contextBridge API surface
+│   └── shared/                  # Shared types (main ↔ renderer)
+├── tests/                       # Pure-logic test suites (no Electron/DB)
+│   ├── security/
+│   ├── eval/
+│   ├── evo/
+│   └── ...
+├── docs/
+├── example/plugins/             # Example custom evolution plugins
+├── openspec/                    # Spec-first development docs
 │   ├── specs/                   # Permanent feature specs
 │   └── changes/                 # Active change proposals
-├── CLAUDE.md                    # Project guidelines & coding principles
-└── package.json
+└── CLAUDE.md                    # Project guidelines & coding principles
 ```
 
-### 🔒 Security Architecture
+---
 
-The project follows **7 IPC Security Invariants** (see `openspec/specs/01-ipc-security.md`):
+## 🤝 贡献 / Contributing
 
-1. **SEC-R1**: File paths must pass whitelist validation
-2. **SEC-R2**: name parameters must be sanitized before file writes
-3. **SEC-R3**: API keys never exposed to renderer process
-4. **SEC-R4**: shell.openExternal only accepts `https?://` protocols
-5. **SEC-R5**: All AI calls wrapped with 30s timeout
-6. **SEC-R6**: testCaseIds array length ≤ 50
-7. **SEC-R7**: skills:readFile validates file is within skill's rootDir
+1. Fork → create feature branch
+2. **Spec-First**：先写 Spec（`openspec/specs/`），再实现
+3. `npm test` 全部通过
+4. 遵守 7 条 IPC 安全不变量
+5. Submit Pull Request
 
-Violations of any rule will block code merges.
+详见 [CLAUDE.md](CLAUDE.md) 中的 Spec-First 工作流与 Karpathy 编码准则。
 
-### 📐 Development Workflow
+---
 
-**Spec-First Methodology** (see `CLAUDE.md`):
+## 📄 许可证 / License
 
-1. **Write Spec** → `openspec/specs/<module>.md`
-2. **Align** → Confirm direction with stakeholders
-3. **Create Change** → `openspec/changes/<name>/` (proposal + design + tasks)
-4. **Implement** → Follow spec, update spec if deviating
-5. **Code Review** → 4 dimensions (security compliance, product depth, testability, performance)
+[Apache License 2.0](LICENSE)
 
-**Coding Principles** (Karpathy Guidelines):
-- Think before writing (no assumptions, expose tradeoffs)
-- Simplicity first (minimal code)
-- Surgical modifications (only change what's needed)
-- Goal-driven execution (define success criteria)
+---
 
-### 📊 Database Schema
+## 🙏 致谢 / Acknowledgments
 
-```sql
--- Skills metadata
-CREATE TABLE skills (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  format TEXT DEFAULT 'markdown',
-  version TEXT DEFAULT '1.0.0',
-  tags TEXT DEFAULT '[]',
-  yaml_frontmatter TEXT DEFAULT '',
-  markdown_content TEXT DEFAULT '',
-  file_path TEXT NOT NULL,
-  root_dir TEXT NOT NULL,
-  skill_type TEXT DEFAULT 'single',
-  installed_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-
--- Test cases
-CREATE TABLE test_cases (
-  id TEXT PRIMARY KEY,
-  skill_id TEXT NOT NULL REFERENCES skills(id),
-  name TEXT NOT NULL,
-  input TEXT NOT NULL,
-  judge_type TEXT DEFAULT 'llm',
-  judge_param TEXT DEFAULT '',
-  created_at INTEGER NOT NULL
-);
-
--- Evaluation history
-CREATE TABLE eval_history (
-  id TEXT PRIMARY KEY,
-  skill_id TEXT NOT NULL,
-  model TEXT NOT NULL,
-  provider TEXT NOT NULL,
-  input_prompt TEXT NOT NULL,
-  output TEXT NOT NULL,
-  scores TEXT DEFAULT '{}',
-  total_score REAL DEFAULT 0,
-  duration_ms INTEGER DEFAULT 0,
-  status TEXT DEFAULT 'success',
-  created_at INTEGER NOT NULL
-);
-```
-
-### 🤝 Contributing
-
-1. Fork this repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Follow Spec-First workflow (write spec before implementation)
-4. Ensure all tests pass (`npm test`)
-5. Comply with 7 IPC security invariants
-6. Submit a Pull Request
-
-### 📄 License
-
-This project is licensed under the [Apache License 2.0](LICENSE).
-
-### 🙏 Acknowledgments
-
-- [Andrej Karpathy](https://github.com/karpathy) - Inspiration for coding principles
-- [Claude Code](https://claude.ai/code) - AI-assisted development tool
-- [SkillNet](https://github.com/skillnet) - Skill ecosystem reference
-- [agent-skill-autonomous](https://skyseraph.github.io/posts/2026/agent-skill-autonomous/)
+- [Andrej Karpathy](https://github.com/karpathy) — 编码准则灵感 / Coding principles inspiration
+- [Claude Code](https://claude.ai/code) — AI 辅助开发工具 / AI-assisted development
+- [agent-skill-autonomous](https://skyseraph.github.io/posts/2026/agent-skill-autonomous/) — 理论基础 / Theoretical foundation
 
 ---
 
 <div align="center">
 
-**Made with ❤️ by the SkillNexus Team**
-
-[Report Bug](https://github.com/yourusername/SkillNexus/issues) · [Request Feature](https://github.com/yourusername/SkillNexus/issues)
+**Made with ❤️ · [Report Bug](https://github.com/skyseraph/SkillNexus/issues) · [Request Feature](https://github.com/skyseraph/SkillNexus/issues)**
 
 </div>
