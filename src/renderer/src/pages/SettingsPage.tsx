@@ -3,15 +3,18 @@ import type { AppConfigPublic, AppConfig, ToolTarget, LLMProvider, LLMProviderPr
 import { LLM_PROVIDER_PRESETS } from '../../../shared/types'
 import type { Theme } from '../App'
 import { useTrack } from '../hooks/useTrack'
+import qrcodeImg from '../assets/qrcode.jpg'
 
-function QRPlaceholder({ label, placeholder }: { label: string; placeholder: string }) {
+function QRPlaceholder({ label, placeholder, imgSrc }: { label: string; placeholder: string; imgSrc?: string }) {
   const [expanded, setExpanded] = useState(false)
   return (
     <>
       <div className="qr-thumb" onClick={() => setExpanded(true)} title={`点击放大 ${label} 二维码`}>
         <div className="qr-placeholder-box">
-          <span className="qr-placeholder-icon">▦</span>
-          <span className="qr-placeholder-text">{placeholder}</span>
+          {imgSrc
+            ? <img src={imgSrc} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 5 }} />
+            : <><span className="qr-placeholder-icon">▦</span><span className="qr-placeholder-text">{placeholder}</span></>
+          }
         </div>
         <span className="qr-label">{label}</span>
       </div>
@@ -20,8 +23,10 @@ function QRPlaceholder({ label, placeholder }: { label: string; placeholder: str
           <div className="qr-modal" onClick={e => e.stopPropagation()}>
             <div className="qr-modal-title">{label} 二维码</div>
             <div className="qr-modal-box">
-              <span className="qr-modal-icon">▦</span>
-              <span className="qr-modal-hint">请将实际二维码图片替换此占位符</span>
+              {imgSrc
+                ? <img src={imgSrc} alt={label} style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 6 }} />
+                : <><span className="qr-modal-icon">▦</span><span className="qr-modal-hint">请将实际二维码图片替换此占位符</span></>
+              }
             </div>
             <button className="qr-modal-close" onClick={() => setExpanded(false)}>关闭</button>
           </div>
@@ -592,10 +597,10 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
           </div>
           <div className="about-qrcodes">
             {[
-              { label: '微信', placeholder: 'WeChat' },
-              { label: '公众号', placeholder: 'Official' },
-            ].map(({ label, placeholder }) => (
-              <QRPlaceholder key={label} label={label} placeholder={placeholder} />
+              { label: '微信', placeholder: 'WeChat', imgSrc: undefined },
+              { label: '公众号', placeholder: 'Official', imgSrc: qrcodeImg },
+            ].map(({ label, placeholder, imgSrc }) => (
+              <QRPlaceholder key={label} label={label} placeholder={placeholder} imgSrc={imgSrc} />
             ))}
           </div>
         </div>
