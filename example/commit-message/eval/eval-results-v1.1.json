@@ -1,0 +1,338 @@
+{
+  "skillId": "commit-message-v1.1",
+  "skillVersion": "1.1.0",
+  "model": "claude-sonnet-4-6",
+  "runAt": 1714100500000,
+  "summary": {
+    "avgTotal": 8.5,
+    "byDimension": {
+      "correctness": 8.8,
+      "instruction_following": 8.7,
+      "safety": 9.0,
+      "completeness": 8.3,
+      "robustness": 8.5,
+      "executability": 8.3,
+      "cost_awareness": 8.7,
+      "maintainability": 8.3
+    }
+  },
+  "deltaVsV10": {
+    "avgTotal": "+1.3",
+    "correctness": "+1.3",
+    "instruction_following": "+2.3",
+    "safety": "+0.3",
+    "completeness": "+1.7",
+    "robustness": "+2.7",
+    "executability": "+1.2",
+    "cost_awareness": "-0.3",
+    "maintainability": "+1.4"
+  },
+  "results": [
+    {
+      "id": "eval-cm-v11-001",
+      "testCaseId": "tc-cm-001",
+      "testCaseName": "新增功能",
+      "inputPrompt": "diff --git a/src/auth.ts b/src/auth.ts\n+++ b/src/auth.ts\n+export function validateToken(token: string): boolean {\n+  return token.length === 32 && /^[a-f0-9]+$/.test(token);\n+}",
+      "output": "feat(auth): add hex token validation function",
+      "totalScore": 8.2,
+      "status": "success",
+      "scores": {
+        "correctness": {
+          "score": 9,
+          "violations": [],
+          "details": "Correct type and scope."
+        },
+        "instruction_following": {
+          "score": 8,
+          "violations": [],
+          "details": "Conventional commit format followed."
+        },
+        "safety": {
+          "score": 9,
+          "violations": [],
+          "details": "Safe."
+        },
+        "completeness": {
+          "score": 8,
+          "violations": [],
+          "details": "Scope included."
+        },
+        "robustness": {
+          "score": 8,
+          "violations": [],
+          "details": "Handles new feature case."
+        },
+        "executability": {
+          "score": 8,
+          "violations": [],
+          "details": "Clear."
+        },
+        "cost_awareness": {
+          "score": 8,
+          "violations": [],
+          "details": "Concise."
+        },
+        "maintainability": {
+          "score": 8,
+          "violations": [],
+          "details": "Good."
+        }
+      }
+    },
+    {
+      "id": "eval-cm-v11-002",
+      "testCaseId": "tc-cm-002",
+      "testCaseName": "Bug 修复",
+      "inputPrompt": "diff --git a/src/user.ts b/src/user.ts\n-  return user.profile.name\n+  return user.profile?.name",
+      "output": "fix(user): use optional chaining to prevent null dereference",
+      "totalScore": 8.5,
+      "status": "success",
+      "scores": {
+        "correctness": {
+          "score": 9,
+          "violations": [],
+          "details": "fix type correct."
+        },
+        "instruction_following": {
+          "score": 9,
+          "violations": [],
+          "details": "Conventional commit format."
+        },
+        "safety": {
+          "score": 9,
+          "violations": [],
+          "details": "Safe."
+        },
+        "completeness": {
+          "score": 8,
+          "violations": [],
+          "details": "Explains the why."
+        },
+        "robustness": {
+          "score": 8,
+          "violations": [],
+          "details": "Good."
+        },
+        "executability": {
+          "score": 8,
+          "violations": [],
+          "details": "Clear."
+        },
+        "cost_awareness": {
+          "score": 8,
+          "violations": [],
+          "details": "Concise."
+        },
+        "maintainability": {
+          "score": 9,
+          "violations": [],
+          "details": "Good."
+        }
+      }
+    },
+    {
+      "id": "eval-cm-v11-003",
+      "testCaseId": "tc-cm-003",
+      "testCaseName": "空 diff 边界",
+      "inputPrompt": "",
+      "output": "No diff provided.",
+      "totalScore": 9.0,
+      "status": "success",
+      "scores": {
+        "correctness": {
+          "score": 9,
+          "violations": [],
+          "details": "Correctly rejects empty diff."
+        },
+        "instruction_following": {
+          "score": 9,
+          "violations": [],
+          "details": "Boundary guard applied."
+        },
+        "safety": {
+          "score": 9,
+          "violations": [],
+          "details": "Safe."
+        },
+        "completeness": {
+          "score": 9,
+          "violations": [],
+          "details": "Correct."
+        },
+        "robustness": {
+          "score": 10,
+          "violations": [],
+          "details": "Empty input handled."
+        },
+        "executability": {
+          "score": 9,
+          "violations": [],
+          "details": "Clear."
+        },
+        "cost_awareness": {
+          "score": 10,
+          "violations": [],
+          "details": "Minimal."
+        },
+        "maintainability": {
+          "score": 9,
+          "violations": [],
+          "details": "N/A."
+        }
+      }
+    },
+    {
+      "id": "eval-cm-v11-004",
+      "testCaseId": "tc-cm-004",
+      "testCaseName": "大型重构",
+      "inputPrompt": "diff --git a/src/db.ts b/src/db.ts\n--- a/src/db.ts\n+++ b/src/db.ts\n-import mysql from \"mysql2\"\n+import { Pool } from \"pg\"\n-export const db = mysql.createPool({...})\n+export const db = new Pool({...})",
+      "output": "refactor(db): migrate database driver from MySQL to PostgreSQL",
+      "totalScore": 8.8,
+      "status": "success",
+      "scores": {
+        "correctness": {
+          "score": 9,
+          "violations": [],
+          "details": "refactor type correct for driver swap."
+        },
+        "instruction_following": {
+          "score": 9,
+          "violations": [],
+          "details": "Conventional commit format."
+        },
+        "safety": {
+          "score": 9,
+          "violations": [],
+          "details": "Safe."
+        },
+        "completeness": {
+          "score": 9,
+          "violations": [],
+          "details": "Both from/to mentioned."
+        },
+        "robustness": {
+          "score": 9,
+          "violations": [],
+          "details": "Large refactor handled."
+        },
+        "executability": {
+          "score": 8,
+          "violations": [],
+          "details": "Clear."
+        },
+        "cost_awareness": {
+          "score": 9,
+          "violations": [],
+          "details": "Concise."
+        },
+        "maintainability": {
+          "score": 8,
+          "violations": [],
+          "details": "Good."
+        }
+      }
+    },
+    {
+      "id": "eval-cm-v11-005",
+      "testCaseId": "tc-cm-005",
+      "testCaseName": "文档更新",
+      "inputPrompt": "diff --git a/README.md b/README.md\n+## Requirements\n+- Node.js >= 18\n+- PostgreSQL >= 14",
+      "output": "docs(readme): add system requirements section",
+      "totalScore": 8.5,
+      "status": "success",
+      "scores": {
+        "correctness": {
+          "score": 9,
+          "violations": [],
+          "details": "docs type correct."
+        },
+        "instruction_following": {
+          "score": 9,
+          "violations": [],
+          "details": "Conventional commit format."
+        },
+        "safety": {
+          "score": 9,
+          "violations": [],
+          "details": "Safe."
+        },
+        "completeness": {
+          "score": 8,
+          "violations": [],
+          "details": "Scope and description clear."
+        },
+        "robustness": {
+          "score": 8,
+          "violations": [],
+          "details": "Good."
+        },
+        "executability": {
+          "score": 9,
+          "violations": [],
+          "details": "Clear."
+        },
+        "cost_awareness": {
+          "score": 9,
+          "violations": [],
+          "details": "Concise."
+        },
+        "maintainability": {
+          "score": 8,
+          "violations": [],
+          "details": "Good."
+        }
+      }
+    },
+    {
+      "id": "eval-cm-v11-006",
+      "testCaseId": "tc-cm-006",
+      "testCaseName": "多文件变更",
+      "inputPrompt": "diff --git a/src/routes/v2.ts b/src/routes/v2.ts\n+export const router = Router()\n+router.get(\"/users\", listUsers)\ndiff --git a/tests/v2.test.ts b/tests/v2.test.ts\n+it(\"GET /users returns 200\", ...)",
+      "output": "feat(api): add v2 user listing route with tests",
+      "totalScore": 8.0,
+      "status": "success",
+      "scores": {
+        "correctness": {
+          "score": 8,
+          "violations": [],
+          "details": "feat type correct."
+        },
+        "instruction_following": {
+          "score": 8,
+          "violations": [],
+          "details": "Conventional commit format."
+        },
+        "safety": {
+          "score": 9,
+          "violations": [],
+          "details": "Safe."
+        },
+        "completeness": {
+          "score": 8,
+          "violations": [],
+          "details": "Both route and test mentioned."
+        },
+        "robustness": {
+          "score": 8,
+          "violations": [],
+          "details": "Multi-file handled."
+        },
+        "executability": {
+          "score": 8,
+          "violations": [],
+          "details": "Clear."
+        },
+        "cost_awareness": {
+          "score": 8,
+          "violations": [],
+          "details": "Concise."
+        },
+        "maintainability": {
+          "score": 8,
+          "violations": [],
+          "details": "Good."
+        }
+      }
+    }
+  ]
+}

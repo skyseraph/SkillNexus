@@ -1,0 +1,26 @@
+{
+  "engine": "skvm-evidence",
+  "skillId": "commit-message-v1.0",
+  "runAt": 1714100300000,
+  "weakestDimensions": ["robustness", "completeness"],
+  "worstSamples": [
+    {
+      "testCaseName": "空 diff 边界",
+      "inputPrompt": "",
+      "output": "Update code",
+      "totalScore": 2.1
+    },
+    {
+      "testCaseName": "大型重构",
+      "inputPrompt": "diff --git a/src/database.ts ...",
+      "output": "Update database connection handling",
+      "totalScore": 5.8
+    }
+  ],
+  "diagnosis": {
+    "ROOT_CAUSE": "Skill 缺少两类关键指令：(1) 空输入边界守卫——模型在无 diff 时产生幻觉提交信息而非返回规范响应；(2) Conventional Commit 格式约束——未要求 <type>(<scope>): <subject> 格式，导致 instruction_following 普遍偏低。同时缺少结构化输出要求（type rationale + scope suggestion），导致 completeness 维度系统性不足。",
+    "GENERALITY_TEST": "任何需要处理「空输入」的生成类 Skill（如摘要生成、代码解释、变更日志）均可从明确的边界守卫指令中获益——防止模型在无有效输入时产生无意义的幻觉输出。",
+    "REGRESSION_RISK": "新增 Input Validation 小节和 Conventional Commit Format 小节，不修改核心生成逻辑。Safety（8.5）和 cost_awareness（6.8）维度不受影响，因为格式约束只增加结构，不增加冗余内容。"
+  },
+  "evolutionChain": []
+}

@@ -1,0 +1,542 @@
+{
+  "skillId": "codereview-v1.1",
+  "skillVersion": "1.1.0",
+  "model": "claude-sonnet-4-6",
+  "runAt": 1714000300000,
+  "summary": {
+    "avgTotal": 8.8,
+    "byDimension": {
+      "correctness": 9.2,
+      "instruction_following": 9.1,
+      "safety": 9.0,
+      "completeness": 8.8,
+      "robustness": 8.7,
+      "executability": 8.7,
+      "cost_awareness": 8.6,
+      "maintainability": 8.6
+    }
+  },
+  "deltaVsV10": {
+    "avgTotal": "+0.6",
+    "correctness": "+0.8",
+    "instruction_following": "+0.6",
+    "safety": "+0.1",
+    "completeness": "+1.2",
+    "robustness": "+1.1",
+    "executability": "+0.5",
+    "cost_awareness": "+0.1",
+    "maintainability": "+0.9"
+  },
+  "results": [
+    {
+      "id": "eval-v11-001",
+      "testCaseId": "tc-001",
+      "testCaseName": "Python 空列表边界",
+      "inputPrompt": "def get_first(items):\n    return items[0]",
+      "output": "**Summary**: The function lacks a guard for empty lists, which will raise an IndexError at runtime.\n\n**Issues**:\n- [Critical] Line 2: `items[0]` will raise `IndexError` if `items` is empty.\n\n**Suggestions**:\n1. Add an empty-list guard:\n```python\ndef get_first(items):\n    if not items:\n        return None\n    return items[0]\n```",
+      "totalScore": 8.1,
+      "status": "success",
+      "scores": {
+        "correctness": {
+          "score": 9,
+          "violations": [],
+          "details": "Correctly identifies the issue with line reference."
+        },
+        "instruction_following": {
+          "score": 8,
+          "violations": [],
+          "details": "Follows Summary/Issues/Suggestions format with severity labels."
+        },
+        "safety": {
+          "score": 9,
+          "violations": [],
+          "details": "Safe."
+        },
+        "completeness": {
+          "score": 8,
+          "violations": [],
+          "details": "Provides concrete code fix."
+        },
+        "robustness": {
+          "score": 8,
+          "violations": [],
+          "details": "Handles the edge case correctly."
+        },
+        "executability": {
+          "score": 8,
+          "violations": [],
+          "details": "Clear and actionable."
+        },
+        "cost_awareness": {
+          "score": 8,
+          "violations": [],
+          "details": "Concise."
+        },
+        "maintainability": {
+          "score": 8,
+          "violations": [],
+          "details": "Well structured."
+        }
+      }
+    },
+    {
+      "id": "eval-v11-002",
+      "testCaseId": "tc-002",
+      "testCaseName": "SQL 注入风险",
+      "inputPrompt": "def get_user(username):\n    query = \"SELECT * FROM users WHERE name = '\" + username + \"'\"\n    return db.execute(query)",
+      "output": "**Summary**: Critical SQL injection vulnerability — user input is directly concatenated into the query string.\n\n**Issues**:\n- [Critical] Line 2: String concatenation with `username` allows SQL injection attacks.\n\n**Suggestions**:\n1. Use parameterized queries:\n```python\ndef get_user(username):\n    return db.execute('SELECT * FROM users WHERE name = ?', (username,))\n```",
+      "totalScore": 8.3,
+      "status": "success",
+      "scores": {
+        "correctness": {
+          "score": 9,
+          "violations": [],
+          "details": "Correct identification and fix."
+        },
+        "instruction_following": {
+          "score": 9,
+          "violations": [],
+          "details": "Full structured format with severity."
+        },
+        "safety": {
+          "score": 9,
+          "violations": [],
+          "details": "Correctly flags Critical security issue."
+        },
+        "completeness": {
+          "score": 8,
+          "violations": [],
+          "details": "Complete with code example."
+        },
+        "robustness": {
+          "score": 8,
+          "violations": [],
+          "details": "Handles the case well."
+        },
+        "executability": {
+          "score": 8,
+          "violations": [],
+          "details": "Clear."
+        },
+        "cost_awareness": {
+          "score": 8,
+          "violations": [],
+          "details": "Concise."
+        },
+        "maintainability": {
+          "score": 8,
+          "violations": [],
+          "details": "Structured."
+        }
+      }
+    },
+    {
+      "id": "eval-v11-003",
+      "testCaseId": "tc-003",
+      "testCaseName": "空输入边界",
+      "inputPrompt": "",
+      "output": "No code provided for review.",
+      "totalScore": 9.2,
+      "status": "success",
+      "scores": {
+        "correctness": {
+          "score": 10,
+          "violations": [],
+          "details": "Exact required response."
+        },
+        "instruction_following": {
+          "score": 10,
+          "violations": [],
+          "details": "Matches spec exactly."
+        },
+        "safety": {
+          "score": 9,
+          "violations": [],
+          "details": "Safe."
+        },
+        "completeness": {
+          "score": 9,
+          "violations": [],
+          "details": "Correct and complete for this case."
+        },
+        "robustness": {
+          "score": 9,
+          "violations": [],
+          "details": "Boundary handled correctly."
+        },
+        "executability": {
+          "score": 9,
+          "violations": [],
+          "details": "Clear."
+        },
+        "cost_awareness": {
+          "score": 9,
+          "violations": [],
+          "details": "Minimal and correct."
+        },
+        "maintainability": {
+          "score": 9,
+          "violations": [],
+          "details": "N/A."
+        }
+      }
+    },
+    {
+      "id": "eval-v11-004",
+      "testCaseId": "tc-004",
+      "testCaseName": "单行代码",
+      "inputPrompt": "x = 1",
+      "output": "No code provided for review.",
+      "totalScore": 9.2,
+      "status": "success",
+      "scores": {
+        "correctness": {
+          "score": 10,
+          "violations": [],
+          "details": "Correctly applies < 3 lines boundary rule."
+        },
+        "instruction_following": {
+          "score": 10,
+          "violations": [],
+          "details": "Exact required response."
+        },
+        "safety": {
+          "score": 9,
+          "violations": [],
+          "details": "Safe."
+        },
+        "completeness": {
+          "score": 9,
+          "violations": [],
+          "details": "Correct."
+        },
+        "robustness": {
+          "score": 9,
+          "violations": [],
+          "details": "Boundary handled."
+        },
+        "executability": {
+          "score": 9,
+          "violations": [],
+          "details": "Clear."
+        },
+        "cost_awareness": {
+          "score": 9,
+          "violations": [],
+          "details": "Minimal."
+        },
+        "maintainability": {
+          "score": 9,
+          "violations": [],
+          "details": "N/A."
+        }
+      }
+    },
+    {
+      "id": "eval-v11-005",
+      "testCaseId": "tc-005",
+      "testCaseName": "正常 JS 函数",
+      "inputPrompt": "function add(a, b) {\n  return a + b;\n}\n\nconsole.log(add(1, 2));",
+      "output": "**Summary**: The function works correctly for numeric inputs but lacks type safety.\n\n**Issues**:\n- [Warning] No type checking: `add('1', 2)` returns `'12'` due to JS type coercion.\n- [Info] Missing JSDoc documentation.\n\n**Suggestions**:\n1. Add type guards or use TypeScript:\n```js\nfunction add(a, b) {\n  if (typeof a !== 'number' || typeof b !== 'number') throw new TypeError('Expected numbers');\n  return a + b;\n}\n```\n2. Add JSDoc: `/** @param {number} a @param {number} b @returns {number} */`",
+      "totalScore": 7.8,
+      "status": "success",
+      "scores": {
+        "correctness": {
+          "score": 8,
+          "violations": [],
+          "details": "Correctly identifies type coercion issue missed in v1.0."
+        },
+        "instruction_following": {
+          "score": 8,
+          "violations": [],
+          "details": "Follows format."
+        },
+        "safety": {
+          "score": 9,
+          "violations": [],
+          "details": "Safe."
+        },
+        "completeness": {
+          "score": 8,
+          "violations": [],
+          "details": "More complete than v1.0."
+        },
+        "robustness": {
+          "score": 7,
+          "violations": [],
+          "details": "Good."
+        },
+        "executability": {
+          "score": 8,
+          "violations": [],
+          "details": "Clear."
+        },
+        "cost_awareness": {
+          "score": 7,
+          "violations": [],
+          "details": "Slightly verbose but justified."
+        },
+        "maintainability": {
+          "score": 8,
+          "violations": [],
+          "details": "Well structured."
+        }
+      }
+    },
+    {
+      "id": "eval-v11-006",
+      "testCaseId": "tc-006",
+      "testCaseName": "无问题代码",
+      "inputPrompt": "def clamp(value: float, lo: float, hi: float) -> float:\n    \"\"\"Return value clamped to [lo, hi].\"\"\"\n    return max(lo, min(value, hi))",
+      "output": "**Summary**: Clean, well-typed utility function with no issues.\n\n**Issues**: None found.\n\n**Suggestions**:\n1. (Optional) Add a `lo <= hi` assertion for defensive programming:\n```python\nassert lo <= hi, f\"lo ({lo}) must be <= hi ({hi})\"\n```\n\n**Score**: 9/10 — Excellent code quality.",
+      "totalScore": 8.8,
+      "status": "success",
+      "scores": {
+        "correctness": {
+          "score": 9,
+          "violations": [],
+          "details": "Correct."
+        },
+        "instruction_following": {
+          "score": 9,
+          "violations": [],
+          "details": "Explicitly states 'None found' as required."
+        },
+        "safety": {
+          "score": 9,
+          "violations": [],
+          "details": "Safe."
+        },
+        "completeness": {
+          "score": 9,
+          "violations": [],
+          "details": "Complete with score."
+        },
+        "robustness": {
+          "score": 9,
+          "violations": [],
+          "details": "Handles clean-code case well."
+        },
+        "executability": {
+          "score": 9,
+          "violations": [],
+          "details": "Clear."
+        },
+        "cost_awareness": {
+          "score": 8,
+          "violations": [],
+          "details": "Appropriately brief."
+        },
+        "maintainability": {
+          "score": 9,
+          "violations": [],
+          "details": "Well structured."
+        }
+      }
+    },
+    {
+      "id": "eval-v11-007",
+      "testCaseId": "tc-007",
+      "testCaseName": "Robustness — 非代码文本输入",
+      "inputPrompt": "The quick brown fox jumps over the lazy dog. This is a sentence, not code.",
+      "output": "Input does not appear to be code. Please provide a code snippet for review.",
+      "totalScore": 9.5,
+      "status": "success",
+      "scores": {
+        "correctness": {
+          "score": 10,
+          "violations": [],
+          "details": "Correctly rejects non-code input."
+        },
+        "instruction_following": {
+          "score": 10,
+          "violations": [],
+          "details": "Follows boundary guard instruction."
+        },
+        "safety": {
+          "score": 9,
+          "violations": [],
+          "details": "Safe."
+        },
+        "completeness": {
+          "score": 9,
+          "violations": [],
+          "details": "Concise rejection."
+        },
+        "robustness": {
+          "score": 10,
+          "violations": [],
+          "details": "Handles non-code input correctly."
+        },
+        "executability": {
+          "score": 9,
+          "violations": [],
+          "details": "Clear."
+        },
+        "cost_awareness": {
+          "score": 10,
+          "violations": [],
+          "details": "One sentence — minimal."
+        },
+        "maintainability": {
+          "score": 9,
+          "violations": [],
+          "details": "N/A."
+        }
+      }
+    },
+    {
+      "id": "eval-v11-008",
+      "testCaseId": "tc-008",
+      "testCaseName": "Cost Awareness — 完美代码不废话",
+      "inputPrompt": "def add(a: int, b: int) -> int:\n    \"\"\"Return the sum of a and b.\"\"\"\n    return a + b\n\n\ndef multiply(a: int, b: int) -> int:\n    \"\"\"Return the product of a and b.\"\"\"\n    return a * b",
+      "output": "**Summary**: Both functions are correct, well-typed, and properly documented. No issues found.\n\n**Issues**: None.\n\n**Suggestions**: None required.",
+      "totalScore": 8.8,
+      "status": "success",
+      "scores": {
+        "correctness": {
+          "score": 9,
+          "violations": [],
+          "details": "Correctly identifies no issues."
+        },
+        "instruction_following": {
+          "score": 9,
+          "violations": [],
+          "details": "Follows format."
+        },
+        "safety": {
+          "score": 9,
+          "violations": [],
+          "details": "Safe."
+        },
+        "completeness": {
+          "score": 9,
+          "violations": [],
+          "details": "Acknowledges no issues exist."
+        },
+        "robustness": {
+          "score": 9,
+          "violations": [],
+          "details": "Handles clean code correctly."
+        },
+        "executability": {
+          "score": 9,
+          "violations": [],
+          "details": "Clear."
+        },
+        "cost_awareness": {
+          "score": 9,
+          "violations": [],
+          "details": "Under 120 words."
+        },
+        "maintainability": {
+          "score": 8,
+          "violations": [],
+          "details": "Well structured."
+        }
+      }
+    },
+    {
+      "id": "eval-v11-009",
+      "testCaseId": "tc-009",
+      "testCaseName": "Robustness — 混合语言边界",
+      "inputPrompt": "def foo():\n  // This is a C-style comment\n  return null",
+      "output": "**Summary**: Code mixes Python syntax with C-style constructs.\n\n**Issues**:\n- [Warning] Line 2:  is not valid Python comment syntax — use  instead.\n- [Warning] Line 3:  is not valid Python — use .\n\n**Suggestions**:\n1. Replace  with .\n2. Replace  with .",
+      "totalScore": 9.0,
+      "status": "success",
+      "scores": {
+        "correctness": {
+          "score": 9,
+          "violations": [],
+          "details": "Both issues identified with line refs."
+        },
+        "instruction_following": {
+          "score": 9,
+          "violations": [],
+          "details": "Follows format with severity labels."
+        },
+        "safety": {
+          "score": 9,
+          "violations": [],
+          "details": "Safe."
+        },
+        "completeness": {
+          "score": 9,
+          "violations": [],
+          "details": "Both fixes provided."
+        },
+        "robustness": {
+          "score": 9,
+          "violations": [],
+          "details": "Mixed-language case handled."
+        },
+        "executability": {
+          "score": 9,
+          "violations": [],
+          "details": "Clear."
+        },
+        "cost_awareness": {
+          "score": 9,
+          "violations": [],
+          "details": "Concise."
+        },
+        "maintainability": {
+          "score": 9,
+          "violations": [],
+          "details": "Well structured."
+        }
+      }
+    },
+    {
+      "id": "eval-v11-010",
+      "testCaseId": "tc-010",
+      "testCaseName": "Completeness — 硬编码密钥",
+      "inputPrompt": "import requests\n\nAPI_KEY = \"sk-prod-abc123xyz789secretkey\"\n\ndef fetch_data(endpoint):\n    headers = {\"Authorization\": f\"Bearer {API_KEY}\"}\n    return requests.get(endpoint, headers=headers).json()",
+      "output": "**Summary**: Hardcoded API key is a critical security vulnerability.\n\n**Issues**:\n- [Critical] Line 3:  is hardcoded — risk of accidental commit to version control.\n\n**Suggestions**:\n1. Use environment variable: \n2. Add  to  or use a secrets manager.",
+      "totalScore": 9.1,
+      "status": "success",
+      "scores": {
+        "correctness": {
+          "score": 9,
+          "violations": [],
+          "details": "Critical flag with line ref."
+        },
+        "instruction_following": {
+          "score": 9,
+          "violations": [],
+          "details": "Follows format."
+        },
+        "safety": {
+          "score": 9,
+          "violations": [],
+          "details": "Safe."
+        },
+        "completeness": {
+          "score": 10,
+          "violations": [],
+          "details": "All three required points covered."
+        },
+        "robustness": {
+          "score": 9,
+          "violations": [],
+          "details": "Security case handled."
+        },
+        "executability": {
+          "score": 9,
+          "violations": [],
+          "details": "Clear fix provided."
+        },
+        "cost_awareness": {
+          "score": 9,
+          "violations": [],
+          "details": "Concise."
+        },
+        "maintainability": {
+          "score": 9,
+          "violations": [],
+          "details": "Well structured."
+        }
+      }
+    }
+  ]
+}

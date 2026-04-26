@@ -1,0 +1,82 @@
+[
+  {
+    "id": "tc-001",
+    "name": "Python 空列表 IndexError",
+    "input": "def get_first(items):\n    return items[0]",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Response MUST (1) identify the IndexError / index out of range risk when items is empty, (2) suggest a concrete fix — either `if not items: return None` or `items[0] if items else None`, (3) reference line 2 or the return statement. Score 0 if no concrete fix is given. Score 0 if the risk is only vaguely mentioned without naming IndexError or empty-list scenario.",
+    "createdAt": 1714000000000
+  },
+  {
+    "id": "tc-002",
+    "name": "SQL 注入 — 字符串拼接",
+    "input": "def get_user(username):\n    query = \"SELECT * FROM users WHERE name = '\" + username + \"'\"\n    return db.execute(query)",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Response MUST (1) label SQL injection as Critical severity, (2) explain WHY it is dangerous (user-controlled input in query), (3) provide a parameterized query example such as `db.execute('SELECT * FROM users WHERE name = ?', (username,))`. Score 0 if severity is not Critical. Score 0 if no parameterized query example is given. Deduct 3 points if the word 'Critical' is absent.",
+    "createdAt": 1714000001000
+  },
+  {
+    "id": "tc-003",
+    "name": "边界守卫 — 空输入",
+    "input": "",
+    "judgeType": "grep",
+    "judgeParam": "No code provided",
+    "createdAt": 1714000002000
+  },
+  {
+    "id": "tc-004",
+    "name": "边界守卫 — 单行赋值",
+    "input": "x = 1",
+    "judgeType": "grep",
+    "judgeParam": "No code provided",
+    "createdAt": 1714000003000
+  },
+  {
+    "id": "tc-005",
+    "name": "JS 函数 — 隐式类型转换",
+    "input": "function add(a, b) {\n  return a + b;\n}\n\nconsole.log(add(1, 2));",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Response MUST (1) produce a structured review with at minimum a summary section and an issues/suggestions section, (2) identify the JavaScript type coercion issue — add('1', 2) returns '12' not 3 — and label it at least Info severity, (3) NOT fabricate Critical issues that do not exist. Score 0 if type coercion is not mentioned at all. Score 0 if structure is a single flat paragraph with no sections. Deduct 2 points if a non-existent Critical issue is fabricated.",
+    "createdAt": 1714000004000
+  },
+  {
+    "id": "tc-006",
+    "name": "干净代码 — 不捏造问题",
+    "input": "def clamp(value: float, lo: float, hi: float) -> float:\n    \"\"\"Return value clamped to [lo, hi].\"\"\"\n    return max(lo, min(value, hi))",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Response MUST explicitly state that no significant issues were found — phrases like 'No issues found', 'Code looks good', or 'No critical issues' are required. Score 0 if any fabricated Critical or Warning issues appear. Score 0 if the response fails to mention the code is correct. Deduct 2 points if the response suggests unnecessary changes to correct code without justification.",
+    "createdAt": 1714000005000
+  },
+  {
+    "id": "tc-007",
+    "name": "Robustness — 非代码文本输入",
+    "input": "The quick brown fox jumps over the lazy dog. This is a sentence, not code.",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Response MUST reject the input as non-code and NOT attempt a code review. Acceptable responses: 'Input does not appear to be code.' or equivalent. Score 0 if the model attempts to review the sentence as if it were code. Score 0 if the model asks clarifying questions instead of rejecting. Score 10 if the rejection is concise (1-2 sentences) and polite.",
+    "createdAt": 1714000006000
+  },
+  {
+    "id": "tc-008",
+    "name": "Cost Awareness — 完美代码不废话",
+    "input": "def add(a: int, b: int) -> int:\n    \"\"\"Return the sum of a and b.\"\"\"\n    return a + b\n\n\ndef multiply(a: int, b: int) -> int:\n    \"\"\"Return the product of a and b.\"\"\"\n    return a * b",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Code is correct and well-written. Response MUST (1) acknowledge no issues exist, (2) be concise — under 120 words total. Score 0 if response exceeds 200 words. Score 0 if fabricated issues are listed. Deduct 3 points per fabricated Warning or Critical issue. Deduct 2 points if response repeats the same observation more than once.",
+    "createdAt": 1714000007000
+  },
+  {
+    "id": "tc-009",
+    "name": "Robustness — 混合语言边界",
+    "input": "def foo():\n  // This is a C-style comment\n  return null",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Response MUST (1) identify that the code mixes Python syntax with C-style comment `//` and uses `null` which is not valid Python, (2) label these as syntax errors or at minimum Warning severity, (3) suggest the correct Python equivalents (`#` for comment, `None` for null). Score 0 if the mixed-language issues are not identified. Score 0 if the response treats this as valid Python.",
+    "createdAt": 1714000008000
+  },
+  {
+    "id": "tc-010",
+    "name": "Completeness — 硬编码密钥",
+    "input": "import requests\n\nAPI_KEY = \"sk-prod-abc123xyz789secretkey\"\n\ndef fetch_data(endpoint):\n    headers = {\"Authorization\": f\"Bearer {API_KEY}\"}\n    return requests.get(endpoint, headers=headers).json()",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Response MUST (1) flag the hardcoded API key `sk-prod-abc123xyz789secretkey` as a Critical security issue, (2) recommend using environment variables such as `os.environ.get('API_KEY')`, (3) note the risk of accidentally committing secrets to version control. Score 0 if the hardcoded secret is not flagged as Critical. Score 0 if no environment variable solution is suggested. Deduct 2 points if line number or variable name is not referenced.",
+    "createdAt": 1714000009000
+  }
+]

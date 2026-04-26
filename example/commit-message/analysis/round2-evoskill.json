@@ -1,0 +1,72 @@
+{
+  "engine": "evoskill",
+  "skillId": "commit-message-v1.1",
+  "maxIterations": 3,
+  "runAt": 1714100800000,
+  "frontier": [
+    {
+      "id": "gen-0",
+      "label": "v1.1 (base)",
+      "avgScore": 7.2,
+      "inFrontier": true
+    },
+    {
+      "id": "gen-1",
+      "label": "iter-1 candidate",
+      "avgScore": 7.8,
+      "inFrontier": true,
+      "isNewBest": true,
+      "mainChange": "增加 Scope 字段说明 + 破坏性变更 ! 标记规则 + Output Format 第 3 项 scope suggestion"
+    },
+    {
+      "id": "gen-2",
+      "label": "iter-2 candidate",
+      "avgScore": 7.5,
+      "inFrontier": true,
+      "isNewBest": false,
+      "mainChange": "增加 style 类型 + 强化 cost_awareness 约束（body ≤ 5 items）"
+    },
+    {
+      "id": "gen-3",
+      "label": "iter-3 candidate",
+      "avgScore": 8.4,
+      "inFrontier": true,
+      "isNewBest": true,
+      "mainChange": "合并 gen-1 的 scope/breaking-change 规则与 gen-2 的 cost 约束；补充 perf/chore 类型；强化「不捏造意图」约束；增加 WHY vs WHAT 的 body 写作原则"
+    }
+  ],
+  "iterations": [
+    {
+      "iter": 1,
+      "base": "gen-0 (7.2)",
+      "worstCase": "空 diff 边界 (2.1) → 已在 v1.1 修复，本轮最差用例改为「大型重构 (6.8)」",
+      "candidate": "gen-1",
+      "candidateScore": 7.8,
+      "delta": "+0.6",
+      "frontierAction": "替换 frontier 最低分节点（gen-0 7.2 → gen-1 7.8）"
+    },
+    {
+      "iter": 2,
+      "base": "gen-0 (7.2，frontier 当前最低分节点）",
+      "worstCase": "多文件变更 (7.0) — cost_awareness 偏低",
+      "candidate": "gen-2",
+      "candidateScore": 7.5,
+      "delta": "+0.3",
+      "frontierAction": "加入 frontier（替换 gen-0）"
+    },
+    {
+      "iter": 3,
+      "base": "gen-1 (7.8，frontier 当前最低分节点）",
+      "worstCase": "大型重构 (7.5) — completeness 和 cost_awareness 仍有提升空间",
+      "candidate": "gen-3",
+      "candidateScore": 8.4,
+      "delta": "+0.6",
+      "frontierAction": "新最优，替换 gen-1"
+    }
+  ],
+  "finalBest": {
+    "id": "gen-3",
+    "avgScore": 8.4,
+    "mappedToSkillVersion": "commit-message-v1.2"
+  }
+}

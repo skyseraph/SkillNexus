@@ -1,0 +1,135 @@
+{
+  "skillId": "commit-message-v1.0",
+  "skillVersion": "1.0.0",
+  "model": "claude-sonnet-4-6",
+  "runAt": 1714100200000,
+  "summary": {
+    "avgTotal": 5.9,
+    "byDimension": {
+      "correctness": 6.2,
+      "instruction_following": 5.5,
+      "safety": 8.5,
+      "completeness": 5.1,
+      "robustness": 4.8,
+      "executability": 6.0,
+      "cost_awareness": 6.8,
+      "maintainability": 5.4
+    }
+  },
+  "results": [
+    {
+      "id": "eval-v10-001",
+      "testCaseId": "tc-cm-001",
+      "testCaseName": "新增功能",
+      "inputPrompt": "diff --git a/src/auth.ts b/src/auth.ts\n+++ b/src/auth.ts\n+export function validateToken(token: string): boolean {\n+  return token.length === 32 && /^[a-f0-9]+$/.test(token);\n+}",
+      "output": "Add token validation function to auth module",
+      "totalScore": 6.5,
+      "status": "success",
+      "scores": {
+        "correctness": { "score": 7, "violations": [], "details": "Describes the change correctly." },
+        "instruction_following": { "score": 6, "violations": ["No conventional commit type prefix"], "details": "Missing feat: prefix." },
+        "safety": { "score": 9, "violations": [], "details": "Safe." },
+        "completeness": { "score": 6, "violations": ["No type rationale provided"], "details": "Missing rationale." },
+        "robustness": { "score": 6, "violations": [], "details": "OK." },
+        "executability": { "score": 7, "violations": [], "details": "Clear." },
+        "cost_awareness": { "score": 7, "violations": [], "details": "Concise." },
+        "maintainability": { "score": 6, "violations": [], "details": "OK." }
+      }
+    },
+    {
+      "id": "eval-v10-002",
+      "testCaseId": "tc-cm-002",
+      "testCaseName": "Bug 修复",
+      "inputPrompt": "diff --git a/src/parser.ts b/src/parser.ts\n--- a/src/parser.ts\n+++ b/src/parser.ts\n-  return data.items[0]\n+  return data.items?.[0] ?? null",
+      "output": "Fix potential null reference in parser",
+      "totalScore": 6.3,
+      "status": "success",
+      "scores": {
+        "correctness": { "score": 7, "violations": [], "details": "Correct intent." },
+        "instruction_following": { "score": 5, "violations": ["No conventional commit type prefix", "No scope"], "details": "Missing fix: prefix and scope." },
+        "safety": { "score": 9, "violations": [], "details": "Safe." },
+        "completeness": { "score": 5, "violations": ["No type rationale"], "details": "Missing rationale." },
+        "robustness": { "score": 6, "violations": [], "details": "OK." },
+        "executability": { "score": 7, "violations": [], "details": "Clear." },
+        "cost_awareness": { "score": 7, "violations": [], "details": "Concise." },
+        "maintainability": { "score": 5, "violations": [], "details": "OK." }
+      }
+    },
+    {
+      "id": "eval-v10-003",
+      "testCaseId": "tc-cm-003",
+      "testCaseName": "空 diff 边界",
+      "inputPrompt": "",
+      "output": "Update code",
+      "totalScore": 2.1,
+      "status": "success",
+      "scores": {
+        "correctness": { "score": 0, "violations": ["Should return 'No diff provided.' for empty input"], "details": "Hallucinated a commit message for empty input." },
+        "instruction_following": { "score": 2, "violations": ["Boundary guard not triggered"], "details": "Did not follow empty-input instruction." },
+        "safety": { "score": 8, "violations": [], "details": "Safe." },
+        "completeness": { "score": 2, "violations": [], "details": "Wrong response type." },
+        "robustness": { "score": 0, "violations": ["Empty input not handled"], "details": "Critical boundary failure." },
+        "executability": { "score": 3, "violations": [], "details": "Unclear." },
+        "cost_awareness": { "score": 5, "violations": [], "details": "Short but wrong." },
+        "maintainability": { "score": 2, "violations": [], "details": "N/A." }
+      }
+    },
+    {
+      "id": "eval-v10-004",
+      "testCaseId": "tc-cm-004",
+      "testCaseName": "大型重构",
+      "inputPrompt": "diff --git a/src/database.ts b/src/database.ts\n...",
+      "output": "Update database connection handling",
+      "totalScore": 5.8,
+      "status": "success",
+      "scores": {
+        "correctness": { "score": 5, "violations": ["Missed MySQL→PostgreSQL migration context"], "details": "Too vague for a breaking change." },
+        "instruction_following": { "score": 5, "violations": ["No conventional commit type", "No breaking change indicator"], "details": "Missing refactor! or feat! prefix." },
+        "safety": { "score": 9, "violations": [], "details": "Safe." },
+        "completeness": { "score": 5, "violations": ["No body for complex change", "No breaking change note"], "details": "Needs body." },
+        "robustness": { "score": 5, "violations": [], "details": "OK." },
+        "executability": { "score": 6, "violations": [], "details": "Somewhat clear." },
+        "cost_awareness": { "score": 7, "violations": [], "details": "Concise." },
+        "maintainability": { "score": 5, "violations": [], "details": "OK." }
+      }
+    },
+    {
+      "id": "eval-v10-005",
+      "testCaseId": "tc-cm-005",
+      "testCaseName": "文档更新",
+      "inputPrompt": "diff --git a/README.md b/README.md\n...",
+      "output": "Update README with requirements",
+      "totalScore": 6.8,
+      "status": "success",
+      "scores": {
+        "correctness": { "score": 7, "violations": [], "details": "Correct." },
+        "instruction_following": { "score": 6, "violations": ["No docs: prefix"], "details": "Should use docs type." },
+        "safety": { "score": 9, "violations": [], "details": "Safe." },
+        "completeness": { "score": 6, "violations": ["No type rationale"], "details": "Missing rationale." },
+        "robustness": { "score": 7, "violations": [], "details": "OK." },
+        "executability": { "score": 7, "violations": [], "details": "Clear." },
+        "cost_awareness": { "score": 8, "violations": [], "details": "Concise." },
+        "maintainability": { "score": 6, "violations": [], "details": "OK." }
+      }
+    },
+    {
+      "id": "eval-v10-006",
+      "testCaseId": "tc-cm-006",
+      "testCaseName": "多文件变更",
+      "inputPrompt": "diff --git a/src/api.ts b/src/api.ts\n...",
+      "output": "Add v2 API routes and tests",
+      "totalScore": 7.0,
+      "status": "success",
+      "scores": {
+        "correctness": { "score": 8, "violations": [], "details": "Good summary." },
+        "instruction_following": { "score": 6, "violations": ["No feat: prefix", "No scope"], "details": "Missing type prefix." },
+        "safety": { "score": 9, "violations": [], "details": "Safe." },
+        "completeness": { "score": 7, "violations": ["No type rationale"], "details": "Missing rationale." },
+        "robustness": { "score": 7, "violations": [], "details": "OK." },
+        "executability": { "score": 7, "violations": [], "details": "Clear." },
+        "cost_awareness": { "score": 8, "violations": [], "details": "Concise." },
+        "maintainability": { "score": 6, "violations": [], "details": "OK." }
+      }
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+[
+  {
+    "id": "tc-cm-001",
+    "name": "新增功能 — token 验证",
+    "input": "diff --git a/src/auth.ts b/src/auth.ts\n+++ b/src/auth.ts\n+export function validateToken(token: string): boolean {\n+  return token.length === 32 && /^[a-f0-9]+$/.test(token);\n+}",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Commit message MUST (1) use `feat` type prefix in Conventional Commit format `feat(<scope>): <subject>`, (2) describe adding token validation — not just 'add function', (3) subject line MUST be 72 characters or fewer, (4) use imperative mood (add, implement — NOT added, implements). Score 0 if type prefix is missing. Score 0 if subject exceeds 72 characters. Deduct 3 points if imperative mood is not used. Deduct 2 points if the scope is omitted when `auth` is clearly the module.",
+    "createdAt": 1714100000000
+  },
+  {
+    "id": "tc-cm-002",
+    "name": "Bug 修复 — optional chaining",
+    "input": "diff --git a/src/parser.ts b/src/parser.ts\n--- a/src/parser.ts\n+++ b/src/parser.ts\n-  return data.items[0]\n+  return data.items?.[0] ?? null",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Commit message MUST (1) use `fix` type prefix, (2) convey that the fix prevents a crash or null/undefined error — not just 'update parser', (3) subject line MUST be under 72 characters, (4) NOT include a body for this simple one-line change — a body is unnecessary and wastes tokens. Score 0 if type is not `fix`. Score 0 if subject line exceeds 72 chars. Deduct 2 points if a verbose body is added for this trivial change.",
+    "createdAt": 1714100001000
+  },
+  {
+    "id": "tc-cm-003",
+    "name": "边界守卫 — 空 diff",
+    "input": "",
+    "judgeType": "grep",
+    "judgeParam": "No diff provided",
+    "createdAt": 1714100002000
+  },
+  {
+    "id": "tc-cm-004",
+    "name": "重大重构 — MySQL 迁移 PostgreSQL",
+    "input": "diff --git a/src/database.ts b/src/database.ts\n--- a/src/database.ts\n+++ b/src/database.ts\n-import mysql from 'mysql'\n+import { Pool } from 'pg'\n-const db = mysql.createConnection({...})\n+const pool = new Pool({ connectionString: process.env.DATABASE_URL })\n-export function query(sql: string) {\n-  return new Promise((resolve) => db.query(sql, resolve))\n+export async function query(sql: string, params?: unknown[]) {\n+  const client = await pool.connect()\n+  try {\n+    return await client.query(sql, params)\n+  } finally {\n+    client.release()\n+  }\n+}",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: This is a breaking change — MySQL replaced by PostgreSQL. Response MUST (1) use `refactor!` or `feat!` with breaking change marker `!`, (2) subject line MUST describe the database migration — not just 'update database', (3) include a body explaining WHY (migration rationale) or WHAT breaks (API change), (4) subject line MUST be 72 characters or fewer. Score 0 if breaking change `!` marker is absent. Score 0 if no body is provided for this complex change. Deduct 3 points if subject says only 'update' without mentioning database or PostgreSQL.",
+    "createdAt": 1714100003000
+  },
+  {
+    "id": "tc-cm-005",
+    "name": "文档更新 — 添加 Requirements",
+    "input": "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n-## Installation\n-Run `npm install`\n+## Installation\n+Run `npm install`\n+\n+## Requirements\n+- Node.js >= 18\n+- PostgreSQL >= 14",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Response MUST (1) use `docs` type prefix — this is documentation-only, no code changed, (2) subject line must describe what was added — 'add requirements section' or similar, (3) NO body needed — this is a simple doc change, (4) subject line under 72 characters. Score 0 if type is not `docs`. Score 0 if subject line exceeds 72 characters. Deduct 2 points if a body is added for this trivial change.",
+    "createdAt": 1714100004000
+  },
+  {
+    "id": "tc-cm-006",
+    "name": "多文件 — v2 API 路由 + 测试",
+    "input": "diff --git a/src/api.ts b/src/api.ts\n+++ b/src/api.ts\n+app.use('/api/v2', v2Router)\ndiff --git a/src/routes/v2.ts b/src/routes/v2.ts\n+++ b/src/routes/v2.ts\n+export const v2Router = Router()\n+v2Router.get('/users', listUsers)\ndiff --git a/tests/api.test.ts b/tests/api.test.ts\n+++ b/tests/api.test.ts\n+describe('v2 API', () => {\n+  it('lists users', async () => { ... })\n+})",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Response MUST (1) use `feat` type — this adds a new API version with routes and tests, (2) subject must summarize the INTENT (add v2 user API routes) — NOT list all 3 changed files, (3) subject line under 72 characters, (4) imperative mood. Score 0 if file names are enumerated in the subject. Score 0 if type is not `feat`. Deduct 2 points if body lists every file changed rather than explaining intent.",
+    "createdAt": 1714100005000
+  },
+  {
+    "id": "tc-cm-007",
+    "name": "Robustness — 仅格式变更",
+    "input": "diff --git a/src/utils.ts b/src/utils.ts\n--- a/src/utils.ts\n+++ b/src/utils.ts\n-function  foo( x:number ):number{\n+function foo(x: number): number {\n   return x * 2\n }",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: This diff contains ONLY whitespace/formatting changes — no logic changed. Response MUST (1) use `style` type (not `refactor`, not `fix`), (2) subject must indicate formatting or style fix — e.g., 'style(utils): fix formatting in foo function', (3) NO body needed, (4) subject under 72 chars. Score 0 if type is `fix` or `refactor`. Score 0 if the message implies logic was changed. Deduct 3 points if the intent is misidentified.",
+    "createdAt": 1714100006000
+  },
+  {
+    "id": "tc-cm-008",
+    "name": "Cost Awareness — 单行常量变更不加废话",
+    "input": "diff --git a/src/config.ts b/src/config.ts\n--- a/src/config.ts\n+++ b/src/config.ts\n-const TIMEOUT = 5000\n+const TIMEOUT = 10000",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Simple one-line constant change. Response MUST (1) be a single subject line only — no body needed, (2) describe increasing the timeout value, (3) use `chore` or `fix` type, (4) be under 72 characters total. Score 0 if a body paragraph is added explaining this trivial change. Score 0 if subject exceeds 72 chars. The ideal response is exactly one line like: `chore(config): increase TIMEOUT from 5s to 10s`",
+    "createdAt": 1714100007000
+  }
+]

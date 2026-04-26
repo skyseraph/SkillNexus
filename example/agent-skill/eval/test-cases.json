@@ -1,0 +1,66 @@
+[
+  {
+    "id": "tc-ag-001",
+    "name": "SQL 注入漏洞 PR — 必须 REQUEST_CHANGES",
+    "input": "diff --git a/src/db.py b/src/db.py\n@@ -10,6 +10,10 @@\n+def get_user(username):\n+    query = \"SELECT * FROM users WHERE name = '\" + username + \"'\"\n+    return db.execute(query)",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Response MUST (1) identify SQL injection as a CRITICAL or HIGH severity finding in the Security Findings section, (2) set Verdict to REQUEST_CHANGES — never APPROVE, (3) suggest parameterized queries as the fix, (4) reference the specific line where string concatenation occurs. Score 0 if Verdict is APPROVE. Score 0 if SQL injection is not labeled CRITICAL or HIGH. Score 0 if no parameterized query fix is suggested. Deduct 3 points if the specific variable `username` or the concatenation pattern is not mentioned.",
+    "createdAt": 1714200000000
+  },
+  {
+    "id": "tc-ag-002",
+    "name": "新功能 PR — 无安全问题，不捏造",
+    "input": "diff --git a/src/utils.py b/src/utils.py\n@@ -0,0 +1,12 @@\n+def format_date(dt: datetime) -> str:\n+    \"\"\"Format datetime to ISO 8601 string.\"\"\"\n+    if dt is None:\n+        return ''\n+    return dt.strftime('%Y-%m-%dT%H:%M:%SZ')",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Response MUST (1) classify this as a low-risk feature or utility addition in Change Classification, (2) report no security issues — Security Findings section MUST say 'No issues found' or equivalent, (3) set Verdict to APPROVE, (4) NOT fabricate security concerns for this benign formatting function. Score 0 if Verdict is REQUEST_CHANGES. Score 0 if any CRITICAL or HIGH security finding is invented. Score 0 if Change Classification labels this high-risk. Deduct 2 points if the null guard `if dt is None` is not acknowledged as good practice.",
+    "createdAt": 1714200001000
+  },
+  {
+    "id": "tc-ag-003",
+    "name": "硬编码 API Key — 必须阻止合并",
+    "input": "diff --git a/src/config.py b/src/config.py\n@@ -5,3 +5,4 @@\n+API_KEY = 'sk-ant-api03-secretkey12345'\n+BASE_URL = 'https://api.anthropic.com'",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Response MUST (1) flag `API_KEY = 'sk-ant-api03-secretkey12345'` as a CRITICAL security issue, (2) set Verdict to REQUEST_CHANGES, (3) recommend storing the key in environment variables — e.g., `os.environ.get('API_KEY')`, (4) warn about the risk of committing secrets to version control. Score 0 if Verdict is not REQUEST_CHANGES. Score 0 if the hardcoded key is not labeled CRITICAL. Score 0 if no environment variable solution is provided. Deduct 2 points if the specific variable name `API_KEY` or value prefix `sk-ant` is not referenced.",
+    "createdAt": 1714200002000
+  },
+  {
+    "id": "tc-ag-004",
+    "name": "硬编码密码 — Verdict 必须 REQUEST_CHANGES",
+    "input": "diff --git a/src/auth.py b/src/auth.py\n@@ -20,6 +20,10 @@\n+def login(user, password):\n+    if user == 'admin' and password == 'admin123':\n+        return True",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Response MUST (1) identify the hardcoded credential `password == 'admin123'` as a CRITICAL or HIGH security vulnerability, (2) set Verdict to REQUEST_CHANGES — this is a blocking security issue, (3) explain why hardcoded passwords are dangerous (bypasses auth system, exposed in source), (4) suggest proper fix — hash comparison, env variable, or config-based auth. Score 0 if Verdict is APPROVE or NEEDS_DISCUSSION. Score 0 if hardcoded password is not flagged as CRITICAL or HIGH. Deduct 3 points if the specific string 'admin123' is not referenced.",
+    "createdAt": 1714200003000
+  },
+  {
+    "id": "tc-ag-005",
+    "name": "空 diff 边界处理 — 拒绝而非崩溃",
+    "input": "",
+    "judgeType": "grep",
+    "judgeParam": "No diff provided",
+    "createdAt": 1714200004000
+  },
+  {
+    "id": "tc-ag-006",
+    "name": "报告必须包含三个结构化章节",
+    "input": "diff --git a/src/api.ts b/src/api.ts\n@@ -1,3 +1,8 @@\n+export async function fetchUser(id: string) {\n+  const res = await fetch(`/api/users/${id}`)\n+  return res.json()\n+}",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Response MUST contain ALL three required sections with recognizable headers: (1) a Change Classification section identifying type and risk level, (2) a Security Findings section — for this diff it should note missing error handling and potential path traversal if `id` is unsanitized, and (3) a Quality Assessment section with at least one scored dimension. Response MUST also include a Verdict line. Score 0 if any of the three sections is missing. Score 0 if Verdict is absent. Deduct 2 points if Security Findings does not mention the lack of error handling on `res.json()` or the unvalidated `id` parameter.",
+    "createdAt": 1714200005000
+  },
+  {
+    "id": "tc-ag-007",
+    "name": "XSS 漏洞 — innerHTML 注入",
+    "input": "diff --git a/src/render.js b/src/render.js\n@@ -0,0 +1,6 @@\n+function renderUserName(name) {\n+  const el = document.getElementById('user-display')\n+  el.innerHTML = name\n+}",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Response MUST (1) identify the XSS vulnerability from `el.innerHTML = name` where user-controlled `name` is injected without sanitization, (2) label it CRITICAL or HIGH severity, (3) set Verdict to REQUEST_CHANGES, (4) suggest using `textContent` or a sanitization library instead. Score 0 if XSS is not identified. Score 0 if Verdict is APPROVE. Score 0 if no safe alternative (`textContent` or DOMPurify) is mentioned. Deduct 3 points if `innerHTML` is not specifically cited as the vulnerability source.",
+    "createdAt": 1714200006000
+  },
+  {
+    "id": "tc-ag-008",
+    "name": "Cost Awareness — 报告不超过 500 词",
+    "input": "diff --git a/src/math.py b/src/math.py\n@@ -0,0 +1,4 @@\n+def square(n: int) -> int:\n+    \"\"\"Return the square of n.\"\"\"\n+    return n * n",
+    "judgeType": "llm",
+    "judgeParam": "STRICT: Code is trivially correct. Response MUST (1) set Verdict to APPROVE, (2) report no security issues, (3) be concise — the full report MUST NOT exceed 200 words, (4) NOT fabricate quality issues for this trivially correct function. Score 0 if Verdict is not APPROVE. Score 0 if response exceeds 300 words. Score 0 if fabricated issues appear. Deduct 2 points if the report repeats the same observation more than once. Skill constraint: report must be under 500 words — verify this is enforced.",
+    "createdAt": 1714200007000
+  }
+]

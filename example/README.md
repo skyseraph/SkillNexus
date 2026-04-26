@@ -1,162 +1,142 @@
-# 实战案例：CodeReview Skill 进化全流程
+# SkillNexus — 示例案例
 
-本目录记录了一个真实的 Skill 进化案例：CodeReview Skill 经过两轮进化，均分从 **6.8 → 8.1**，提升 **+1.3**。
+三个完整的 Skill 案例，覆盖 Studio 生成 → Eval 评测 → Evo 进化全链路。
 
 ---
 
-## 目录结构
+## 案例目录
+
+| 目录 | Skill | 进化路径 | 均分提升 |
+|------|-------|---------|---------:|
+| [`codereview/`](codereview/README.md) | CodeReview — 代码审查助手 | SkVM 证据驱动 → EvoSkill | 6.8 → 8.1（+1.3） |
+| [`commit-message/`](commit-message/README.md) | CommitMessage — 提交信息生成器 | SkVM 证据驱动 → EvoSkill | 5.9 → 8.4（+2.5） |
+| [`agent-skill/`](agent-skill/README.md) | PR Review Agent — 多步骤 PR 审查 Agent | Agent Skill 示例（三子 Skill 编排） | — |
+
+---
+
+## 目录结构（每个案例相同）
 
 ```
-example/
+<case>/
   skills/
-    codereview-v1.0.md          ← 根版本（原始 Skill）
-    codereview-v1.1.md          ← 第一轮进化结果（SkVM 证据驱动）
-    codereview-v1.2.md          ← 第二轮进化结果（EvoSkill gen-3，当前最优）
+    *-v1.0.md     ← 原始版本（Studio 生成或手动编写）
+    *-v1.1.md     ← 第一轮进化结果（SkVM 证据驱动）
+    *-v1.2.md     ← 第二轮进化结果（EvoSkill，当前最优）
   eval/
-    test-cases.json             ← 6 个测试用例（覆盖边界、安全、正常、无问题场景）
-    eval-results-v1.0.json      ← v1.0 评测结果（均分 6.8）
-    eval-results-v1.1.json      ← v1.1 评测结果（均分 7.4，+0.6）
-    eval-results-v1.2.json      ← v1.2 评测结果（均分 8.1，+0.7）
-    transfer-test-v1.2.json     ← v1.2 跨模型迁移测试（Haiku / GPT-4o-mini / Qwen-72B）
+    test-cases.json          ← 测试用例集
+    eval-results-v1.0.json   ← 基线评测结果
+    eval-results-v1.1.json   ← 第一轮进化后评测结果
+    eval-results-v1.2.json   ← 第二轮进化后评测结果
   analysis/
-    round1-skvm-evidence.json   ← 第一轮诊断：根因 + 泛化测试 + 回归风险
-    round2-evoskill.json        ← 第二轮迭代过程：3 次迭代 + Frontier 演进
+    round1-skvm-evidence.json  ← 第一轮诊断（ROOT_CAUSE / GENERALITY_TEST / REGRESSION_RISK）
+    round2-evoskill.json       ← 第二轮迭代过程（Frontier 演进）
+  README.md                  ← 案例详细说明
+
+plugins/                     ← 进化引擎插件示例（本地插件机制）
+  append-notes.js
+  weak-dim-boost.js
+  ollama-evolve.js
 ```
 
 ---
 
-## 进化历史树
+## 在 SkillNexus 中复现
 
-```
-○ CodeReview v1.0   根版本（均分 6.8）
-  └── ○ CodeReview v1.1  +0.6 ↑  [SkVM 证据驱动]
-        └── ◉ CodeReview v1.2  +0.7 ↑  [EvoSkill gen-3]  ← 当前最优
-```
+1. 打开 Studio，手动编辑模式粘贴 `skills/*-v1.0.md` 内容，安装 Skill
+2. 在 Eval 页 TestCase Tab，导入 `eval/test-cases.json`
+3. 运行 Eval，得到基线均分
+4. 进入 Evo 页，选择 SkVM 证据驱动，启动第一轮进化
+5. 接受进化版本后，选择 EvoSkill（maxIterations=3），启动第二轮进化
+6. 查看进化历史树，对比三个版本的得分变化
 
 ---
 
-## 第一轮：SkVM 证据驱动
+## 测试用例设计原则
 
-### 问题诊断
+### 为什么需要"有区分度"的测试用例？
 
-v1.0 在 **Completeness（5.9）** 和 **Robustness（6.2）** 两个维度表现最差。
+如果 judgeParam 过于宽松（如"应该能识别 SQL 注入"），LLM 裁判会给出普遍高分——即使没有 Skill 加持，基础 LLM 也能通过。这会导致：
 
-最弱的两个测试用例：
+- **三条件模式**中看不出 Skill 的实际增益
+- **进化**时找不到真正的薄弱点
+- 评测失去意义
 
-| 用例 | 得分 | 问题 |
+**好的测试用例**应该让 v1.0（弱版本）得 5-7 分，v1.2（强版本）得 8-9 分，分差 ≥ 1.5。
+
+### judgeParam 设计规范
+
+所有 llm 类型的 judgeParam 遵循以下结构：
+
+```
+STRICT: Response MUST (1) <具体可验证条件>, (2) <具体可验证条件>, ...
+Score 0 if <明确的零分条件>.
+Score 0 if <明确的零分条件>.
+Deduct N points if <扣分条件>.
+```
+
+**关键要素：**
+
+| 要素 | 说明 | 反例 |
 |------|------|------|
-| 空输入边界 | 5.1 | 应返回 "No code provided for review." 但模型给出了不同措辞 |
-| 单行代码 | 4.8 | 应触发 < 3 行边界守卫，但模型当作正常代码处理 |
+| `STRICT:` 前缀 | 告知裁判采用严格模式 | 无前缀 → 裁判过于宽松 |
+| 明确的必须条件 | 具体到词语、标签、行号 | "should mention security" |
+| 零分边界 | 触发条件 → 直接得 0 | "should probably avoid APPROVE" |
+| 可量化约束 | 字数上限、字符数、评分值 | "be concise" |
+| 引用原文 | 变量名、代码片段、关键字 | "the hardcoded value" |
 
-### 诊断结果（`analysis/round1-skvm-evidence.json`）
+### 用例类型覆盖矩阵
 
-```
-ROOT_CAUSE: Skill 缺少对"空输入"和"单行代码"边界场景的明确处理指令，
-  导致模型在输入为空或极短时产生幻觉输出，而非返回规范的边界响应。
-  同时缺少结构化输出格式要求，导致 completeness 和 instruction_following 普遍偏低。
+每个 Skill 的测试集应覆盖以下类型：
 
-GENERALITY_TEST: 任何需要处理"零结果"场景的聚合类 Skill（如搜索、列表过滤）
-  均可从此修复中获益。
+| 类型 | 目的 | judge 类型 |
+|------|------|-----------|
+| 核心功能（正向） | 验证 Skill 主要价值 | `llm` |
+| 核心功能（负向） | 不捏造不存在的问题 | `llm` |
+| 边界守卫（空输入） | 确保不崩溃 | `grep` |
+| 边界守卫（非法输入） | 拒绝而非猜测 | `llm` / `grep` |
+| 输出格式约束 | 结构/章节/字段完整性 | `llm` |
+| Cost Awareness | 简洁输出，不废话 | `llm`（含字数限制） |
+| Robustness | 混合/歧义/边缘输入 | `llm` |
 
-REGRESSION_RISK: 仅在 Input Validation 小节增加边界说明，并补充结构化输出格式。
-  不修改核心审查逻辑，不影响已通过的 Safety（8.1）和 Executability（7.5）。
-```
+### 各案例预期分数区间
 
-### 进化结果
+#### CodeReview（10 个用例）
 
-v1.1 新增：
-- `## Input Validation` 小节，明确空输入和 < 3 行的边界响应措辞
-- `## Output Format` 要求 Summary / Issues（含 severity）/ Suggestions 三段式结构
+| 用例 | v1.0 预期 | v1.2 预期 | 关键区分点 |
+|------|-----------|-----------|-----------|
+| tc-001 Python IndexError | 6–7 | 8–9 | 是否给出具体修复代码 |
+| tc-002 SQL 注入 | 5–6 | 9–10 | 是否标 Critical + 参数化查询 |
+| tc-003 空输入 | 9–10 | 9–10 | 边界稳定（无区分） |
+| tc-004 单行赋值 | 9–10 | 9–10 | 边界稳定（无区分） |
+| tc-005 JS 类型转换 | 6–7 | 8–9 | 是否有结构化章节 |
+| tc-006 干净代码不捏造 | 6–8 | 9–10 | 是否正确报告无问题 |
+| tc-007 非代码文本拒绝 | 5–7 | 9–10 | 是否明确拒绝而非乱审查 |
+| tc-008 完美代码简洁输出 | 5–7 | 8–9 | 是否 ≤200 词，不重复 |
+| tc-009 混合语言边界 | 5–7 | 8–9 | 是否识别 // 和 null 的语法错误 |
+| tc-010 硬编码密钥 | 6–7 | 9–10 | 是否标 Critical + env var 方案 |
 
-| 维度 | v1.0 | v1.1 | Delta |
-|------|------|------|-------|
-| correctness | 6.8 | 7.6 | +0.8 |
-| instruction_following | 7.2 | 7.8 | +0.6 |
-| safety | 8.1 | 8.2 | +0.1 |
-| completeness | 5.9 | 7.1 | **+1.2** |
-| robustness | 6.2 | 7.3 | **+1.1** |
-| executability | 7.5 | 8.0 | +0.5 |
-| cost_awareness | 7.8 | 7.9 | +0.1 |
-| maintainability | 6.5 | 7.4 | +0.9 |
-| **均分** | **6.8** | **7.4** | **+0.6 ✅** |
+#### CommitMessage（8 个用例）
 
-决策：**接受**。
+| 用例 | v1.0 预期 | v1.2 预期 | 关键区分点 |
+|------|-----------|-----------|-----------|
+| tc-cm-001 新增功能 | 6–7 | 8–9 | `feat(<scope>):` 格式 + imperative |
+| tc-cm-002 Bug 修复 | 6–8 | 8–9 | `fix:` 类型 + 无多余 body |
+| tc-cm-003 空 diff | 9–10 | 9–10 | 边界稳定 |
+| tc-cm-004 重大重构 | 4–6 | 8–9 | 是否有 `!` 标记 + body 说明 |
+| tc-cm-005 文档更新 | 6–7 | 8–9 | `docs:` 类型 + 无 body |
+| tc-cm-006 多文件 | 6–7 | 8–9 | subject 描述意图而非列文件 |
+| tc-cm-007 仅格式变更 | 4–6 | 8–9 | 是否用 `style:` 而非 `fix:` |
+| tc-cm-008 单行常量 | 5–7 | 9–10 | 是否只有一行，无 body |
 
----
+#### PR Review Agent（8 个用例）
 
-## 第二轮：EvoSkill 多代迭代
-
-以 v1.1（均分 7.4）为基础，启动 EvoSkill（maxIterations=3）。
-
-### 迭代过程（`analysis/round2-evoskill.json`）
-
-| 迭代 | 基础版本 | 候选均分 | 是否新最优 | 主要改进 |
-|------|---------|---------|-----------|---------|
-| Iter 1 | v1.1（7.4） | 7.7 | ★ 是 | 增加有序审查流程（静态→逻辑→安全→风格）+ Score 字段 |
-| Iter 2 | v1.1（7.4） | 7.5 | 否 | 增加语言检测回退 + max-5 建议约束 |
-| Iter 3 | gen-1（7.7） | **8.1** | ★ 是 | 合并有序流程与 severity 标签，补充"无问题"明确措辞，收紧约束 |
-
-Frontier 最终保留 3 个变体，最优版本 v1.2 均分 **8.1**。
-
-### 进化结果
-
-v1.2 相对 v1.1 的主要变化：
-- `## Review Process` 新增四步有序审查流程（静态分析 → 逻辑 → 安全 → 风格）
-- `## Severity Levels` 明确 Critical / Warning / Info 定义
-- `## Output Format` 新增第 4 项 Score 字段
-- `## Constraints` 新增"无问题时明确说明"和"最多 5 条建议"约束
-
-| 维度 | v1.1 | v1.2 | Delta |
-|------|------|------|-------|
-| correctness | 7.6 | 8.5 | +0.9 |
-| instruction_following | 7.8 | 8.7 | +0.9 |
-| safety | 8.2 | 8.8 | +0.6 |
-| completeness | 7.1 | 8.2 | **+1.1** |
-| robustness | 7.3 | 8.3 | **+1.0** |
-| executability | 8.0 | 8.6 | +0.6 |
-| cost_awareness | 7.9 | 7.6 | -0.3 ⚠️ |
-| maintainability | 7.4 | 8.4 | +1.0 |
-| **均分** | **7.4** | **8.1** | **+0.7 ✅** |
-
-> ⚠️ cost_awareness 下降 0.3：有序审查流程和 Score 字段使输出略长。Delta < 1.0，不触发防回归警告。
-
-决策：**接受**。
-
----
-
-## 跨模型迁移验证（`eval/transfer-test-v1.2.json`）
-
-v1.2 在 claude-sonnet-4-6 上进化，迁移至三个模型验证：
-
-| 模型 | 均分 | 迁移率 | 说明 |
-|------|------|--------|------|
-| claude-haiku-4-5 | 7.9 | 74% | 边界用例 100% 通过，JS 分析略简 |
-| gpt-4o-mini | 7.5 | 59% | 边界用例通过，Score 字段偶尔缺失 |
-| qwen-72b-instruct | 8.0 | 79% | 强迁移，有序流程遵循良好 |
-| **综合** | — | **71%** | 良好迁移性 |
-
-边界守卫指令（空输入 / 单行代码）在所有模型上 **100% 迁移**，结构化输出格式在弱模型上有 20-30% 的遵循率下降。
-
----
-
-## 测试用例设计说明（`eval/test-cases.json`）
-
-6 个用例覆盖四类场景：
-
-| 用例 | 场景类型 | 判断方式 | 核心验证点 |
-|------|---------|---------|-----------|
-| tc-001 Python 空列表边界 | 逻辑 bug | llm | 识别 IndexError + 提供修复代码 |
-| tc-002 SQL 注入风险 | 安全漏洞 | llm | 标记 Critical + 参数化查询建议 |
-| tc-003 空输入边界 | 边界守卫 | grep | 精确返回 "No code provided for review." |
-| tc-004 单行代码 | 边界守卫 | grep | < 3 行触发边界守卫 |
-| tc-005 正常 JS 函数 | 正常代码 | llm | 结构化输出 + 识别类型隐患 |
-| tc-006 无问题代码 | 干净代码 | llm | 明确说明无问题，不捏造 |
-
----
-
-## 关键结论
-
-1. **边界守卫指令是最高 ROI 的改进**：两行明确的边界说明将 robustness 从 6.2 提升至 8.3（+2.1）。
-2. **结构化输出格式驱动 completeness 提升**：要求 Summary/Issues/Suggestions 三段式后，completeness 从 5.9 升至 8.2（+2.3）。
-3. **有序审查流程提升 correctness**：静态→逻辑→安全→风格的顺序让模型不遗漏安全类问题。
-4. **迁移性验证不可跳过**：GPT-4o-mini 的 59% 迁移率提示结构化格式指令对弱模型需要更强的约束措辞。
+| 用例 | v1.0 预期 | v1.2 预期 | 关键区分点 |
+|------|-----------|-----------|-----------|
+| tc-ag-001 SQL 注入 | 6–7 | 9–10 | CRITICAL + REQUEST_CHANGES |
+| tc-ag-002 无安全问题 | 6–8 | 9–10 | APPROVE + 不捏造 |
+| tc-ag-003 硬编码 API Key | 6–7 | 9–10 | CRITICAL + env var |
+| tc-ag-004 硬编码密码 | 5–7 | 9–10 | CRITICAL + REQUEST_CHANGES |
+| tc-ag-005 空 diff | 9–10 | 9–10 | 边界稳定 |
+| tc-ag-006 三章节结构 | 6–7 | 8–9 | 三节完整 + Verdict 存在 |
+| tc-ag-007 XSS 漏洞 | 5–7 | 9–10 | innerHTML + textContent 替代 |
+| tc-ag-008 Cost Awareness | 5–7 | 8–9 | APPROVE + ≤200 词 |
