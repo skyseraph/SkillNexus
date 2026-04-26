@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import type { Skill, SkillScore5D, TestCase, GithubSkillResult } from '../../../shared/types'
+import type { Skill, SkillScore5D, TestCase, GithubSkillResult, EvalResult, EvalHistoryPage } from '../../../shared/types'
 import { SKILLNET_SKILLS, type DiscoverySkill } from '../data/studio-discovery'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -7,7 +7,6 @@ import { SKILLNET_SKILLS, type DiscoverySkill } from '../data/studio-discovery'
 type StudioMode = 'describe' | 'examples' | 'extract' | 'edit' | 'agent'
 type MethodType = 'builtin' | 'external'
 type DiscoverySource = 'skillnet' | 'github' | 'mine'
-type ValTab = 'quicktest' | 'compare' | 'oneclick'
 
 interface AgentFields {
   name: string
@@ -52,12 +51,6 @@ const PRESET_TOOLS = [
   'shell', 'browser', 'mcp_tool', 'sub_skill'
 ]
 
-const STRATEGIES = [
-  { id: 'improve_weak', label: '修复薄弱维度', hint: '针对评分最低维度重点改进' },
-  { id: 'expand',       label: '扩展能力边界', hint: '增加新能力和更广的适用场景' },
-  { id: 'simplify',     label: '精简聚焦',     hint: '提炼核心，让 Skill 更简洁' },
-  { id: 'add_examples', label: '补充示例',     hint: '添加具体示例和边界情况说明' }
-]
 
 // ── DiscoveryPanel ────────────────────────────────────────────────────────────
 
@@ -119,7 +112,7 @@ function DiscoveryPanel({
         {(['skillnet', 'github', 'mine'] as DiscoverySource[]).map(src => (
           <button key={src} className={`studio-v2-src-tab ${source === src ? 'active' : ''}`}
             onClick={() => { setSource(src); setSearch(''); setGhError(null) }}>
-            {src === 'skillnet' ? 'SkillNet' : src === 'github' ? 'GitHub' : '我的库'}
+            {src === 'skillnet' ? '精选' : src === 'github' ? 'GitHub' : '我的库'}
           </button>
         ))}
       </div>
@@ -621,7 +614,17 @@ function InputAreaExtract({ streaming, apiKeySet, onExtract }: {
 
 // ── Score5DMini ───────────────────────────────────────────────────────────────
 
+const SCORE_5D_TIPS: Record<string, string> = {
+  safety:          '加强输入校验、明确拒绝边界、限制工具调用范围',
+  completeness:    '补充 edge case 说明、扩展 examples、明确任务 scope',
+  executability:   '拆分步骤、用 numbered list、减少歧义词让 LLM 更易遵循',
+  maintainability: '加 frontmatter、分段组织、用清晰的 section 标题',
+  costAwareness:   '限制输出长度、合并工具调用、加 "be concise" 约束',
+  orchestration:   '明确子 Agent 职责边界、减少不必要的协调层级',
+}
+
 function Score5DMini({ scores, loading }: { scores: SkillScore5D | null; loading: boolean }) {
+  const [hintOpen, setHintOpen] = useState(false)
   if (loading) return <span className="studio-v2-score-mini-loading">评分中...</span>
   if (!scores) return null
   const isAgent = (scores.orchestration ?? 0) > 0
@@ -629,16 +632,44 @@ function Score5DMini({ scores, loading }: { scores: SkillScore5D | null; loading
     ? (['safety', 'completeness', 'executability', 'maintainability', 'orchestration'] as const)
     : SCORE_5D_KEYS
   const avg = displayKeys.reduce((a, k) => a + (scores[k] ?? 0), 0) / displayKeys.length
+  const weakDims = displayKeys.filter(k => (scores[k] ?? 0) < 6)
   return (
-    <div className="studio-v2-score-mini">
-      {displayKeys.map(k => (
-        <span key={k} className="studio-v2-score-pill" style={{ color: SCORE_5D_COLORS[k], borderColor: `${SCORE_5D_COLORS[k]}44` }}>
-          {SCORE_5D_SHORT[k]} {(scores[k] ?? 0).toFixed(1)}
+    <div className="studio-v2-score-mini-wrap">
+      <div className="studio-v2-score-mini">
+        {displayKeys.map(k => {
+          const val = scores[k] ?? 0
+          const isWeak = val < 6
+          return (
+            <span
+              key={k}
+              className={`studio-v2-score-pill${isWeak ? ' weak' : ''}`}
+              style={{ color: SCORE_5D_COLORS[k], borderColor: `${SCORE_5D_COLORS[k]}${isWeak ? '99' : '44'}` }}
+              title={isWeak ? `${SCORE_5D_SHORT[k]} 偏低 — ${SCORE_5D_TIPS[k]}` : undefined}
+            >
+              {SCORE_5D_SHORT[k]} {val.toFixed(1)}
+              {isWeak && <span className="studio-v2-score-pill-warn">!</span>}
+            </span>
+          )
+        })}
+        <span className="studio-v2-score-avg" style={{ color: avg >= 7 ? 'var(--success)' : avg >= 5 ? 'var(--warning)' : 'var(--danger)' }}>
+          avg {avg.toFixed(1)}
         </span>
-      ))}
-      <span className="studio-v2-score-avg" style={{ color: avg >= 7 ? 'var(--success)' : avg >= 5 ? 'var(--warning)' : 'var(--danger)' }}>
-        avg {avg.toFixed(1)}
-      </span>
+        {weakDims.length > 0 && (
+          <button className="studio-v2-score-hint-toggle" onClick={() => setHintOpen(v => !v)}>
+            {hintOpen ? '▾' : '▸'} 改进建议
+          </button>
+        )}
+      </div>
+      {hintOpen && weakDims.length > 0 && (
+        <div className="studio-v2-score-hints">
+          {weakDims.map(k => (
+            <div key={k} className="studio-v2-score-hint-row">
+              <span className="studio-v2-score-hint-dim" style={{ color: SCORE_5D_COLORS[k] }}>{SCORE_5D_SHORT[k]}</span>
+              <span className="studio-v2-score-hint-text">{SCORE_5D_TIPS[k]}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -762,97 +793,6 @@ function QuickRunPane({ editorContent, apiKeySet }: { editorContent: string; api
   )
 }
 
-// ── OneClickEvalPane ──────────────────────────────────────────────────────────
-
-function OneClickEvalPane({ installedSkill }: { installedSkill: Skill }) {
-  const [testCases, setTestCases] = useState<TestCase[]>([])
-  const [running, setRunning] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [result, setResult] = useState<{ totalScore: number; scores: Record<string, { score: number }> } | null>(null)
-  const cleanupRef = useRef<(() => void) | null>(null)
-
-  useEffect(() => {
-    window.api.testcases.getBySkill(installedSkill.id).then(tcs => setTestCases(tcs.slice(0, 5)))
-  }, [installedSkill.id])
-
-  const handleEval = async () => {
-    if (testCases.length === 0 || running) return
-    setRunning(true)
-    setProgress(0)
-    setResult(null)
-
-    cleanupRef.current?.()
-    cleanupRef.current = window.api.eval.onProgress(({ progress: p }) => {
-      setProgress(p)
-      if (p >= 100) {
-        cleanupRef.current?.()
-        cleanupRef.current = null
-      }
-    })
-
-    try {
-      await window.api.eval.start(installedSkill.id, testCases.map(t => t.id))
-      const history = await window.api.eval.history(installedSkill.id)
-      const latest = history.items?.[0]
-      if (latest) setResult({ totalScore: latest.totalScore, scores: latest.scores })
-    } finally {
-      setRunning(false)
-      cleanupRef.current?.()
-      cleanupRef.current = null
-    }
-  }
-
-  useEffect(() => () => { cleanupRef.current?.() }, [])
-
-  if (testCases.length === 0) {
-    return (
-      <div className="studio-v2-val-empty">
-        暂无测试用例，请先
-        <button className="studio-v2-link-btn" onClick={() => window.api.testcases.generate(installedSkill.id, 3)
-          .then(tcs => setTestCases(tcs.slice(0, 5)))}>
-          自动生成用例
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="studio-v2-oneclick">
-      <div className="studio-v2-oneclick-cases">
-        {testCases.map(tc => (
-          <div key={tc.id} className="studio-v2-oneclick-case">
-            <span className="studio-v2-oneclick-case-name">{tc.name}</span>
-            <span className="studio-v2-oneclick-case-type">{tc.judgeType}</span>
-          </div>
-        ))}
-      </div>
-      <button className="studio-v2-btn primary sm" onClick={handleEval} disabled={running}>
-        {running ? `测评中 ${progress}%` : `▶ 一键测评 (${testCases.length} 条用例)`}
-      </button>
-      {running && (
-        <div className="studio-v2-progress-bar-wrap">
-          <div className="studio-v2-progress-bar" style={{ width: `${progress}%` }} />
-        </div>
-      )}
-      {result && (
-        <div className="studio-v2-oneclick-result">
-          <span className="studio-v2-oneclick-total"
-            style={{ color: result.totalScore >= 7 ? 'var(--success)' : 'var(--warning)' }}>
-            总分 {result.totalScore.toFixed(1)}
-          </span>
-          <div className="studio-v2-score-pills">
-            {Object.entries(result.scores).map(([dim, s]) => (
-              <span key={dim} className="studio-v2-score-pill"
-                style={{ background: `${SCORE_5D_COLORS[dim] ?? '#888'}22`, color: SCORE_5D_COLORS[dim] ?? '#888', borderColor: `${SCORE_5D_COLORS[dim] ?? '#888'}55` }}>
-                {SCORE_5D_SHORT[dim] ?? dim} {s.score.toFixed(1)}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
 
 // ── AgentDesignPanel ──────────────────────────────────────────────────────────
 
@@ -970,6 +910,51 @@ function QuickTestPane({ installedSkill }: { installedSkill: Skill | null }) {
     return <div className="studio-v2-val-empty">请先安装 Skill 后再快速测试</div>
   }
 
+  // Parse agent output or plain text, extract file paths
+  const renderOutput = (raw: string) => {
+    // Try agent output format
+    let agentAnswer: string | null = null
+    let agentTrace: Array<{ turn: number; toolName: string; toolInput: Record<string, unknown>; toolOutput: string; toolError?: string }> = []
+    try {
+      const obj = JSON.parse(raw)
+      if (obj && typeof obj.answer === 'string' && Array.isArray(obj.trace)) {
+        agentAnswer = obj.answer
+        agentTrace = obj.trace
+      }
+    } catch { /* plain text */ }
+
+    const text = agentAnswer ?? raw
+    // Detect absolute file paths
+    const filePathRe = /(\/[^\s"'<>]+\.[a-zA-Z0-9]{2,6})/g
+    const filePaths = [...new Set(text.match(filePathRe) ?? [])]
+
+    return (
+      <>
+        <pre className="studio-v2-qt-pre">{text}</pre>
+        {filePaths.length > 0 && (
+          <div className="studio-v2-qt-files">
+            {filePaths.map(p => (
+              <button key={p} className="studio-v2-qt-file-btn" onClick={() => window.api.shell.openPath(p)} title={p}>
+                📂 打开 {p.split('/').pop()}
+              </button>
+            ))}
+          </div>
+        )}
+        {agentTrace.length > 0 && (
+          <details className="studio-v2-qt-trace">
+            <summary>执行轨迹（{agentTrace.length} 步）</summary>
+            {agentTrace.map((step, i) => (
+              <div key={i} className="studio-v2-qt-trace-step">
+                <span className="studio-v2-qt-trace-tool">{step.toolName}</span>
+                <pre className="studio-v2-qt-trace-pre">{step.toolError ? `[error] ${step.toolError}\n${step.toolOutput}` : step.toolOutput}</pre>
+              </div>
+            ))}
+          </details>
+        )}
+      </>
+    )
+  }
+
   return (
     <div className="studio-v2-quicktest">
       <div className="studio-v2-qt-row">
@@ -992,7 +977,7 @@ function QuickTestPane({ installedSkill }: { installedSkill: Skill | null }) {
                 评分 {result.totalScore.toFixed(1)}
               </span>
             </div>
-            <pre>{result.output}</pre>
+            {renderOutput(result.output)}
           </div>
           {!saved && (
             <div className="studio-v2-qt-actions">
@@ -1007,136 +992,111 @@ function QuickTestPane({ installedSkill }: { installedSkill: Skill | null }) {
   )
 }
 
-// ── ComparePane ───────────────────────────────────────────────────────────────
 
-function ComparePane({ installedSkill, apiKeySet }: { installedSkill: Skill | null; apiKeySet: boolean | null }) {
-  const [strategy, setStrategy] = useState('improve_weak')
-  const [originalContent, setOriginalContent] = useState('')
-  const [evolvedContent, setEvolvedContent] = useState('')
-  const [streaming, setStreaming] = useState(false)
-  const [installedEvolved, setInstalledEvolved] = useState<Skill | null>(null)
+// ── OneClickEvalPane ──────────────────────────────────────────────────────────
+
+function OneClickEvalPane({ installedSkill }: { installedSkill: Skill }) {
+  const [testCases, setTestCases] = useState<TestCase[]>([])
+  const [running, setRunning] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [result, setResult] = useState<EvalResult | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
-    if (installedSkill) setOriginalContent(installedSkill.markdownContent)
-  }, [installedSkill])
+    window.api.testcases.getBySkill(installedSkill.id)
+      .then((tcs: TestCase[]) => setTestCases(tcs.slice(0, 5)))
+      .catch(() => {})
+  }, [installedSkill.id])
 
-  const handleEvolve = async () => {
-    if (!installedSkill) return
-    setStreaming(true)
-    setEvolvedContent('')
-    setInstalledEvolved(null)
+  useEffect(() => () => { cleanupRef.current?.() }, [])
+
+  const handleRun = async () => {
+    if (running || testCases.length === 0) return
+    setRunning(true)
+    setProgress(0)
+    setResult(null)
 
     cleanupRef.current?.()
-    cleanupRef.current = window.api.studio.onChunk(({ chunk, done }) => {
-      if (!done) setEvolvedContent(p => p + chunk)
-      else {
-        setStreaming(false)
-        cleanupRef.current?.()
-        cleanupRef.current = null
-      }
+    cleanupRef.current = window.api.eval.onProgress(({ progress: p }) => {
+      setProgress(Math.round(p * 100))
     })
 
     try {
-      await window.api.studio.evolve(installedSkill.id, strategy)
+      await window.api.eval.start(installedSkill.id, testCases.map(tc => tc.id))
+      const page = await window.api.eval.history(installedSkill.id, 1, 0)
+      if (page.items.length > 0) setResult(page.items[0])
     } catch {
-      setStreaming(false)
+      // ignore
+    } finally {
+      setRunning(false)
       cleanupRef.current?.()
       cleanupRef.current = null
     }
   }
 
-  const handleInstallEvolved = async () => {
-    if (!evolvedContent || !installedSkill) return
-    const skill = await window.api.studio.install(evolvedContent, `${installedSkill.name}-evolved`)
-    setInstalledEvolved(skill)
-  }
-
-  if (!installedSkill) {
-    return <div className="studio-v2-val-empty">请先安装 Skill 后再对比进化</div>
+  if (testCases.length === 0) {
+    return (
+      <div className="studio-v2-oneclick-empty">
+        <span>暂无测试用例</span>
+        <span className="studio-v2-oneclick-hint">请先在 Eval 页面添加用例</span>
+      </div>
+    )
   }
 
   return (
-    <div className="studio-v2-compare">
-      <div className="studio-v2-compare-controls">
-        <div className="studio-v2-strategy-row">
-          {STRATEGIES.map(st => (
-            <button
-              key={st.id}
-              className={`studio-v2-strategy-chip ${strategy === st.id ? 'active' : ''}`}
-              onClick={() => setStrategy(st.id)}
-              title={st.hint}
-            >
-              {st.label}
-            </button>
+    <div className="studio-v2-oneclick">
+      <div className="studio-v2-oneclick-cases">
+        {testCases.map(tc => (
+          <span key={tc.id} className="studio-v2-oneclick-tc">{tc.name || '未命名'}</span>
+        ))}
+      </div>
+      <button className="studio-v2-btn primary" onClick={handleRun} disabled={running}>
+        {running ? '评测中...' : '▶ 开始测评'}
+      </button>
+      {running && (
+        <div className="studio-v2-progress-bar-wrap">
+          <div className="studio-v2-progress-bar" style={{ width: `${progress}%` }} />
+        </div>
+      )}
+      {result && (
+        <div className="studio-v2-oneclick-result">
+          {Object.entries(result.scores).map(([dim, s]) => (
+            <span key={dim} className="studio-v2-5d-pill"
+              style={{ background: (SCORE_5D_COLORS[dim] ?? '#888') + '22', color: SCORE_5D_COLORS[dim] ?? '#888', borderColor: (SCORE_5D_COLORS[dim] ?? '#888') + '55' }}>
+              {SCORE_5D_SHORT[dim] ?? dim} {s.score.toFixed(1)}
+            </span>
           ))}
         </div>
-        <button className="studio-v2-btn primary sm" onClick={handleEvolve}
-          disabled={streaming || apiKeySet === false}>
-          {streaming ? '进化中...' : '开始进化'}
-        </button>
-      </div>
-
-      <div className="studio-v2-compare-layout">
-        <div className="studio-v2-compare-pane">
-          <div className="studio-v2-compare-header">原版</div>
-          <pre className="studio-v2-compare-content dim">{originalContent}</pre>
-        </div>
-        <div className="studio-v2-compare-pane">
-          <div className="studio-v2-compare-header evolved">
-            进化版 {streaming && <span className="studio-v2-streaming-dot">●</span>}
-          </div>
-          <pre className="studio-v2-compare-content">{evolvedContent}{streaming ? '▌' : ''}</pre>
-          {!streaming && evolvedContent && !installedEvolved && (
-            <div className="studio-v2-compare-install">
-              <button className="studio-v2-btn primary sm" onClick={handleInstallEvolved}>
-                安装进化版
-              </button>
-            </div>
-          )}
-          {installedEvolved && <div className="studio-v2-success-note">✅ 进化版已安装：{installedEvolved.name}</div>}
-        </div>
-      </div>
+      )}
     </div>
   )
 }
 
 // ── ValidationPanel ───────────────────────────────────────────────────────────
 
-function ValidationPanel({ expanded, onToggle, valTab, onTabChange, installedSkill, apiKeySet }: {
+type ValTab = 'quicktest' | 'oneclick'
+
+function ValidationPanel({ expanded, onToggle, installedSkill }: {
   expanded: boolean; onToggle: () => void
-  valTab: ValTab; onTabChange: (t: ValTab) => void
-  installedSkill: Skill | null; apiKeySet: boolean | null
+  installedSkill: Skill | null
 }) {
+  const [tab, setTab] = useState<ValTab>('quicktest')
+
   return (
     <div className="studio-v2-val-panel">
       <div className="studio-v2-val-header" onClick={onToggle}>
-        <div className="studio-v2-val-title">
-          <span>⚡ 验证</span>
-          <div className="studio-v2-val-tabs" onClick={e => e.stopPropagation()}>
-            <button className={`studio-v2-val-tab ${valTab === 'quicktest' ? 'active' : ''}`}
-              onClick={() => { onTabChange('quicktest'); if (!expanded) onToggle() }}>
-              快速测试
-            </button>
-            <button className={`studio-v2-val-tab ${valTab === 'compare' ? 'active' : ''}`}
-              onClick={() => { onTabChange('compare'); if (!expanded) onToggle() }}>
-              对比进化
-            </button>
-            <button className={`studio-v2-val-tab ${valTab === 'oneclick' ? 'active' : ''} ${!installedSkill ? 'disabled' : ''}`}
-              onClick={() => { if (installedSkill) { onTabChange('oneclick'); if (!expanded) onToggle() } }}
-              title={!installedSkill ? '请先安装 Skill' : ''}>
-              一键测评
-            </button>
-          </div>
-        </div>
+        <span className="studio-v2-val-title">⚡ 快速测试</span>
         <span className="studio-v2-val-toggle">{expanded ? '▼' : '▲'}</span>
       </div>
-
       {expanded && (
         <div className="studio-v2-val-body">
-          {valTab === 'quicktest' && <QuickTestPane installedSkill={installedSkill} />}
-          {valTab === 'compare' && <ComparePane installedSkill={installedSkill} apiKeySet={apiKeySet} />}
-          {valTab === 'oneclick' && installedSkill && <OneClickEvalPane installedSkill={installedSkill} />}
+          <div className="studio-v2-val-tabs">
+            <button className={`studio-v2-val-tab ${tab === 'quicktest' ? 'active' : ''}`} onClick={() => setTab('quicktest')}>快速测试</button>
+            <button className={`studio-v2-val-tab ${tab === 'oneclick' ? 'active' : ''} ${!installedSkill ? 'disabled' : ''}`}
+              onClick={() => installedSkill && setTab('oneclick')} disabled={!installedSkill}>一键测评</button>
+          </div>
+          {tab === 'quicktest' && <QuickTestPane installedSkill={installedSkill} />}
+          {tab === 'oneclick' && installedSkill && <OneClickEvalPane installedSkill={installedSkill} />}
         </div>
       )}
     </div>
@@ -1167,7 +1127,6 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
   const [installedSkill, setInstalledSkill] = useState<Skill | null>(null)
   const [discExpanded, setDiscExpanded] = useState(true)
   const [valExpanded, setValExpanded] = useState(false)
-  const [valTab, setValTab] = useState<ValTab>('quicktest')
   const [showMethodModal, setShowMethodModal] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
   const [noSkill, setNoSkill] = useState(false)
@@ -1208,12 +1167,21 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
         ])
         setScores(s)
         setSimilarSkills(sim)
+        // Auto-upgrade to T2 if 5D avg >= 6 and skill is still at T1
+        if (installedSkill && installedSkill.trustLevel === 1) {
+          const vals = Object.values(s).filter(v => typeof v === 'number') as number[]
+          const avg = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0
+          if (avg >= 6) {
+            await window.api.skills.setTrustLevel(installedSkill.id, 2)
+            setInstalledSkill(prev => prev ? { ...prev, trustLevel: 2 } : prev)
+          }
+        }
       } finally {
         setScoring(false)
       }
     }, 1200)
     return () => clearTimeout(timer)
-  }, [editorContent])
+  }, [editorContent, installedSkill])
 
   const activeMethod = methods.find(m => m.id === activeMethodId) ?? methods[0]
   const showMethodBar = mode === 'describe' || mode === 'examples'
@@ -1351,14 +1319,20 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
             <span className="studio-v2-header-badge score">5D {avg5D}</span>
           )}
           {installedSkill && (
-            <span className="studio-v2-header-badge trust">T1 AI生成</span>
+            <span className="studio-v2-header-badge trust" style={{
+              background: installedSkill.trustLevel >= 4 ? '#6c63ff33' : installedSkill.trustLevel >= 3 ? '#00d4aa33' : installedSkill.trustLevel >= 2 ? '#f59e0b33' : '#88888833',
+              color: installedSkill.trustLevel >= 4 ? '#6c63ff' : installedSkill.trustLevel >= 3 ? '#00d4aa' : installedSkill.trustLevel >= 2 ? '#f59e0b' : '#888',
+              borderColor: installedSkill.trustLevel >= 4 ? '#6c63ff66' : installedSkill.trustLevel >= 3 ? '#00d4aa66' : installedSkill.trustLevel >= 2 ? '#f59e0b66' : '#88888866'
+            }}>
+              {installedSkill.trustLevel >= 4 ? 'T4 已批准' : installedSkill.trustLevel >= 3 ? 'T3 已评测' : installedSkill.trustLevel >= 2 ? 'T2 质量达标' : 'T1 未验证'}
+            </span>
           )}
         </div>
       </div>
 
       {apiKeySet === false && (
         <div className="studio-v2-guard">
-          ⚠️ 未配置 AI Provider。请前往 <strong>Settings</strong> 添加后再使用生成功能。
+          ⚠️ 未配置 AI Provider。请前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>Settings</button> 添加后再使用生成功能。
         </div>
       )}
 
@@ -1472,13 +1446,21 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
             <>
               {installedSkill ? (
                 <div className="studio-v2-success-banner">
-                  <span>✅ &quot;{installedSkill.name}&quot; 已安装！</span>
-                  <div className="studio-v2-success-actions">
-                    <button className="studio-v2-btn sm" onClick={() => onNavigate?.('testcase', installedSkill.id)}>
-                      🧪 去添加用例
+                  <span>✅ &quot;{installedSkill.name}&quot; 已安装</span>
+                  <div className="studio-v2-flow-guide">
+                    <button className="studio-v2-flow-step" onClick={() => onNavigate?.('eval', installedSkill.id)}>
+                      <span className="studio-v2-flow-num">①</span>
+                      <span>添加用例</span>
                     </button>
-                    <button className="studio-v2-btn primary sm" onClick={() => onNavigate?.('eval', installedSkill.id)}>
-                      📊 去测评
+                    <span className="studio-v2-flow-arrow">→</span>
+                    <button className="studio-v2-flow-step" onClick={() => onNavigate?.('eval', installedSkill.id)}>
+                      <span className="studio-v2-flow-num">②</span>
+                      <span>评测</span>
+                    </button>
+                    <span className="studio-v2-flow-arrow">→</span>
+                    <button className="studio-v2-flow-step" onClick={() => onNavigate?.('evo', installedSkill.id)}>
+                      <span className="studio-v2-flow-num">③</span>
+                      <span>进化</span>
                     </button>
                   </div>
                 </div>
@@ -1498,10 +1480,7 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
           <ValidationPanel
             expanded={valExpanded}
             onToggle={() => setValExpanded(v => !v)}
-            valTab={valTab}
-            onTabChange={setValTab}
             installedSkill={installedSkill}
-            apiKeySet={apiKeySet}
           />
         </div>
 
@@ -1638,13 +1617,26 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
         .studio-v2-install-row input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 13px; padding: 7px 10px; }
         .studio-v2-install-row input:focus { outline: none; border-color: var(--accent); }
         .studio-v2-success-banner { background: rgba(74,222,128,0.1); border: 1px solid var(--success); border-radius: var(--radius); padding: 10px 14px; color: var(--success); font-size: 13px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-        .studio-v2-success-actions { display: flex; gap: 6px; }
+        .studio-v2-flow-guide { display: flex; align-items: center; gap: 6px; }
+        .studio-v2-flow-step { display: flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(74,222,128,0.4); background: rgba(74,222,128,0.08); color: var(--success); font-size: 12px; cursor: pointer; transition: all var(--transition); }
+        .studio-v2-flow-step:hover { background: rgba(74,222,128,0.18); border-color: var(--success); }
+        .studio-v2-flow-num { font-weight: 700; font-size: 11px; }
+        .studio-v2-flow-arrow { font-size: 12px; color: rgba(74,222,128,0.5); }
 
         /* 5D Mini */
+        .studio-v2-score-mini-wrap { display: flex; flex-direction: column; gap: 6px; }
         .studio-v2-score-mini { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
-        .studio-v2-score-pill { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 8px; border: 1px solid; }
+        .studio-v2-score-pill { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 8px; border: 1px solid; cursor: default; }
+        .studio-v2-score-pill.weak { background: rgba(239,68,68,0.06); }
+        .studio-v2-score-pill-warn { margin-left: 2px; font-size: 9px; opacity: 0.8; }
         .studio-v2-score-avg { font-size: 11px; font-weight: 700; margin-left: 4px; }
         .studio-v2-score-mini-loading { font-size: 11px; color: var(--text-muted); }
+        .studio-v2-score-hint-toggle { background: none; border: none; font-size: 11px; color: var(--warning); cursor: pointer; padding: 0 4px; margin-left: 2px; }
+        .studio-v2-score-hint-toggle:hover { opacity: 0.75; }
+        .studio-v2-score-hints { background: rgba(249,115,22,0.06); border: 1px solid rgba(249,115,22,0.2); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; }
+        .studio-v2-score-hint-row { display: flex; gap: 8px; align-items: baseline; font-size: 11px; }
+        .studio-v2-score-hint-dim { font-weight: 700; flex-shrink: 0; min-width: 28px; }
+        .studio-v2-score-hint-text { color: var(--text-muted); line-height: 1.4; }
 
         /* Similar Warn */
         .studio-v2-similar-warn { display: flex; gap: 8px; background: rgba(245,158,11,0.07); border: 1px solid rgba(245,158,11,0.3); border-radius: var(--radius); padding: 8px 12px; font-size: 12px; color: var(--warning); }
@@ -1653,9 +1645,6 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
         .studio-v2-val-panel { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; flex-shrink: 0; }
         .studio-v2-val-header { display: flex; justify-content: space-between; align-items: center; padding: 9px 14px; background: var(--surface2); cursor: pointer; user-select: none; }
         .studio-v2-val-title { display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; }
-        .studio-v2-val-tabs { display: flex; gap: 4px; }
-        .studio-v2-val-tab { font-size: 11px; padding: 3px 10px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; }
-        .studio-v2-val-tab.active { background: rgba(108,99,255,0.1); color: var(--accent); border-color: rgba(108,99,255,0.3); }
         .studio-v2-val-toggle { font-size: 11px; color: var(--text-muted); }
         .studio-v2-val-body { padding: 14px; border-top: 1px solid var(--border); }
         .studio-v2-val-empty { font-size: 12px; color: var(--text-muted); text-align: center; padding: 16px 0; }
@@ -1671,21 +1660,17 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
         .studio-v2-qt-score { font-weight: 700; }
         .studio-v2-qt-output pre { font-size: 12px; font-family: monospace; white-space: pre-wrap; word-break: break-all; padding: 10px; margin: 0; color: var(--text); line-height: 1.55; max-height: 200px; overflow-y: auto; }
         .studio-v2-qt-actions { display: flex; gap: 6px; justify-content: flex-end; }
+        .studio-v2-qt-pre { font-size: 12px; font-family: monospace; white-space: pre-wrap; word-break: break-all; padding: 10px; margin: 0; color: var(--text); line-height: 1.55; max-height: 300px; overflow-y: auto; }
+        .studio-v2-qt-files { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 10px; border-top: 1px solid var(--border); }
+        .studio-v2-qt-file-btn { background: var(--surface); border: 1px solid var(--accent); border-radius: 5px; color: var(--accent); font-size: 11px; padding: 3px 8px; cursor: pointer; }
+        .studio-v2-qt-file-btn:hover { background: var(--accent); color: #fff; }
+        .studio-v2-qt-trace { padding: 6px 10px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-muted); }
+        .studio-v2-qt-trace summary { cursor: pointer; user-select: none; padding: 2px 0; }
+        .studio-v2-qt-trace-step { margin-top: 6px; border-left: 2px solid var(--border); padding-left: 8px; }
+        .studio-v2-qt-trace-tool { font-weight: 600; color: var(--accent); font-size: 11px; }
+        .studio-v2-qt-trace-pre { font-size: 11px; font-family: monospace; white-space: pre-wrap; word-break: break-all; margin: 2px 0 0; color: var(--text-muted); max-height: 120px; overflow-y: auto; }
         .studio-v2-success-note { font-size: 12px; color: var(--success); }
 
-        /* Compare */
-        .studio-v2-compare { display: flex; flex-direction: column; gap: 10px; }
-        .studio-v2-compare-controls { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-        .studio-v2-strategy-row { display: flex; flex-wrap: wrap; gap: 5px; }
-        .studio-v2-strategy-chip { font-size: 11px; padding: 3px 10px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; }
-        .studio-v2-strategy-chip.active { background: rgba(108,99,255,0.1); color: var(--accent); border-color: rgba(108,99,255,0.3); }
-        .studio-v2-compare-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .studio-v2-compare-pane { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
-        .studio-v2-compare-header { padding: 7px 12px; font-size: 11px; font-weight: 600; color: var(--text-muted); background: var(--surface2); border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px; }
-        .studio-v2-compare-header.evolved { color: var(--accent); }
-        .studio-v2-compare-content { font-size: 11px; font-family: monospace; white-space: pre-wrap; word-break: break-all; padding: 10px 12px; margin: 0; color: var(--text); line-height: 1.6; max-height: 240px; overflow-y: auto; flex: 1; }
-        .studio-v2-compare-content.dim { color: var(--text-muted); }
-        .studio-v2-compare-install { padding: 8px 12px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
 
         /* Buttons */
         .studio-v2-btn { padding: 7px 16px; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: var(--text); font-size: 13px; cursor: pointer; transition: all var(--transition); white-space: nowrap; font-weight: 500; }
@@ -1745,21 +1730,6 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
         .studio-v2-quickrun-output { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
         .studio-v2-quickrun-output pre { font-size: 12px; font-family: monospace; white-space: pre-wrap; word-break: break-all; color: var(--text); line-height: 1.6; margin: 0; }
 
-        /* One-click Eval */
-        .studio-v2-oneclick { display: flex; flex-direction: column; gap: 10px; }
-        .studio-v2-oneclick-cases { display: flex; flex-direction: column; gap: 4px; }
-        .studio-v2-oneclick-case { display: flex; justify-content: space-between; align-items: center; background: var(--surface2); border: 1px solid var(--border); border-radius: 5px; padding: 5px 10px; font-size: 12px; }
-        .studio-v2-oneclick-case-name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .studio-v2-oneclick-case-type { font-size: 10px; color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; }
-        .studio-v2-progress-bar-wrap { height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
-        .studio-v2-progress-bar { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s ease; }
-        .studio-v2-oneclick-result { display: flex; flex-direction: column; gap: 6px; }
-        .studio-v2-oneclick-total { font-size: 13px; font-weight: 700; }
-        .studio-v2-score-pills { display: flex; gap: 5px; flex-wrap: wrap; }
-        .studio-v2-link-btn { background: transparent; border: none; color: var(--accent); cursor: pointer; font-size: 13px; padding: 0 4px; text-decoration: underline; }
-
-        /* Val tab disabled */
-        .studio-v2-val-tab.disabled { opacity: 0.4; cursor: not-allowed; }
 
         /* Agent Design Panel */
         .studio-v2-agent-panel { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 12px; flex-shrink: 0; }
@@ -1771,7 +1741,20 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
         .studio-v2-tool-chips { display: flex; gap: 5px; flex-wrap: wrap; }
         .studio-v2-tool-chip { font-size: 11px; padding: 3px 10px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; transition: all var(--transition); font-family: monospace; }
         .studio-v2-tool-chip:hover { color: var(--text); border-color: var(--text-muted); }
-        .studio-v2-tool-chip.active { background: rgba(249,115,22,0.1); color: #f97316; border-color: rgba(249,115,22,0.4); }`}</style>
+        .studio-v2-tool-chip.active { background: rgba(249,115,22,0.1); color: #f97316; border-color: rgba(249,115,22,0.4); }
+        .studio-v2-val-tabs { display: flex; gap: 4px; margin-bottom: 10px; }
+        .studio-v2-val-tab { font-size: 12px; padding: 4px 12px; border-radius: var(--radius); border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; transition: all var(--transition); }
+        .studio-v2-val-tab:hover:not(.disabled) { color: var(--text); border-color: var(--text-muted); }
+        .studio-v2-val-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .studio-v2-val-tab.disabled { opacity: 0.4; cursor: not-allowed; }
+        .studio-v2-oneclick { display: flex; flex-direction: column; gap: 10px; }
+        .studio-v2-oneclick-cases { display: flex; flex-wrap: wrap; gap: 5px; }
+        .studio-v2-oneclick-tc { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border); }
+        .studio-v2-oneclick-empty { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; color: var(--text-muted); font-size: 13px; }
+        .studio-v2-oneclick-hint { font-size: 11px; color: var(--text-muted); opacity: 0.7; }
+        .studio-v2-progress-bar-wrap { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+        .studio-v2-progress-bar { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s ease; }
+        .studio-v2-oneclick-result { display: flex; flex-wrap: wrap; gap: 5px; }`}</style>
     </div>
   )
 }

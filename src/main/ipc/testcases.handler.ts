@@ -63,6 +63,51 @@ export function registerTestCasesHandlers(): void {
     getDb().prepare('DELETE FROM test_cases WHERE id = ?').run(id)
   })
 
+  ipcMain.handle(
+    'testcases:importJson',
+    (_event, skillId: string, items: unknown[]): { imported: TestCase[]; errors: string[] } => {
+      if (!Array.isArray(items)) throw new Error('JSON 根节点必须是数组')
+      if (items.length > 200) throw new Error('单次最多导入 200 条')
+
+      const db = getDb()
+      const imported: TestCase[] = []
+      const errors: string[] = []
+      const VALID_JUDGE = new Set(['llm', 'grep', 'command'])
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i] as Record<string, unknown>
+        const idx = `第 ${i + 1} 条`
+
+        if (typeof item !== 'object' || item === null) { errors.push(`${idx}：不是对象`); continue }
+        if (!item.name || typeof item.name !== 'string' || !String(item.name).trim()) { errors.push(`${idx}：name 缺失或为空`); continue }
+        if (!item.input || typeof item.input !== 'string' || !String(item.input).trim()) { errors.push(`${idx}：input 缺失或为空`); continue }
+
+        const judgeType = VALID_JUDGE.has(String(item.judgeType ?? ''))
+          ? (item.judgeType as TestCase['judgeType'])
+          : 'llm'
+        const judgeParam = typeof item.judgeParam === 'string' ? item.judgeParam : ''
+
+        const now = Date.now()
+        const id = `tc-${now}-${Math.random().toString(36).slice(2, 8)}`
+        const tc: TestCase = {
+          id, skillId,
+          name: String(item.name).slice(0, 120),
+          input: String(item.input),
+          judgeType,
+          judgeParam,
+          createdAt: now
+        }
+        db.prepare(`
+          INSERT INTO test_cases (id, skill_id, name, input, judge_type, judge_param, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(id, skillId, tc.name, tc.input, tc.judgeType, tc.judgeParam, now)
+        imported.push(tc)
+      }
+
+      return { imported, errors }
+    }
+  )
+
   ipcMain.handle('testcases:generate', async (_event, skillId: string, count: number): Promise<TestCase[]> => {
     if (count < 1 || count > 20) throw new Error('count must be between 1 and 20')
 

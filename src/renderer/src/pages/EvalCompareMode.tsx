@@ -2,10 +2,14 @@ import { useState, useEffect, useRef } from 'react'
 import type { Skill, TestCase, EvalResult } from '../../../shared/types'
 
 const DIM_COLORS: Record<string, string> = {
-  correctness:  '#6c63ff',
-  clarity:      '#00d4aa',
-  completeness: '#f59e0b',
-  safety:       '#ef4444'
+  correctness:           '#6c63ff',
+  instruction_following: '#00d4aa',
+  safety:                '#ef4444',
+  completeness:          '#f59e0b',
+  robustness:            '#8b5cf6',
+  executability:         '#06b6d4',
+  cost_awareness:        '#10b981',
+  maintainability:       '#f97316'
 }
 
 function avgDims(history: EvalResult[]): Record<string, number> {
@@ -19,7 +23,7 @@ function avgDims(history: EvalResult[]): Record<string, number> {
   return Object.fromEntries(Object.entries(totals).map(([d, { sum, count }]) => [d, sum / count]))
 }
 
-export default function CompareMode({ skills, apiKeySet }: { skills: Skill[]; apiKeySet: boolean | null }) {
+export default function CompareMode({ skills, apiKeySet, onNavigate }: { skills: Skill[]; apiKeySet: boolean | null; onNavigate?: (page: string, skillId?: string) => void }) {
   const [skillAId, setSkillAId] = useState('')
   const [skillBId, setSkillBId] = useState('')
   const [testCases, setTestCases] = useState<TestCase[]>([])
@@ -62,8 +66,8 @@ export default function CompareMode({ skills, apiKeySet }: { skills: Skill[]; ap
           window.api.eval.history(skillBId)
         ])
         const recent = Date.now() - 60_000
-        const filtA = hA.filter(r => r.createdAt > recent)
-        const filtB = hB.filter(r => r.createdAt > recent)
+        const filtA = hA.items.filter(r => r.createdAt > recent)
+        const filtB = hB.items.filter(r => r.createdAt > recent)
         if (filtA.length > 0 && filtB.length > 0) {
           clearInterval(poll); pollRef.current = null
           cleanupRef.current?.(); cleanupRef.current = null
@@ -87,7 +91,7 @@ export default function CompareMode({ skills, apiKeySet }: { skills: Skill[]; ap
 
   return (
     <div className="compare-mode">
-      {apiKeySet === false && <div className="guard-banner">⚠️ 未配置 LLM 供应商，请先在 Settings 添加。</div>}
+      {apiKeySet === false && <div className="guard-banner">⚠️ 未配置 LLM 供应商，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>Settings</button> 添加。</div>}
 
       <div className="eval-card">
         <span className="card-title">选择两个 Skill 对比</span>
@@ -133,12 +137,12 @@ export default function CompareMode({ skills, apiKeySet }: { skills: Skill[]; ap
         )}
 
         {skillAId && testCases.length === 0 && (
-          <div className="info-banner">Skill A 还没有测试用例，请先在 TestCase 页面添加。</div>
+          <div className="info-banner">Skill A 还没有测试用例，请先<button className="link-btn" onClick={() => onNavigate?.('eval')}>在 TestCase 页面添加</button>。</div>
         )}
 
         <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleRun}
           disabled={!skillAId || !skillBId || selectedTcIds.size === 0 || running || apiKeySet === false}>
-          {running ? `评测中 ${progress}%...` : `▶ 开始对比评测 (${selectedTcIds.size} 用例)`}
+          {running ? <><span className="gen-spinner" />{` 评测中 ${progress}%...`}</> : `▶ 开始对比评测 (${selectedTcIds.size} 用例)`}
         </button>
         {error && <div className="guard-banner" style={{ marginTop: 10 }}>⚠️ {error}</div>}
       </div>

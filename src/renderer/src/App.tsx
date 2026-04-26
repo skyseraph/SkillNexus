@@ -7,6 +7,7 @@ import TrendingPage from './pages/TrendingPage'
 import TasksPage from './pages/TasksPage'
 import SettingsPage from './pages/SettingsPage'
 import ToastContainer from './components/ToastContainer'
+import TelemetryConsentDialog from './components/TelemetryConsentDialog'
 import { useToast } from './hooks/useToast'
 import './App.css'
 import type { EvoSession } from '../../shared/types'
@@ -32,13 +33,23 @@ function applyTheme(theme: Theme) {
 export default function App() {
   const [page, setPage] = useState<Page>('home')
   const [navSkillId, setNavSkillId] = useState<string | null>(null)
+  // Track nav version per page — incrementing forces remount when navigating with a skillId
+  const [navVersion, setNavVersion] = useState<Record<string, number>>({})
   const [apiKeySet, setApiKeySet] = useState<boolean | null>(null)
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('theme') as Theme) ?? 'dark')
   const { toasts, toast, dismiss } = useToast()
   const evoSessionRef = useRef<EvoSession | null>(null)
+  // Track which pages have been visited (for lazy mount)
+  const [mounted, setMounted] = useState<Set<Page>>(new Set(['home']))
 
   const handleNavigate = (p: string, skillId?: string) => {
-    setPage(p as Page)
+    const newPage = p as Page
+    setPage(newPage)
+    setMounted(prev => new Set([...prev, newPage]))
+    if (skillId) {
+      // Force remount of target page when navigating with a specific skillId
+      setNavVersion(prev => ({ ...prev, [newPage]: (prev[newPage] ?? 0) + 1 }))
+    }
     setNavSkillId(skillId ?? null)
   }
 
@@ -59,17 +70,7 @@ export default function App() {
     }
   }, [theme])
 
-  const renderPage = () => {
-    switch (page) {
-      case 'home': return <HomePage toast={toast} onNavigate={handleNavigate} />
-      case 'eval': return <EvalPage initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} />
-      case 'studio': return <StudioPage initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} />
-      case 'evo': return <EvoPage session={evoSessionRef} initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} />
-      case 'tasks': return <TasksPage onNavigate={handleNavigate} />
-      case 'trending': return <TrendingPage />
-      case 'settings': return <SettingsPage onConfigSaved={checkApiKey} theme={theme} onThemeChange={setTheme} toast={toast} />
-    }
-  }
+  const v = (p: Page) => navVersion[p] ?? 0
 
   return (
     <div className="app-layout">
@@ -117,9 +118,33 @@ export default function App() {
             </button>
           </div>
         )}
-        <main className="content">{renderPage()}</main>
+        <main className="content">
+          {/* Lazy-mount: each page is rendered once on first visit and kept alive with display:none */}
+          <div style={{ display: page === 'home' ? undefined : 'none', height: '100%' }}>
+            {mounted.has('home') && <HomePage toast={toast} onNavigate={handleNavigate} />}
+          </div>
+          <div style={{ display: page === 'studio' ? undefined : 'none', height: '100%' }}>
+            {mounted.has('studio') && <StudioPage key={v('studio')} initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} />}
+          </div>
+          <div style={{ display: page === 'eval' ? undefined : 'none', height: '100%' }}>
+            {mounted.has('eval') && <EvalPage key={v('eval')} initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} />}
+          </div>
+          <div style={{ display: page === 'evo' ? undefined : 'none', height: '100%' }}>
+            {mounted.has('evo') && <EvoPage key={v('evo')} session={evoSessionRef} initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} />}
+          </div>
+          <div style={{ display: page === 'tasks' ? undefined : 'none', height: '100%' }}>
+            {mounted.has('tasks') && <TasksPage onNavigate={handleNavigate} />}
+          </div>
+          <div style={{ display: page === 'trending' ? undefined : 'none', height: '100%' }}>
+            {mounted.has('trending') && <TrendingPage onNavigate={handleNavigate} />}
+          </div>
+          <div style={{ display: page === 'settings' ? undefined : 'none', height: '100%' }}>
+            {mounted.has('settings') && <SettingsPage onConfigSaved={checkApiKey} theme={theme} onThemeChange={setTheme} toast={toast} />}
+          </div>
+        </main>
       </div>
       <ToastContainer toasts={toasts} onDismiss={dismiss} />
+      <TelemetryConsentDialog />
     </div>
   )
 }

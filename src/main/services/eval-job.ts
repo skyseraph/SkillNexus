@@ -6,6 +6,28 @@ import { getDb } from '../db'
 import type { EvalScore } from '../../shared/types'
 import yaml from 'js-yaml'
 import { TOOL_DEFS, executeTool } from './agent-tools'
+import { execSync } from 'child_process'
+
+// Lightweight concurrency limiter — avoids triggering provider rate limits
+// when all 8 judge dimensions fire in parallel across many test cases.
+const MAX_JUDGE_CONCURRENCY = 4
+function pLimit(concurrency: number) {
+  let active = 0
+  const queue: Array<() => void> = []
+  const next = () => {
+    if (active >= concurrency || queue.length === 0) return
+    active++
+    queue.shift()!()
+  }
+  return function run<T>(fn: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      queue.push(() => {
+        fn().then(resolve, reject).finally(() => { active--; next() })
+      })
+      next()
+    })
+  }
+}
 
 export const EVAL_DIMENSIONS = [
   'correctness',
@@ -41,29 +63,29 @@ const DIM_RUBRICS: Record<string, string> = {
     'G5 · Robustness: Does the output handle edge cases, ambiguous inputs, or unexpected scenarios gracefully? ' +
     'Score 10 if handles all edge cases well, deduct if it fails on boundary inputs or gives brittle responses.',
   executability:
-    'SkillNet · Executability: Are the Skill\'s instructions clear, unambiguous, and actionable enough for an AI to follow without confusion? ' +
+    'S1 · Executability: Are the Skill\'s instructions clear, unambiguous, and actionable enough for an AI to follow without confusion? ' +
     'Score 10 if perfectly clear, deduct for vague directives, contradictions, or missing context.',
   cost_awareness:
-    'SkillNet · Cost Awareness: Does the output avoid unnecessary verbosity, repetition, or token waste while still being complete? ' +
+    'S2 · Cost Awareness: Does the output avoid unnecessary verbosity, repetition, or token waste while still being complete? ' +
     'Score 10 if concise and efficient, deduct for padding, redundancy, or excessive length.',
   maintainability:
-    'SkillNet · Maintainability: Is the Skill well-structured, readable, and easy to update or extend? ' +
+    'S3 · Maintainability: Is the Skill well-structured, readable, and easy to update or extend? ' +
     'Score 10 if clearly organized with good headings and logical flow, deduct for poor structure or hard-to-parse instructions.'
 }
 
-const JUDGE_SYSTEM_PROMPT = `You are an expert Skill evaluator using a standardized 8-dimension framework (AgentSkills G1-G5 + SkillNet).
+const JUDGE_SYSTEM_PROMPT = `You are an expert Skill evaluator using the SkillNexus 8-dimension evaluation framework.
 Score the AI response on the given dimension from 0 to 10 using the provided rubric.
 Respond ONLY in JSON format: {"score": number, "violations": string[], "details": string}`
 
 export async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>
+  let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error(`Timeout after ${ms}ms: ${label}`)), ms)
   })
   try {
     return await Promise.race([promise, timeout])
   } finally {
-    clearTimeout(timer!)
+    clearTimeout(timer)
   }
 }
 
@@ -90,7 +112,8 @@ export async function judgeOneDimension(
     `judge:${dimension}`
   )
   try {
-    return JSON.parse(result.content) as EvalScore
+    const raw = result.content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+    return JSON.parse(raw) as EvalScore
   } catch {
     return { score: 5, violations: [], details: result.content }
   }
@@ -101,6 +124,23 @@ function grepScore(output: string, judgeParam: string): EvalScore {
   return { score: hit ? 10 : 0, violations: hit ? [] : [`Expected "${judgeParam}" in output`], details: hit ? 'grep match' : 'grep miss' }
 }
 
+function commandScore(output: string, judgeParam: string): EvalScore {
+  // judgeParam is a shell command; the output is passed via STDIN / $OUTPUT env var.
+  // Exit code 0 → pass (score 10), non-zero → fail (score 0).
+  try {
+    execSync(judgeParam, {
+      input: output,
+      env: { ...process.env, OUTPUT: output.slice(0, 4096) },
+      timeout: 5000,
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+    return { score: 10, violations: [], details: 'command exited 0' }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return { score: 0, violations: [`Command failed: ${msg.slice(0, 200)}`], details: 'command exited non-zero' }
+  }
+}
+
 export async function runEvalJob(
   jobId: string,
   skillId: string,
@@ -109,6 +149,7 @@ export async function runEvalJob(
 ): Promise<void> {
   const win = getMainWindow()
   let completed = 0
+  const allScores: number[] = []
   for (const tc of testCases) {
     const start = Date.now()
     let status: 'success' | 'error' = 'success'
@@ -125,13 +166,17 @@ export async function runEvalJob(
         'skill-execution'
       )
       output = response.content
+      const limit = pLimit(MAX_JUDGE_CONCURRENCY)
       const scoreEntries = await Promise.all(
         EVAL_DIMENSIONS.map(async (dim) => {
           // grep judge: use deterministic correctness check, LLM for other dims
           if (dim === 'correctness' && tc.judge_type === 'grep') {
             return [dim, grepScore(output, tc.judge_param as string)] as [string, EvalScore]
           }
-          const s = await judgeOneDimension(dim, skillContent, tc.input as string, output)
+          if (dim === 'correctness' && tc.judge_type === 'command') {
+            return [dim, commandScore(output, tc.judge_param as string)] as [string, EvalScore]
+          }
+          const s = await limit(() => judgeOneDimension(dim, skillContent, tc.input as string, output))
           return [dim, s] as [string, EvalScore]
         })
       )
@@ -141,14 +186,18 @@ export async function runEvalJob(
       status = 'error'
       errorMsg = err instanceof Error ? err.message : String(err)
     }
+    if (status === 'success') allScores.push(totalScore)
     insertEvalHistory({
       skillId,
+      jobId,
       input: tc.input as string,
       output: status === 'error' ? errorMsg : output,
       scores,
       totalScore,
       durationMs: Date.now() - start,
-      status
+      status,
+      testCaseId: tc.id as string,
+      testCaseName: tc.name as string
     })
     completed++
     win?.webContents.send('eval:progress', {
@@ -158,11 +207,16 @@ export async function runEvalJob(
     })
   }
 
-  // Upgrade to T3 (eval-tested) if not already T3/T4
+  // Upgrade to T3 (eval-tested) only if avgScore >= 7
   try {
-    const db = getDb()
-    db.prepare(`UPDATE skills SET trust_level = 3, updated_at = ? WHERE id = ? AND trust_level < 3`)
-      .run(Date.now(), skillId)
+    if (allScores.length > 0) {
+      const avg = allScores.reduce((s, v) => s + v, 0) / allScores.length
+      if (avg >= 7) {
+        const db = getDb()
+        db.prepare(`UPDATE skills SET trust_level = 3, updated_at = ? WHERE id = ? AND trust_level < 3`)
+          .run(Date.now(), skillId)
+      }
+    }
   } catch { /* non-critical */ }
 }
 
@@ -201,6 +255,7 @@ export async function runAgentEvalJob(
   const toolDefs = activeToolNames.map(n => TOOL_DEFS[n]).filter(Boolean)
 
   let completed = 0
+  const allScores: number[] = []
   for (const tc of testCases) {
     const start = Date.now()
     let status: 'success' | 'error' = 'success'
@@ -225,9 +280,10 @@ export async function runAgentEvalJob(
         trace: result.trace
       })
 
+      const agentLimit = pLimit(MAX_JUDGE_CONCURRENCY)
       const scoreEntries = await Promise.all(
         EVAL_DIMENSIONS.map(async (dim) => {
-          const s = await judgeOneDimension(dim, markdownContent, tc.input as string, result.answer)
+          const s = await agentLimit(() => judgeOneDimension(dim, markdownContent, tc.input as string, result.answer))
           return [dim, s] as [string, EvalScore]
         })
       )
@@ -238,14 +294,18 @@ export async function runAgentEvalJob(
       errorMsg = err instanceof Error ? err.message : String(err)
     }
 
+    if (status === 'success') allScores.push(totalScore)
     insertEvalHistory({
       skillId,
+      jobId,
       input: tc.input as string,
       output: status === 'error' ? errorMsg : output,
       scores,
       totalScore,
       durationMs: Date.now() - start,
-      status
+      status,
+      testCaseId: tc.id as string,
+      testCaseName: tc.name as string
     })
 
     completed++
@@ -256,10 +316,15 @@ export async function runAgentEvalJob(
     })
   }
 
-  // Upgrade trust level
+  // Upgrade to T3 (eval-tested) only if avgScore >= 7
   try {
-    const db = getDb()
-    db.prepare(`UPDATE skills SET trust_level = 3, updated_at = ? WHERE id = ? AND trust_level < 3`)
-      .run(Date.now(), skillId)
+    if (allScores.length > 0) {
+      const avg = allScores.reduce((s, v) => s + v, 0) / allScores.length
+      if (avg >= 7) {
+        const db = getDb()
+        db.prepare(`UPDATE skills SET trust_level = 3, updated_at = ? WHERE id = ? AND trust_level < 3`)
+          .run(Date.now(), skillId)
+      }
+    }
   } catch { /* non-critical */ }
 }

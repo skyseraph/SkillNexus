@@ -3,6 +3,8 @@ import { writeFileSync, mkdirSync } from 'fs'
 import { join, resolve, dirname, basename } from 'path'
 import { app } from 'electron'
 import yaml from 'js-yaml'
+import { loadPlugins, getPlugin, listPlugins } from '../services/plugin-loader'
+import type { PluginInput } from '../services/plugin-loader'
 import { getDb } from '../db'
 import { runEvalJob, runAgentEvalJob, MAX_TEST_CASES, withTimeout, AI_TIMEOUT_MS } from '../services/eval-job'
 import { runEvoSkill } from '../services/evoskill'
@@ -244,5 +246,50 @@ export function registerEvoHandlers(): void {
     }
     if (config.windowSize !== undefined) config.windowSize = Math.max(5, Math.min(100, config.windowSize))
     return runSkillClaw(config)
+  })
+
+  // ── Plugin engine handlers ──────────────────────────────────────────────────
+
+  ipcMain.handle('evo:listPlugins', () => {
+    loadPlugins()  // refresh from disk each time
+    return listPlugins()
+  })
+
+  ipcMain.handle('evo:runPlugin', async (
+    _event,
+    config: { skillId: string; pluginId: string }
+  ) => {
+    if (!config.skillId) throw new Error('skillId is required')
+    if (!config.pluginId) throw new Error('pluginId is required')
+
+    // Reload plugins from disk (picks up newly installed plugins)
+    loadPlugins()
+    const plugin = getPlugin(config.pluginId)
+    if (!plugin) throw new Error(`Plugin "${config.pluginId}" not found. Make sure the plugin file is in the plugins directory.`)
+
+    const db = getDb()
+    const skill = db.prepare('SELECT * FROM skills WHERE id = ?').get(config.skillId) as Record<string, unknown> | undefined
+    if (!skill) throw new Error(`Skill ${config.skillId} not found`)
+
+    const evalRows = db.prepare(
+      'SELECT input_prompt, output, scores FROM eval_history WHERE skill_id = ? AND status = ? ORDER BY created_at DESC LIMIT 20'
+    ).all(config.skillId, 'success') as Array<{ input_prompt: string; output: string; scores: string }>
+
+    const evalHistory = evalRows.map(r => ({
+      input: r.input_prompt,
+      output: r.output,
+      scores: JSON.parse(r.scores) as Record<string, { score: number }>
+    }))
+
+    const input: PluginInput = {
+      skillContent: String(skill.markdown_content ?? ''),
+      skillName: String(skill.name ?? ''),
+      evalHistory,
+      config: {}
+    }
+
+    const result = await plugin.evolve(input)
+    if (!result?.evolvedContent) throw new Error(`Plugin "${config.pluginId}" returned no evolvedContent`)
+    return { evolvedContent: result.evolvedContent, engine: `plugin:${config.pluginId}` }
   })
 }

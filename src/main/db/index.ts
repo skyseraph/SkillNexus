@@ -42,7 +42,9 @@ CREATE TABLE IF NOT EXISTS eval_history (
   total_score REAL NOT NULL DEFAULT 0,
   duration_ms INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'success',
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  test_case_id TEXT,
+  test_case_name TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_test_cases_skill_id ON test_cases(skill_id);
@@ -60,7 +62,10 @@ const MIGRATIONS = [
   `ALTER TABLE skills ADD COLUMN evolution_engine TEXT`,
   `ALTER TABLE skills ADD COLUMN evolution_generation INTEGER`,
   `ALTER TABLE skills ADD COLUMN pareto_scores TEXT`,
-  `ALTER TABLE skills ADD COLUMN transfer_report TEXT`
+  `ALTER TABLE skills ADD COLUMN transfer_report TEXT`,
+  `ALTER TABLE eval_history ADD COLUMN test_case_id TEXT`,
+  `ALTER TABLE eval_history ADD COLUMN test_case_name TEXT`,
+  `ALTER TABLE eval_history ADD COLUMN job_id TEXT`
 ]
 
 export function initDatabase(): Database.Database {
@@ -77,6 +82,10 @@ export function initDatabase(): Database.Database {
   for (const sql of MIGRATIONS) {
     try { db.exec(sql) } catch { /* column already exists */ }
   }
+
+  // Clean up temporary three-condition records older than 7 days
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000
+  db.prepare(`DELETE FROM skills WHERE (id LIKE 'skill-noskill-%' OR id LIKE 'skill-gen-%') AND installed_at < ?`).run(cutoff)
 
   return db
 }

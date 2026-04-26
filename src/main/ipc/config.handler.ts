@@ -21,14 +21,18 @@ export function registerConfigHandlers(): void {
     return {
       providers: s.providers.map(p => ({ ...p, apiKey: undefined as unknown as string, apiKeySet: !!p.apiKey })),
       activeProviderId: s.activeProviderId,
-      toolApiKeysSet: { tavily: !!(s.toolApiKeys?.tavily) }
+      toolApiKeysSet: { tavily: !!(s.toolApiKeys?.tavily) },
+      githubTokenSet: !!(s.githubToken)
     }
   })
 
-  ipcMain.handle('config:set', (_event, config: Partial<AppConfig>) => {
+type ConfigSetPayload = Pick<AppConfig, 'toolPaths' | 'enabledTools' | 'toolApiKeys' | 'githubToken'>
+
+  ipcMain.handle('config:set', (_event, config: Partial<ConfigSetPayload>) => {
     if ('toolPaths' in config) store.set('toolPaths', config.toolPaths)
     if ('enabledTools' in config) store.set('enabledTools', config.enabledTools)
     if ('toolApiKeys' in config) store.set('toolApiKeys', config.toolApiKeys)
+    if ('githubToken' in config) store.set('githubToken', config.githubToken)
   })
 
   ipcMain.handle('config:saveProvider', (_event, p: LLMProvider) => {

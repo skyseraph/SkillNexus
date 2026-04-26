@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Skill, SkillFileEntry, TestCase, EvalResult, EvalHistoryPage, EvalExport, AppConfigPublic, AppConfig, ScannedSkill, ScanResult, ToolTarget, MarketSkill, EvoRunResult, LLMProvider, ThreeConditionResult, SkillRankEntry, SkillScore5D, GithubSkillResult, EvoAnalysis, EvoConfig, EvoChainEntry, EvoSkillResult, ParetoPoint, CoEvoResult, TransferReport, SkillXResult, SkillClawResult, JobEntry } from '../shared/types'
+import type { Skill, SkillFileEntry, TestCase, EvalResult, EvalHistoryPage, EvalExport, AppConfigPublic, AppConfig, ScannedSkill, ScanResult, ToolTarget, MarketSkill, EvoRunResult, LLMProvider, ThreeConditionResult, SkillRankEntry, SkillScore5D, GithubSkillResult, EvoAnalysis, EvoConfig, EvoChainEntry, EvoSkillResult, ParetoPoint, CoEvoResult, TransferReport, SkillXResult, SkillClawResult, JobEntry, PluginManifest } from '../shared/types'
+import type { TelemetryEventName, TelemetryEventProperties } from '../shared/telemetry-events'
 
 const api = {
   skills: {
@@ -29,12 +30,20 @@ const api = {
       ipcRenderer.invoke('eval:start', skillId, testCaseIds),
     history: (skillId: string, limit = 20, offset = 0): Promise<EvalHistoryPage> =>
       ipcRenderer.invoke('eval:history', skillId, limit, offset),
+    getById: (evalId: string): Promise<EvalResult | null> =>
+      ipcRenderer.invoke('eval:getById', evalId),
     exportHistory: (skillId: string): Promise<EvalExport> =>
       ipcRenderer.invoke('eval:exportHistory', skillId),
     historyAll: (): Promise<SkillRankEntry[]> =>
       ipcRenderer.invoke('eval:historyAll'),
     startThreeCondition: (skillId: string, testCaseIds: string[]): Promise<ThreeConditionResult> =>
       ipcRenderer.invoke('eval:startThreeCondition', skillId, testCaseIds),
+    deleteRecord: (evalId: string): Promise<void> =>
+      ipcRenderer.invoke('eval:delete', evalId),
+    getByJobId: (jobId: string): Promise<import('../shared/types').EvalResult[]> =>
+      ipcRenderer.invoke('eval:getByJobId', jobId),
+    deleteByJobId: (jobId: string): Promise<void> =>
+      ipcRenderer.invoke('eval:deleteByJobId', jobId),
     onProgress: (cb: (data: { jobId: string; progress: number; message: string }) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, data: { jobId: string; progress: number; message: string }) => cb(data)
       ipcRenderer.on('eval:progress', handler)
@@ -84,7 +93,9 @@ const api = {
       ipcRenderer.invoke('testcases:create', tc),
     delete: (id: string): Promise<void> => ipcRenderer.invoke('testcases:delete', id),
     generate: (skillId: string, count: number): Promise<TestCase[]> =>
-      ipcRenderer.invoke('testcases:generate', skillId, count)
+      ipcRenderer.invoke('testcases:generate', skillId, count),
+    importJson: (skillId: string, items: unknown[]): Promise<{ imported: TestCase[]; errors: string[] }> =>
+      ipcRenderer.invoke('testcases:importJson', skillId, items)
   },
   evo: {
     installAndEval: (originalSkillId: string, evolvedContent: string): Promise<EvoRunResult> =>
@@ -100,7 +111,11 @@ const api = {
     runSkillX: (config: { skillId: string; minScore?: number; sampleLimit?: number }): Promise<SkillXResult> =>
       ipcRenderer.invoke('evo:runSkillX', config),
     runSkillClaw: (config: { skillId: string; windowSize?: number }): Promise<SkillClawResult> =>
-      ipcRenderer.invoke('evo:runSkillClaw', config)
+      ipcRenderer.invoke('evo:runSkillClaw', config),
+    listPlugins: (): Promise<PluginManifest[]> =>
+      ipcRenderer.invoke('evo:listPlugins'),
+    runPlugin: (config: { skillId: string; pluginId: string }): Promise<{ evolvedContent: string; engine: string }> =>
+      ipcRenderer.invoke('evo:runPlugin', config)
   },
   config: {
     get: (): Promise<AppConfigPublic> => ipcRenderer.invoke('config:get'),
@@ -115,7 +130,8 @@ const api = {
       ipcRenderer.invoke('config:setActive', id)
   },
   shell: {
-    openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url)
+    openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
+    openPath: (filePath: string): Promise<void> => ipcRenderer.invoke('shell:openPath', filePath)
   },
   jobs: {
     list: (filter?: 'all' | 'eval' | 'evo'): Promise<JobEntry[]> =>
@@ -125,6 +141,14 @@ const api = {
     enter: (): Promise<void> => ipcRenderer.invoke('demo:enter'),
     exit: (): Promise<void> => ipcRenderer.invoke('demo:exit'),
     isActive: (): Promise<boolean> => ipcRenderer.invoke('demo:isActive')
+  },
+  telemetry: {
+    track: (name: TelemetryEventName, properties?: TelemetryEventProperties): Promise<void> =>
+      ipcRenderer.invoke('telemetry:track', name, properties),
+    getConsent: (): Promise<{ enabled: boolean; asked: boolean }> =>
+      ipcRenderer.invoke('telemetry:getConsent'),
+    setConsent: (enabled: boolean): Promise<void> =>
+      ipcRenderer.invoke('telemetry:setConsent', enabled)
   }
 }
 

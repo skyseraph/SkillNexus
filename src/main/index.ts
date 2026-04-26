@@ -4,6 +4,7 @@ import { is } from '@electron-toolkit/utils'
 import { initDatabase } from './db'
 import { registerAllIpcHandlers } from './ipc'
 import { loadApiKeysToEnv } from './ipc/config.handler'
+import { track } from './services/telemetry'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -48,6 +49,7 @@ app.whenReady().then(() => {
   initDatabase()
   registerAllIpcHandlers()
   loadApiKeysToEnv()
+  track('app_launched', { platform: process.platform, version: app.getVersion() })
   createWindow()
 
   app.on('activate', () => {

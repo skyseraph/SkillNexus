@@ -225,8 +225,11 @@ export function registerStudioHandlers(): void {
     interface ChainEntry { name: string; version: string; dimAvgs: { dim: string; avg: number }[] }
     const chainHistory: ChainEntry[] = []
     let cursorId: string | null = skillId
+    const visitedChain = new Set<string>()
     // Walk up to 4 ancestors (oldest first after reverse)
     for (let depth = 0; depth < 4 && cursorId; depth++) {
+      if (visitedChain.has(cursorId)) break
+      visitedChain.add(cursorId)
       const ancestor = db.prepare('SELECT id, name, version, parent_skill_id FROM skills WHERE id = ?').get(cursorId) as
         { id: string; name: string; version: string; parent_skill_id: string | null } | undefined
       if (!ancestor) break
@@ -434,7 +437,7 @@ export function registerStudioHandlers(): void {
     event.sender.send('studio:chunk', { chunk: '', done: true, noSkill: isNoSkill })
   })
 
-  // Score a Skill on 5 dimensions (SkillNet-style)
+  // Score a Skill on 5 dimensions
   ipcMain.handle('studio:scoreSkill', async (_event, content: string): Promise<SkillScore5D> => {
     const provider = getAIProvider()
     const isAgent = /^---[\s\S]*?skill_type:\s*agent/m.test(content)

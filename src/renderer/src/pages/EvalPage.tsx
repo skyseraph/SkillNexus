@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import type { Skill, EvalResult, EvalScore, TestCase } from '../../../shared/types'
 import CompareMode from './EvalCompareMode'
 import ThreeConditionMode from './EvalThreeConditionMode'
+import { useTrack } from '../hooks/useTrack'
 
 const DIM_COLORS: Record<string, string> = {
   correctness:           '#6c63ff',
@@ -36,9 +37,9 @@ const FRAMEWORK_DIMS = [
   { key: 'safety',                source: 'AgentSkills G3', color: '#ef4444', desc: '输出是否安全、无偏见、无害' },
   { key: 'completeness',          source: 'AgentSkills G4', color: '#f59e0b', desc: '响应是否完整覆盖任务所有要求' },
   { key: 'robustness',            source: 'AgentSkills G5', color: '#8b5cf6', desc: '是否能处理边界情况和异常输入' },
-  { key: 'executability',         source: 'SkillNet',       color: '#06b6d4', desc: 'Skill 指令是否清晰可执行、无歧义' },
-  { key: 'cost_awareness',        source: 'SkillNet',       color: '#10b981', desc: '是否避免冗余、token 效率合理' },
-  { key: 'maintainability',       source: 'SkillNet',       color: '#f97316', desc: 'Skill 结构是否清晰、易于维护和更新' },
+  { key: 'executability',         source: 'S1',             color: '#06b6d4', desc: 'Skill 指令是否清晰可执行、无歧义' },
+  { key: 'cost_awareness',        source: 'S2',             color: '#10b981', desc: '是否避免冗余、token 效率合理' },
+  { key: 'maintainability',       source: 'S3',             color: '#f97316', desc: 'Skill 结构是否清晰、易于维护和更新' },
 ]
 
 function FrameworkPanel() {
@@ -46,7 +47,7 @@ function FrameworkPanel() {
   return (
     <div className="fw-panel">
       <button className="fw-toggle" onClick={() => setOpen(v => !v)}>
-        <span>📐 评测框架（AgentSkills G1-G5 + SkillNet · 8 维度）</span>
+        <span>📐 评测框架（8 维度 · G1-G5 任务质量 + S1-S3 Skill 质量）</span>
         <span>{open ? '▾' : '▸'}</span>
       </button>
       {open && (
@@ -71,18 +72,25 @@ function FrameworkPanel() {
 
 // ── SVG Radar Chart ───────────────────────────────────────────────────────────
 
-function RadarChart({ scores, size = 200 }: { scores: Record<string, number>; size?: number }) {
+function RadarChart({ scores, minScores, maxScores, size = 200 }: {
+  scores: Record<string, number>
+  minScores?: Record<string, number>
+  maxScores?: Record<string, number>
+  size?: number
+}) {
   const dims = DIM_ORDER.filter((d) => d in scores)
   if (dims.length < 3) return null
-  const cx = size / 2, cy = size / 2, r = size * 0.38
+  const pad = 36  // space for labels
+  const cx = size / 2, cy = size / 2, r = size / 2 - pad
   const angle = (i: number) => (Math.PI * 2 * i) / dims.length - Math.PI / 2
   const pt = (i: number, val: number) => {
     const a = angle(i), ratio = val / 10
     return [cx + r * ratio * Math.cos(a), cy + r * ratio * Math.sin(a)] as [number, number]
   }
   const gridLevels = [2, 4, 6, 8, 10]
+  const showBand = minScores && maxScores
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: 'visible', flexShrink: 0 }}>
       {/* Grid */}
       {gridLevels.map((lvl) => (
         <polygon key={lvl}
@@ -94,7 +102,24 @@ function RadarChart({ scores, size = 200 }: { scores: Record<string, number>; si
         const [x, y] = pt(i, 10)
         return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="var(--border)" strokeWidth="0.8" />
       })}
-      {/* Data polygon */}
+      {/* Min/Max band (shown when ≥5 samples) */}
+      {showBand && (
+        <>
+          <polygon
+            points={dims.map((d, i) => pt(i, maxScores![d] ?? 0).join(',')).join(' ')}
+            fill="rgba(108,99,255,0.07)" stroke="none" />
+          <polygon
+            points={dims.map((d, i) => pt(i, minScores![d] ?? 0).join(',')).join(' ')}
+            fill="var(--bg)" stroke="none" />
+          <polygon
+            points={dims.map((d, i) => pt(i, maxScores![d] ?? 0).join(',')).join(' ')}
+            fill="none" stroke="rgba(108,99,255,0.25)" strokeWidth="0.8" strokeDasharray="3,2" />
+          <polygon
+            points={dims.map((d, i) => pt(i, minScores![d] ?? 0).join(',')).join(' ')}
+            fill="none" stroke="rgba(108,99,255,0.18)" strokeWidth="0.8" strokeDasharray="3,2" />
+        </>
+      )}
+      {/* Avg polygon */}
       <polygon
         points={dims.map((d, i) => pt(i, scores[d] ?? 0).join(',')).join(' ')}
         fill="rgba(108,99,255,0.18)" stroke="#6c63ff" strokeWidth="1.5" />
@@ -106,11 +131,11 @@ function RadarChart({ scores, size = 200 }: { scores: Record<string, number>; si
       {/* Labels */}
       {dims.map((d, i) => {
         const a = angle(i)
-        const lx = cx + (r + 22) * Math.cos(a)
-        const ly = cy + (r + 22) * Math.sin(a)
+        const lx = cx + (r + 18) * Math.cos(a)
+        const ly = cy + (r + 18) * Math.sin(a)
         return (
           <text key={d} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
-            fontSize="8" fill="var(--text-muted)" fontWeight="600">
+            fontSize="10" fill="var(--text-muted)" fontWeight="600">
             {DIM_LABELS[d] ?? d}
           </text>
         )
@@ -171,64 +196,141 @@ function AgentOutputRenderer({ output }: { output: string }) {
 
 // ── SVG Trend Line (total score) ──────────────────────────────────────────────
 
-function TrendLine({ history, width = 340, height = 80 }: {
-  history: EvalResult[]; width?: number; height?: number
+function TrendLine({ history, tcNames, width = 340, height = 120 }: {
+  history: EvalResult[]; tcNames: string[]; width?: number; height?: number
 }) {
-  if (history.length < 2) return null
-  const pad = { l: 28, r: 12, t: 10, b: 20 }
+  const [tcFilter, setTcFilter] = useState('')
+  const filtered = tcFilter ? history.filter(r => r.testCaseName === tcFilter) : history
+  const data = filtered.slice(-20)
+  if (data.length < 2) return (
+    <div>
+      {tcNames.length > 0 && (
+        <div className="trend-filter-row">
+          <select className="trend-tc-select" value={tcFilter} onChange={e => setTcFilter(e.target.value)}>
+            <option value="">全部用例</option>
+            {tcNames.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+      )}
+      <div className="chart-empty">至少需要 2 次评测数据</div>
+    </div>
+  )
+
+  const pad = { l: 28, r: 12, t: 10, b: 32 }
   const W = width - pad.l - pad.r
   const H = height - pad.t - pad.b
-  const pts = history.map((r, i) => ({
-    x: pad.l + (i / (history.length - 1)) * W,
+
+  const pts = data.map((r, i) => ({
+    x: pad.l + (i / (data.length - 1)) * W,
     y: pad.t + H - (r.totalScore / 10) * H,
+    r,
   }))
   const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
   const areaD = `${pathD} L${pts[pts.length-1].x.toFixed(1)},${(pad.t+H).toFixed(1)} L${pts[0].x.toFixed(1)},${(pad.t+H).toFixed(1)} Z`
 
+  // 7-point moving average
+  const maPath = data.length >= 7 ? (() => {
+    const maPts = data.map((_, i) => {
+      if (i < 3 || i > data.length - 4) return null
+      const window = data.slice(i - 3, i + 4)
+      const avg = window.reduce((s, r) => s + r.totalScore, 0) / window.length
+      return { x: pts[i].x, y: pad.t + H - (avg / 10) * H }
+    }).filter(Boolean) as { x: number; y: number }[]
+    return maPts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+  })() : null
+
+  // X-axis date ticks: show up to 5 evenly spaced
+  const tickIndices = data.length <= 5
+    ? data.map((_, i) => i)
+    : [0, Math.floor(data.length / 4), Math.floor(data.length / 2), Math.floor(data.length * 3 / 4), data.length - 1]
+
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-      {[0, 5, 10].map((v) => {
-        const y = pad.t + H - (v / 10) * H
-        return (
-          <g key={v}>
-            <line x1={pad.l - 4} y1={y} x2={pad.l + W} y2={y} stroke="var(--border)" strokeWidth="0.6" strokeDasharray="3,3" />
-            <text x={pad.l - 6} y={y} textAnchor="end" dominantBaseline="middle" fontSize="8" fill="var(--text-muted)">{v}</text>
-          </g>
-        )
-      })}
-      <path d={areaD} fill="rgba(108,99,255,0.08)" />
-      <path d={pathD} fill="none" stroke="#6c63ff" strokeWidth="1.8" strokeLinejoin="round" />
-      {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} fill="#6c63ff" />)}
-    </svg>
+    <div>
+      {tcNames.length > 0 && (
+        <div className="trend-filter-row">
+          <select className="trend-tc-select" value={tcFilter} onChange={e => setTcFilter(e.target.value)}>
+            <option value="">全部用例</option>
+            {tcNames.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+      )}
+      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+        {[0, 5, 10].map((v) => {
+          const y = pad.t + H - (v / 10) * H
+          return (
+            <g key={v}>
+              <line x1={pad.l - 4} y1={y} x2={pad.l + W} y2={y} stroke="var(--border)" strokeWidth="0.6" strokeDasharray="3,3" />
+              <text x={pad.l - 6} y={y} textAnchor="end" dominantBaseline="middle" fontSize="8" fill="var(--text-muted)">{v}</text>
+            </g>
+          )
+        })}
+        {/* X date ticks */}
+        {tickIndices.map(i => {
+          const d = data[i]
+          const x = pts[i].x
+          const label = new Date(d.createdAt).toLocaleString('zh', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+          return (
+            <text key={i} x={x} y={pad.t + H + 14} textAnchor="middle" fontSize="7" fill="var(--text-muted)">{label}</text>
+          )
+        })}
+        <path d={areaD} fill="rgba(108,99,255,0.08)" />
+        <path d={pathD} fill="none" stroke="#6c63ff" strokeWidth="1.8" strokeLinejoin="round" />
+        {maPath && (
+          <path d={maPath} fill="none" stroke="#6c63ff" strokeWidth="1.2" strokeDasharray="4,3" opacity="0.55" strokeLinejoin="round" />
+        )}
+        {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} fill="#6c63ff" />)}
+      </svg>
+      {maPath && <p className="chart-hint" style={{ marginTop: 2 }}>虚线 = 7 点滑动均值</p>}
+    </div>
   )
 }
 
 // ── Multi-dim Trend Chart ─────────────────────────────────────────────────────
 
+const G_DIMS = ['correctness', 'instruction_following', 'safety', 'completeness', 'robustness']
+const S_DIMS = ['executability', 'cost_awareness', 'maintainability']
+
 function MultiDimTrendChart({ history, width = 540, height = 200 }: {
   history: EvalResult[]; width?: number; height?: number
 }) {
   const [hoveredDim, setHoveredDim] = useState<string | null>(null)
-  if (history.length < 2) return <div className="chart-empty">至少需要 2 次评测数据</div>
-  const pad = { l: 28, r: 12, t: 10, b: 24 }
+  const [showS, setShowS] = useState(false)
+  const data = history.slice(-20)
+  if (data.length < 2) return <div className="chart-empty">至少需要 2 次评测数据</div>
+
+  const activeDims = showS ? DIM_ORDER : G_DIMS
+  const pad = { l: 28, r: 70, t: 10, b: 28 }
   const W = width - pad.l - pad.r
   const H = height - pad.t - pad.b
-  const n = history.length
+  const n = data.length
 
-  const dimPaths = DIM_ORDER.map(dim => {
-    const pts = history.map((r, i) => {
+  // per-dim avg for deviation highlight
+  const dimAvg: Record<string, number> = {}
+  for (const dim of DIM_ORDER) {
+    const vals = data.map(r => r.scores?.[dim]?.score ?? 0)
+    dimAvg[dim] = vals.reduce((a, b) => a + b, 0) / vals.length
+  }
+
+  const dimPaths = activeDims.map(dim => {
+    const pts = data.map((r, i) => {
       const score = r.scores?.[dim]?.score ?? 0
-      return {
-        x: pad.l + (i / (n - 1)) * W,
-        y: pad.t + H - (score / 10) * H,
-      }
+      return { x: pad.l + (i / (n - 1)) * W, y: pad.t + H - (score / 10) * H, score }
     })
     const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
     return { dim, pts, d }
   })
 
+  // X tick indices (up to 5)
+  const tickIdxs = n <= 5 ? data.map((_, i) => i)
+    : [0, Math.floor(n / 4), Math.floor(n / 2), Math.floor(n * 3 / 4), n - 1]
+
   return (
     <div className="multidim-wrap">
+      <div className="multidim-controls">
+        <button className={`mdl-toggle ${showS ? 'active' : ''}`} onClick={() => setShowS(v => !v)}>
+          {showS ? '▾ 隐藏 S1-S3' : '▸ 显示 S1-S3 (Skill 质量)'}
+        </button>
+      </div>
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}
         style={{ display: 'block', overflow: 'visible' }}>
         {/* Grid */}
@@ -242,37 +344,49 @@ function MultiDimTrendChart({ history, width = 540, height = 200 }: {
           )
         })}
         {/* X ticks */}
-        {history.map((r, i) => {
+        {tickIdxs.map(i => {
           const x = pad.l + (i / (n - 1)) * W
-          return (
-            <text key={i} x={x} y={pad.t + H + 14} textAnchor="middle" fontSize="8" fill="var(--text-muted)">
-              {new Date(r.createdAt).toLocaleDateString('zh', { month: 'numeric', day: 'numeric' })}
-            </text>
-          )
+          const label = new Date(data[i].createdAt).toLocaleString('zh', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+          return <text key={i} x={x} y={pad.t + H + 16} textAnchor="middle" fontSize="7" fill="var(--text-muted)">{label}</text>
         })}
-        {/* Lines */}
+        {/* Lines + dots + inline labels */}
         {dimPaths.map(({ dim, pts, d }) => {
           const active = hoveredDim === null || hoveredDim === dim
+          const lastPt = pts[pts.length - 1]
           return (
             <g key={dim}>
               <path d={d} fill="none"
                 stroke={DIM_COLORS[dim]}
                 strokeWidth={hoveredDim === dim ? 2.5 : 1.4}
                 strokeLinejoin="round"
-                opacity={active ? 1 : 0.18}
+                opacity={active ? 1 : 0.15}
                 style={{ transition: 'opacity 0.2s, stroke-width 0.2s' }} />
-              {pts.map((p, i) => (
-                <circle key={i} cx={p.x} cy={p.y} r={hoveredDim === dim ? 3.5 : 2}
-                  fill={DIM_COLORS[dim]} opacity={active ? 1 : 0.18}
-                  style={{ transition: 'opacity 0.2s' }} />
-              ))}
+              {pts.map((p, i) => {
+                const deviated = Math.abs(p.score - dimAvg[dim]) > 1.5
+                const r = deviated ? 5 : (hoveredDim === dim ? 3.5 : 2)
+                const stroke = deviated ? (p.score > dimAvg[dim] ? '#22c55e' : '#ef4444') : undefined
+                return (
+                  <circle key={i} cx={p.x} cy={p.y} r={r}
+                    fill={DIM_COLORS[dim]}
+                    stroke={stroke} strokeWidth={deviated ? 1.5 : 0}
+                    opacity={active ? 1 : 0.15}
+                    style={{ transition: 'opacity 0.2s' }} />
+                )
+              })}
+              {/* Inline label at last point */}
+              {active && (
+                <text x={lastPt.x + 5} y={lastPt.y} dominantBaseline="middle"
+                  fontSize="8" fill={DIM_COLORS[dim]} fontWeight="600" opacity={active ? 1 : 0}>
+                  {DIM_LABELS[dim]}
+                </text>
+              )}
             </g>
           )
         })}
       </svg>
       {/* Legend */}
       <div className="multidim-legend">
-        {DIM_ORDER.map(dim => (
+        {activeDims.map(dim => (
           <div key={dim} className={`mdl-item ${hoveredDim === dim ? 'active' : ''}`}
             onMouseEnter={() => setHoveredDim(dim)}
             onMouseLeave={() => setHoveredDim(null)}>
@@ -290,19 +404,38 @@ function MultiDimTrendChart({ history, width = 540, height = 200 }: {
 // ── Heatmap Chart ─────────────────────────────────────────────────────────────
 
 function scoreColor(score: number): string {
-  // 0→red, 5→yellow, 10→green  (all with low alpha background)
   if (score >= 8) return `rgba(74,222,128,${0.15 + (score - 8) / 2 * 0.6})`
   if (score >= 5) return `rgba(250,204,21,${0.12 + (score - 5) / 3 * 0.3})`
   return `rgba(239,68,68,${0.15 + (5 - score) / 5 * 0.5})`
 }
 
+function deltaColor(delta: number): string {
+  if (delta > 0) return `rgba(74,222,128,${Math.min(0.15 + Math.abs(delta) / 5 * 0.6, 0.75)})`
+  if (delta < 0) return `rgba(239,68,68,${Math.min(0.15 + Math.abs(delta) / 5 * 0.6, 0.75)})`
+  return 'transparent'
+}
+
 function HeatmapChart({ history }: { history: EvalResult[] }) {
+  const [deltaMode, setDeltaMode] = useState(false)
   const rows = [...history].reverse().slice(0, 20)
   if (rows.length === 0) return <div className="chart-empty">暂无评测数据</div>
   const dims = DIM_ORDER.filter(d => rows.some(r => d in (r.scores ?? {})))
 
+  // per-dim global avg for Δ mode
+  const dimAvg: Record<string, number> = {}
+  for (const d of dims) {
+    const vals = rows.map(r => r.scores?.[d]?.score ?? 0)
+    dimAvg[d] = vals.reduce((a, b) => a + b, 0) / vals.length
+  }
+
   return (
     <div className="heatmap-wrap">
+      <div className="hm-toolbar">
+        <button className={`hm-delta-btn ${deltaMode ? 'active' : ''}`} onClick={() => setDeltaMode(v => !v)}>
+          {deltaMode ? '✕ 退出 Δ 模式' : 'Δ 差值模式'}
+        </button>
+        {deltaMode && <span className="hm-delta-hint">绿 = 高于均值　红 = 低于均值</span>}
+      </div>
       <div className="heatmap-table">
         {/* Header row */}
         <div className="hm-header">
@@ -314,34 +447,40 @@ function HeatmapChart({ history }: { history: EvalResult[] }) {
           ))}
         </div>
         {/* Data rows */}
-        {rows.map((r, ri) => (
-          <div key={r.id} className="hm-row">
-            <div className="hm-row-label">
-              {new Date(r.createdAt).toLocaleDateString('zh', { month: 'numeric', day: 'numeric' })}
-            </div>
-            {dims.map(d => {
-              const score = r.scores?.[d]?.score ?? 0
-              return (
-                <div key={d} className="hm-cell" style={{ background: scoreColor(score) }}
-                  title={`${DIM_LABELS[d]}: ${score.toFixed(1)}`}>
-                  <span className="hm-val">{score.toFixed(0)}</span>
+        {rows.map((r, ri) => {
+          const prevTc = ri > 0 ? rows[ri - 1].testCaseName : undefined
+          const showSep = ri > 0 && prevTc !== r.testCaseName
+          return (
+            <div key={r.id}>
+              {showSep && <div className="hm-tc-sep" />}
+              <div className="hm-row" title={r.testCaseName ? `用例: ${r.testCaseName}` : undefined}>
+                <div className="hm-row-label">
+                  {new Date(r.createdAt).toLocaleString('zh', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </div>
-              )
-            })}
-          </div>
-        ))}
+                {dims.map(d => {
+                  const score = r.scores?.[d]?.score ?? 0
+                  const delta = score - dimAvg[d]
+                  const bg = deltaMode ? deltaColor(delta) : scoreColor(score)
+                  const label = deltaMode ? (delta >= 0 ? `+${delta.toFixed(1)}` : delta.toFixed(1)) : score.toFixed(0)
+                  return (
+                    <div key={d} className="hm-cell" style={{ background: bg }}
+                      title={`${DIM_LABELS[d]}: ${score.toFixed(1)} (Δ ${delta >= 0 ? '+' : ''}${delta.toFixed(1)})`}>
+                      <span className="hm-val">{label}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
         {/* Avg row */}
         <div className="hm-row hm-avg-row">
           <div className="hm-row-label hm-avg-label">均值</div>
-          {dims.map(d => {
-            const vals = rows.map(r => r.scores?.[d]?.score ?? 0)
-            const avg = vals.reduce((a, b) => a + b, 0) / vals.length
-            return (
-              <div key={d} className="hm-cell hm-avg-cell" style={{ background: scoreColor(avg) }}>
-                <span className="hm-val hm-avg-val">{avg.toFixed(1)}</span>
-              </div>
-            )
-          })}
+          {dims.map(d => (
+            <div key={d} className="hm-cell hm-avg-cell" style={{ background: scoreColor(dimAvg[d]) }}>
+              <span className="hm-val hm-avg-val">{dimAvg[d].toFixed(1)}</span>
+            </div>
+          ))}
         </div>
       </div>
       {/* Color scale */}
@@ -356,70 +495,108 @@ function HeatmapChart({ history }: { history: EvalResult[] }) {
 
 // ── Box Plot Chart ────────────────────────────────────────────────────────────
 
+// Interpolated quantile (linear interpolation, same as Excel PERCENTILE)
+function quantile(sorted: number[], p: number): number {
+  const n = sorted.length
+  if (n === 0) return 0
+  const idx = p * (n - 1)
+  const lo = Math.floor(idx), hi = Math.ceil(idx)
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo)
+}
+
+// Deterministic jitter based on index (avoids random re-renders)
+function jitter(i: number, range: number): number {
+  return ((i * 2654435761) % 1000) / 1000 * range - range / 2
+}
+
 function BoxPlotChart({ history, width = 520, height = 160 }: {
   history: EvalResult[]; width?: number; height?: number
 }) {
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string } | null>(null)
   if (history.length < 3) return <div className="chart-empty">至少需要 3 次评测数据</div>
-  const pad = { l: 80, r: 16, t: 10, b: 24 }
+  const pad = { l: 80, r: 20, t: 10, b: 24 }
   const W = width - pad.l - pad.r
   const H = height - pad.t - pad.b
   const dims = DIM_ORDER.filter(d => history.some(r => d in (r.scores ?? {})))
   const rowH = H / dims.length
+  const showDots = history.length >= 5
 
   const stats = dims.map(dim => {
     const vals = history.map(r => r.scores?.[dim]?.score ?? 0).sort((a, b) => a - b)
     const n = vals.length
-    const q1 = vals[Math.floor(n * 0.25)]
-    const median = vals[Math.floor(n * 0.5)]
-    const q3 = vals[Math.floor(n * 0.75)]
-    return { dim, min: vals[0], q1, median, q3, max: vals[n - 1], mean: vals.reduce((a, b) => a + b, 0) / n }
+    const q1 = quantile(vals, 0.25)
+    const median = quantile(vals, 0.5)
+    const q3 = quantile(vals, 0.75)
+    const mean = vals.reduce((a, b) => a + b, 0) / n
+    return { dim, vals, min: vals[0], q1, median, q3, max: vals[n - 1], mean, n }
   })
 
   const xOf = (v: number) => pad.l + (v / 10) * W
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}>
-      {/* Grid */}
-      {[0, 2, 4, 6, 8, 10].map(v => {
-        const x = xOf(v)
-        return (
-          <g key={v}>
-            <line x1={x} y1={pad.t} x2={x} y2={pad.t + H} stroke="var(--border)" strokeWidth="0.5" strokeDasharray="3,3" />
-            <text x={x} y={pad.t + H + 14} textAnchor="middle" fontSize="8" fill="var(--text-muted)">{v}</text>
-          </g>
-        )
-      })}
-      {/* Boxes */}
-      {stats.map(({ dim, min, q1, median, q3, max, mean }, i) => {
-        const cy = pad.t + i * rowH + rowH / 2
-        const bh = Math.max(rowH * 0.45, 6)
-        const color = DIM_COLORS[dim]
-        return (
-          <g key={dim}>
-            {/* Dim label */}
-            <text x={pad.l - 6} y={cy} textAnchor="end" dominantBaseline="middle"
-              fontSize="9" fill={color} fontWeight="600">
-              {DIM_LABELS[dim]}
-            </text>
-            {/* Whiskers */}
-            <line x1={xOf(min)} y1={cy} x2={xOf(q1)} y2={cy} stroke={color} strokeWidth="1.2" opacity="0.6" />
-            <line x1={xOf(q3)} y1={cy} x2={xOf(max)} y2={cy} stroke={color} strokeWidth="1.2" opacity="0.6" />
-            <line x1={xOf(min)} y1={cy - bh * 0.35} x2={xOf(min)} y2={cy + bh * 0.35} stroke={color} strokeWidth="1.2" />
-            <line x1={xOf(max)} y1={cy - bh * 0.35} x2={xOf(max)} y2={cy + bh * 0.35} stroke={color} strokeWidth="1.2" />
-            {/* IQR box */}
-            <rect x={xOf(q1)} y={cy - bh / 2} width={Math.max(xOf(q3) - xOf(q1), 2)} height={bh}
-              fill={color + '22'} stroke={color} strokeWidth="1.2" rx="2" />
-            {/* Median line */}
-            <line x1={xOf(median)} y1={cy - bh / 2} x2={xOf(median)} y2={cy + bh / 2}
-              stroke={color} strokeWidth="2" />
-            {/* Mean diamond */}
-            <polygon
-              points={`${xOf(mean)},${cy - bh * 0.3} ${xOf(mean) + 4},${cy} ${xOf(mean)},${cy + bh * 0.3} ${xOf(mean) - 4},${cy}`}
-              fill={color} opacity="0.8" />
-          </g>
-        )
-      })}
-    </svg>
+    <div style={{ position: 'relative' }}>
+      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}
+        onMouseLeave={() => setTooltip(null)}>
+        {/* Grid */}
+        {[0, 2, 4, 6, 8, 10].map(v => {
+          const x = xOf(v)
+          return (
+            <g key={v}>
+              <line x1={x} y1={pad.t} x2={x} y2={pad.t + H} stroke="var(--border)" strokeWidth="0.5" strokeDasharray="3,3" />
+              <text x={x} y={pad.t + H + 14} textAnchor="middle" fontSize="8" fill="var(--text-muted)">{v}</text>
+            </g>
+          )
+        })}
+        {/* Boxes */}
+        {stats.map(({ dim, vals, min, q1, median, q3, max, mean, n }, i) => {
+          const cy = pad.t + i * rowH + rowH / 2
+          const bh = Math.max(rowH * 0.42, 6)
+          const color = DIM_COLORS[dim]
+          const tooltipContent = `${DIM_LABELS[dim]}\nmin ${min.toFixed(1)}  Q1 ${q1.toFixed(1)}  中位 ${median.toFixed(1)}\n均值 ${mean.toFixed(1)}  Q3 ${q3.toFixed(1)}  max ${max.toFixed(1)}\nn = ${n}`
+          return (
+            <g key={dim}>
+              {/* Dim label */}
+              <text x={pad.l - 6} y={cy} textAnchor="end" dominantBaseline="middle"
+                fontSize="9" fill={color} fontWeight="600">
+                {DIM_LABELS[dim]}
+              </text>
+              {/* Jittered dots */}
+              {showDots && vals.map((v, vi) => (
+                <circle key={vi} cx={xOf(v)} cy={cy + jitter(vi, bh * 0.7)}
+                  r={2} fill={color} opacity="0.35" />
+              ))}
+              {/* Whiskers */}
+              <line x1={xOf(min)} y1={cy} x2={xOf(q1)} y2={cy} stroke={color} strokeWidth="1.2" opacity="0.6" />
+              <line x1={xOf(q3)} y1={cy} x2={xOf(max)} y2={cy} stroke={color} strokeWidth="1.2" opacity="0.6" />
+              <line x1={xOf(min)} y1={cy - bh * 0.35} x2={xOf(min)} y2={cy + bh * 0.35} stroke={color} strokeWidth="1.2" />
+              <line x1={xOf(max)} y1={cy - bh * 0.35} x2={xOf(max)} y2={cy + bh * 0.35} stroke={color} strokeWidth="1.2" />
+              {/* Min/max value labels */}
+              <text x={xOf(min) + 3} y={cy - bh * 0.35 - 2} fontSize="7" fill={color} opacity="0.7">{min.toFixed(1)}</text>
+              <text x={xOf(max) - 3} y={cy - bh * 0.35 - 2} fontSize="7" fill={color} opacity="0.7" textAnchor="end">{max.toFixed(1)}</text>
+              {/* IQR box — hover triggers tooltip */}
+              <rect x={xOf(q1)} y={cy - bh / 2} width={Math.max(xOf(q3) - xOf(q1), 2)} height={bh}
+                fill={color + '22'} stroke={color} strokeWidth="1.2" rx="2"
+                style={{ cursor: 'default' }}
+                onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, content: tooltipContent })}
+                onMouseMove={e => setTooltip({ x: e.clientX, y: e.clientY, content: tooltipContent })}
+                onMouseLeave={() => setTooltip(null)} />
+              {/* Median line */}
+              <line x1={xOf(median)} y1={cy - bh / 2} x2={xOf(median)} y2={cy + bh / 2}
+                stroke={color} strokeWidth="2" />
+              {/* Mean diamond */}
+              <polygon
+                points={`${xOf(mean)},${cy - bh * 0.3} ${xOf(mean) + 4},${cy} ${xOf(mean)},${cy + bh * 0.3} ${xOf(mean) - 4},${cy}`}
+                fill={color} opacity="0.8" />
+            </g>
+          )
+        })}
+      </svg>
+      {tooltip && (
+        <div className="bp-tooltip" style={{ left: tooltip.x + 12, top: tooltip.y - 10 }}>
+          {tooltip.content.split('\n').map((line, i) => <div key={i}>{line}</div>)}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -435,6 +612,22 @@ function avgDimScores(history: EvalResult[]): Record<string, number> {
     }
   }
   return Object.fromEntries(Object.entries(totals).map(([d, { sum, count }]) => [d, sum / count]))
+}
+
+function minDimScores(history: EvalResult[]): Record<string, number> {
+  const mins: Record<string, number> = {}
+  for (const r of history)
+    for (const [dim, s] of Object.entries(r.scores))
+      mins[dim] = dim in mins ? Math.min(mins[dim], s.score) : s.score
+  return mins
+}
+
+function maxDimScores(history: EvalResult[]): Record<string, number> {
+  const maxs: Record<string, number> = {}
+  for (const r of history)
+    for (const [dim, s] of Object.entries(r.scores))
+      maxs[dim] = dim in maxs ? Math.max(maxs[dim], s.score) : s.score
+  return maxs
 }
 
 // ── Bar Chart (per-dimension for a single eval result) ────────────────────────
@@ -460,10 +653,11 @@ function DimBarChart({ scores }: { scores: Record<string, EvalScore> }) {
 const JUDGE_COLORS: Record<string, string> = { llm: '#6c63ff', grep: '#00d4aa', command: '#f59e0b' }
 const JUDGE_LABELS: Record<string, string> = { llm: 'LLM Judge', grep: 'Grep', command: 'Command' }
 
-function TestCaseTab({ skillId, apiKeySet, onRunEval }: {
+function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
   skillId: string
   apiKeySet: boolean | null
   onRunEval: (tcIds: string[]) => void
+  onNavigate?: (page: string, skillId?: string) => void
 }) {
   const [testCases, setTestCases] = useState<TestCase[]>([])
   const [loading, setLoading] = useState(false)
@@ -478,6 +672,9 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval }: {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [expandedTcId, setExpandedTcId] = useState<string | null>(null)
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ imported: number; errors: string[] } | null>(null)
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!skillId) return
@@ -525,6 +722,25 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval }: {
     setAdding(false); setAddOpen(false)
   }
 
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setImporting(true); setImportResult(null)
+    try {
+      const text = await file.text()
+      let items: unknown[]
+      try { items = JSON.parse(text) } catch { throw new Error('JSON 解析失败，请检查文件格式') }
+      if (!Array.isArray(items)) throw new Error('JSON 根节点必须是数组 []')
+      const result = await window.api.testcases.importJson(skillId, items)
+      setTestCases((prev) => [...prev, ...result.imported])
+      setSelectedIds((prev) => { const next = new Set(prev); result.imported.forEach((t) => next.add(t.id)); return next })
+      setImportResult({ imported: result.imported.length, errors: result.errors })
+    } catch (err) {
+      setImportResult({ imported: 0, errors: [String(err)] })
+    } finally { setImporting(false) }
+  }
+
   const byType = {
     llm: testCases.filter((t) => t.judgeType === 'llm').length,
     grep: testCases.filter((t) => t.judgeType === 'grep').length,
@@ -548,12 +764,12 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval }: {
           </div>
           <button className="btn btn-primary btn-sm" onClick={handleGenerate}
             disabled={generating || apiKeySet === false}>
-            {generating ? '生成中...' : `生成 ${genCount} 个`}
+            {generating ? <><span className="gen-spinner" />{` 生成中...`}</> : `生成 ${genCount} 个`}
           </button>
         </div>
         {genError && <div className="gen-error">⚠️ {genError}</div>}
         {genSuccess > 0 && !genError && <div className="gen-success">✅ 已生成 {genSuccess} 个用例</div>}
-        {apiKeySet === false && <div className="gen-warn">⚠️ 未配置 API Key</div>}
+        {apiKeySet === false && <div className="gen-warn">⚠️ 未配置 API Key，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 添加。</div>}
       </div>
 
       {/* List */}
@@ -626,9 +842,29 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval }: {
             </div>
           )}
 
-        {/* Add form */}
+        {/* Add / Import */}
+        {!addOpen && (
+          <div className="tc-add-row">
+            <button className="btn btn-ghost btn-sm" onClick={() => { setAddOpen(true); setImportResult(null) }}>+ 手动添加</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => importInputRef.current?.click()} disabled={importing}>
+              {importing ? '导入中...' : '↑ 导入 JSON'}
+            </button>
+            <input ref={importInputRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={handleImportFile} />
+          </div>
+        )}
+        {importResult && (
+          <div className={`import-result ${importResult.errors.length > 0 && importResult.imported === 0 ? 'import-result-error' : 'import-result-ok'}`}>
+            {importResult.imported > 0 && <div>✅ 成功导入 {importResult.imported} 条</div>}
+            {importResult.errors.length > 0 && (
+              <details>
+                <summary>⚠️ {importResult.errors.length} 条跳过</summary>
+                <ul className="import-errors">{importResult.errors.map((e, i) => <li key={i}>{e}</li>)}</ul>
+              </details>
+            )}
+          </div>
+        )}
         {!addOpen
-          ? <button className="btn btn-ghost btn-sm add-toggle" onClick={() => setAddOpen(true)}>+ 手动添加</button>
+          ? null
           : (
             <div className="add-form">
               <div className="add-form-header"><span>手动添加</span><button className="btn-icon-sm" onClick={() => setAddOpen(false)}>✕</button></div>
@@ -664,9 +900,108 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval }: {
   )
 }
 
+// ── By Case Panel ─────────────────────────────────────────────────────────────
+
+function Sparkline({ scores, width = 120, height = 32 }: { scores: number[]; width?: number; height?: number }) {
+  if (scores.length < 2) return null
+  const pad = { l: 2, r: 2, t: 4, b: 4 }
+  const W = width - pad.l - pad.r
+  const H = height - pad.t - pad.b
+  const pts = scores.map((s, i) => ({
+    x: pad.l + (i / (scores.length - 1)) * W,
+    y: pad.t + H - (s / 10) * H,
+  }))
+  const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}>
+      <path d={d} fill="none" stroke="#6c63ff" strokeWidth="1.5" strokeLinejoin="round" />
+      {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={2} fill="#6c63ff" />)}
+    </svg>
+  )
+}
+
+function ByCasePanel({ caseMap }: { caseMap: Map<string, EvalResult[]> }) {
+  const [sortBy, setSortBy] = useState<'avg' | 'count'>('avg')
+  const [expandedCase, setExpandedCase] = useState<string | null>(null)
+
+  if (caseMap.size === 0) return <div className="tc-empty" style={{ padding: 16 }}>暂无按用例聚合数据，请先运行评测</div>
+
+  const entries = [...caseMap.entries()].sort((a, b) => {
+    if (sortBy === 'count') return b[1].length - a[1].length
+    const avgA = a[1].reduce((s, r) => s + r.totalScore, 0) / a[1].length
+    const avgB = b[1].reduce((s, r) => s + r.totalScore, 0) / b[1].length
+    return avgB - avgA
+  })
+
+  return (
+    <div>
+      <div className="bycase-sort-row">
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>排序：</span>
+        <button className={`bycase-sort-btn ${sortBy === 'avg' ? 'active' : ''}`} onClick={() => setSortBy('avg')}>均分</button>
+        <button className={`bycase-sort-btn ${sortBy === 'count' ? 'active' : ''}`} onClick={() => setSortBy('count')}>次数</button>
+      </div>
+      <div className="bycase-table">
+        {entries.map(([name, rows]) => {
+          const avgTotal = rows.reduce((s, r) => s + r.totalScore, 0) / rows.length
+          const isUnnamed = name === '(未命名)'
+          const scoreColor = avgTotal >= 7 ? 'var(--success)' : avgTotal >= 4 ? 'var(--warning)' : 'var(--danger)'
+          const expanded = expandedCase === name
+
+          // Trend arrow: compare last 3 vs overall avg
+          let trendArrow = ''
+          let trendColor = 'var(--text-muted)'
+          if (rows.length >= 4) {
+            const last3Avg = rows.slice(-3).reduce((s, r) => s + r.totalScore, 0) / 3
+            const diff = last3Avg - avgTotal
+            if (diff > 0.5) { trendArrow = '↑'; trendColor = 'var(--success)' }
+            else if (diff < -0.5) { trendArrow = '↓'; trendColor = 'var(--danger)' }
+            else { trendArrow = '→'; trendColor = 'var(--text-muted)' }
+          }
+
+          const sparkScores = rows.map(r => r.totalScore)
+
+          return (
+            <div key={name} style={{ borderRadius: 6, overflow: 'hidden', background: 'var(--surface2)' }}>
+              <div className="bycase-row" onClick={() => setExpandedCase(expanded ? null : name)}>
+                <span className={`bycase-name ${isUnnamed ? 'unnamed' : ''}`}>{name}</span>
+                <span className="bycase-count">{rows.length} 次</span>
+                {trendArrow && <span className="bycase-trend" style={{ color: trendColor }}>{trendArrow}</span>}
+                <span className="bycase-total" style={{ color: scoreColor }}>{avgTotal.toFixed(1)}</span>
+                <div className="bycase-dim-bars">
+                  {DIM_ORDER.map(d => {
+                    const avg = rows.reduce((s, r) => s + (r.scores[d]?.score ?? 0), 0) / rows.length
+                    return (
+                      <div key={d} className="inline-bar-wrap" title={`${DIM_LABELS[d]}: ${avg.toFixed(1)}`}>
+                        <div className="inline-bar" style={{ width: `${(avg / 10) * 100}%`, background: DIM_COLORS[d] }} />
+                      </div>
+                    )
+                  })}
+                </div>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>{expanded ? '▲' : '▼'}</span>
+              </div>
+              {expanded && (
+                <div className="bycase-sparkline">
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>总分走势（{rows.length} 次）</div>
+                  <Sparkline scores={sparkScores} width={300} height={40} />
+                  <div style={{ display: 'flex', gap: 16, marginTop: 6 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>最低 <b style={{ color: 'var(--danger)' }}>{Math.min(...sparkScores).toFixed(1)}</b></span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>均值 <b style={{ color: 'var(--accent)' }}>{avgTotal.toFixed(2)}</b></span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>最高 <b style={{ color: 'var(--success)' }}>{Math.max(...sparkScores).toFixed(1)}</b></span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Main EvalPage ─────────────────────────────────────────────────────────────
 
 export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillId?: string; onNavigate?: (page: string, skillId?: string) => void } = {}) {
+  const track = useTrack()
   const [skills, setSkills] = useState<Skill[]>([])
   const [selectedSkill, setSelectedSkill] = useState(initialSkillId ?? '')
   const [pageTab, setPageTab] = useState<'testcase' | 'eval' | 'chart'>('testcase')
@@ -681,13 +1016,25 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
   const PAGE_SIZE = 20
   const [historySearch, setHistorySearch] = useState('')
   const [historyStatus, setHistoryStatus] = useState<'all' | 'success' | 'error'>('all')
+  const [historyTcFilter, setHistoryTcFilter] = useState('')
+  const [collapsedTcGroups, setCollapsedTcGroups] = useState<Set<string>>(new Set())
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState(0)
   const [progressMsg, setProgressMsg] = useState('')
   const [apiKeySet, setApiKeySet] = useState<boolean | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [compareSet, setCompareSet] = useState<Set<string>>(new Set())
+  const [showCompareModal, setShowCompareModal] = useState(false)
   const [exporting, setExporting] = useState(false)
   const exportRef = useRef<HTMLAnchorElement>(null)
+
+  const toggleCompare = (id: string) => {
+    setCompareSet(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) { next.delete(id) } else if (next.size < 2) { next.add(id) }
+      return next
+    })
+  }
 
   useEffect(() => {
     window.api.skills.getAll().then(setSkills)
@@ -730,6 +1077,11 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
     setRunning(true); setProgress(0); setProgressMsg('')
     try {
       await window.api.eval.start(selectedSkill, ids)
+      const skill = skills.find(s => s.id === selectedSkill)
+      track('eval_ran', {
+        test_case_count: ids.length,
+        skill_type_eval: skill?.skillType as 'single' | 'agent' | undefined
+      })
     } catch (e) {
       setRunning(false)
       setProgressMsg(e instanceof Error ? e.message : String(e))
@@ -749,22 +1101,27 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
     } finally { setExporting(false) }
   }
 
-  const [chartTab, setChartTab] = useState<'radar' | 'trend' | 'multidim' | 'heatmap' | 'boxplot'>('radar')
+  const [chartTab, setChartTab] = useState<'radar' | 'trend' | 'multidim' | 'heatmap' | 'boxplot' | 'bycase'>('radar')
 
   const successHistory = history.filter((r) => r.status === 'success')
   const avgScores = avgDimScores(successHistory)
+  const minScores = successHistory.length >= 5 ? minDimScores(successHistory) : undefined
+  const maxScores = successHistory.length >= 5 ? maxDimScores(successHistory) : undefined
   const overallAvg = successHistory.length
     ? successHistory.reduce((s, r) => s + r.totalScore, 0) / successHistory.length
     : null
 
   const filteredHistory = history.filter((r) => {
     if (historyStatus !== 'all' && r.status !== historyStatus) return false
+    if (historyTcFilter && r.testCaseName !== historyTcFilter) return false
     if (historySearch) {
       const q = historySearch.toLowerCase()
       return r.inputPrompt?.toLowerCase().includes(q) || r.output?.toLowerCase().includes(q)
     }
     return true
   })
+
+  const tcNames = [...new Set(history.map(r => r.testCaseName).filter(Boolean))] as string[]
 
   const totalPages = Math.ceil(historyTotal / PAGE_SIZE)
 
@@ -776,8 +1133,8 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
       {/* Header */}
       <div className="eval-page-header">
         <div>
-          <h1>Eval</h1>
-          <p className="subtitle">测试用例管理 · 多维度评测 · 可视化报告</p>
+          <h1>Skill Eval</h1>
+          <p className="subtitle">测试用例生成 · 技能测评 · 技能成长</p>
         </div>
         <div className="eval-controls">
           <select value={selectedSkill} onChange={(e) => { setSelectedSkill(e.target.value); setHistoryPage(0) }} className="skill-select">
@@ -801,16 +1158,16 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
           ▶ 运行评测
         </button>
         <button className={`page-tab ${pageTab === 'chart' ? 'active' : ''}`} onClick={() => setPageTab('chart')}>
-          📊 图谱 & 历史{historyTotal > 0 && <span className="tab-badge">{historyTotal}</span>}
+          📈 技能成长{historyTotal > 0 && <span className="tab-badge">{historyTotal}</span>}
         </button>
       </div>
 
       {/* ── TestCase Tab ── */}
       {pageTab === 'testcase' && selectedSkill && (
-        <TestCaseTab skillId={selectedSkill} apiKeySet={apiKeySet} onRunEval={handleRunEval} />
+        <TestCaseTab skillId={selectedSkill} apiKeySet={apiKeySet} onRunEval={handleRunEval} onNavigate={onNavigate} />
       )}
       {pageTab === 'testcase' && !selectedSkill && (
-        <div className="no-skill"><div className="no-skill-icon">🧪</div><p>选择一个 Skill 开始管理测试用例</p></div>
+        <div className="no-skill"><div className="no-skill-icon">🧪</div><p>选择一个 Skill 开始管理测试用例</p>{onNavigate && <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('studio')}>✦ 去 Studio 创建 Skill</button>}</div>
       )}
 
       {/* ── Eval Tab ── */}
@@ -825,8 +1182,8 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
 
         <FrameworkPanel />
 
-        {evalMode === 'compare' && <CompareMode skills={skills} apiKeySet={apiKeySet} />}
-        {evalMode === 'three' && <ThreeConditionMode skills={skills} apiKeySet={apiKeySet} />}
+        {evalMode === 'compare' && <CompareMode skills={skills} apiKeySet={apiKeySet} onNavigate={onNavigate} />}
+        {evalMode === 'three' && <ThreeConditionMode skills={skills} apiKeySet={apiKeySet} onNavigate={onNavigate} />}
 
         {evalMode === 'single' && (<>
 
@@ -856,6 +1213,7 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
                 </div>
               )}
               {testCases.length === 0 && <div className="info-banner">还没有测试用例，请先在「测试用例」Tab 添加。</div>}
+              {apiKeySet === false && <div className="gen-warn">⚠️ 未配置 API Key，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 添加。</div>}
             </div>
           )}
 
@@ -869,12 +1227,16 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
 
           {!running && historyTotal > 0 && (
             <div className="run-done-banner">
-              评测完成，<button className="link-btn" onClick={() => setPageTab('chart')}>查看图谱 & 历史 →</button>
+              评测完成
+              <button className="link-btn" onClick={() => setPageTab('chart')}>查看技能成长 →</button>
+              {selectedSkill && (
+                <button className="link-btn evo-link" onClick={() => onNavigate?.('evo', selectedSkill)}>⟳ 去进化 →</button>
+              )}
             </div>
           )}
 
           {!selectedSkill && (
-            <div className="no-skill"><div className="no-skill-icon">📊</div><p>选择一个 Skill 开始评测</p></div>
+            <div className="no-skill"><div className="no-skill-icon">📊</div><p>选择一个 Skill 开始评测</p>{onNavigate && <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('studio')}>✦ 去 Studio 创建 Skill</button>}</div>
           )}
 
         </>)}
@@ -883,7 +1245,7 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
       {/* ── Chart & History Tab ── */}
       {pageTab === 'chart' && (<>
         {!selectedSkill && (
-          <div className="no-skill"><div className="no-skill-icon">📊</div><p>选择一个 Skill 查看图谱与历史</p></div>
+          <div className="no-skill"><div className="no-skill-icon">📈</div><p>选择一个 Skill 查看技能成长</p>{onNavigate && <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('studio')}>✦ 去 Studio 创建 Skill</button>}</div>
         )}
 
         {selectedSkill && (<>
@@ -895,6 +1257,7 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
               <button className={`chart-tab ${chartTab === 'multidim' ? 'active' : ''}`} onClick={() => setChartTab('multidim')}>〰 多维趋势</button>
               <button className={`chart-tab ${chartTab === 'heatmap' ? 'active' : ''}`} onClick={() => setChartTab('heatmap')}>🌡 热力图</button>
               <button className={`chart-tab ${chartTab === 'boxplot' ? 'active' : ''}`} onClick={() => setChartTab('boxplot')}>📦 分布图</button>
+              <button className={`chart-tab ${chartTab === 'bycase' ? 'active' : ''}`} onClick={() => setChartTab('bycase')}>📋 按用例</button>
             </div>
 
             {successHistory.length === 0 && (
@@ -907,7 +1270,7 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
               {/* Radar */}
               {chartTab === 'radar' && (
                 <div className="radar-wrap">
-                  <RadarChart scores={avgScores} size={220} />
+                  <RadarChart scores={avgScores} minScores={minScores} maxScores={maxScores} size={320} />
                   <div className="radar-legend">
                     {DIM_ORDER.filter((d) => d in avgScores).map((d) => (
                       <div key={d} className="legend-row">
@@ -922,13 +1285,18 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
                         <span className="legend-val accent">{overallAvg.toFixed(2)}</span>
                       </div>
                     )}
+                    {minScores && (
+                      <div className="legend-row band-hint">
+                        <span className="legend-dim" style={{ color: 'var(--text-muted)', fontSize: 10 }}>虚线带 = min/max 范围（≥5次）</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
               {chartTab === 'trend' && (
                 <div>
-                  <TrendLine history={successHistory.slice(-20)} width={520} height={120} />
+                  <TrendLine history={successHistory} tcNames={tcNames} width={520} height={120} />
                   <div className="trend-stats">
                     <div className="trend-stat"><span className="ts-label">最低</span><span className="ts-val danger">{Math.min(...successHistory.map(r => r.totalScore)).toFixed(1)}</span></div>
                     <div className="trend-stat"><span className="ts-label">均值</span><span className="ts-val accent">{overallAvg!.toFixed(2)}</span></div>
@@ -958,6 +1326,15 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
                   <BoxPlotChart history={successHistory} width={560} height={Math.max(160, DIM_ORDER.length * 26 + 34)} />
                 </div>
               )}
+              {chartTab === 'bycase' && (() => {
+                const caseMap = new Map<string, typeof successHistory>()
+                for (const r of successHistory) {
+                  const key = r.testCaseName ?? '(未命名)'
+                  if (!caseMap.has(key)) caseMap.set(key, [])
+                  caseMap.get(key)!.push(r)
+                }
+                return <ByCasePanel caseMap={caseMap} />
+              })()}
             </>)}
           </div>
 
@@ -966,6 +1343,15 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
             <div className="card-row">
               <span className="card-title">评测历史（共 {historyTotal} 条）</span>
               <div className="history-controls">
+                {compareSet.size > 0 && (
+                  <button
+                    className={`btn btn-sm ${compareSet.size === 2 ? 'btn-primary' : 'btn-ghost'}`}
+                    disabled={compareSet.size < 2}
+                    onClick={() => setShowCompareModal(true)}
+                  >
+                    对比选中 ({compareSet.size}/2)
+                  </button>
+                )}
                 <div className="tc-search-wrap">
                   <span className="search-icon">🔍</span>
                   <input className="tc-search" placeholder="搜索 input/output..." value={historySearch}
@@ -977,6 +1363,12 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
                   <option value="success">成功</option>
                   <option value="error">失败</option>
                 </select>
+                {tcNames.length > 0 && (
+                  <select className="status-filter" value={historyTcFilter} onChange={e => setHistoryTcFilter(e.target.value)}>
+                    <option value="">全部用例</option>
+                    {tcNames.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                )}
               </div>
             </div>
 
@@ -985,59 +1377,131 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
             )}
 
             <div className="history-list">
-              {filteredHistory.map((r) => (
-                <div key={r.id} className="result-row" onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}>
-                  <div className="result-row-header">
-                    <span className={`status-dot ${r.status}`} />
-                    <span className="result-date">{new Date(r.createdAt).toLocaleString()}</span>
-                    <div className="result-dim-bars">
-                      {DIM_ORDER.filter((d) => d in r.scores).map((d) => (
-                        <div key={d} className="inline-bar-wrap" title={`${DIM_LABELS[d] ?? d}: ${r.scores[d].score}/10`}>
-                          <div className="inline-bar" style={{ width: `${(r.scores[d].score / 10) * 100}%`, background: DIM_COLORS[d] }} />
-                        </div>
-                      ))}
-                    </div>
-                    <span className="result-total" style={{ color: r.totalScore >= 7 ? 'var(--success)' : r.totalScore >= 4 ? 'var(--warning)' : 'var(--danger)' }}>
-                      {r.totalScore.toFixed(1)}
-                    </span>
-                    <span className="expand-icon">{expandedId === r.id ? '▾' : '▸'}</span>
-                  </div>
-
-                  {expandedId === r.id && (
-                    <div className="result-detail">
-                      <div className="result-viz-row">
-                        <RadarChart scores={Object.fromEntries(Object.entries(r.scores).map(([d, s]) => [d, s.score]))} size={160} />
-                        <DimBarChart scores={r.scores} />
+              {(() => {
+                // Group ALL rows by tcName (not just consecutive), preserving first-seen order
+                const groupMap = new Map<string, typeof filteredHistory>()
+                for (const r of filteredHistory) {
+                  const key = r.testCaseName ?? ''
+                  if (!groupMap.has(key)) groupMap.set(key, [])
+                  groupMap.get(key)!.push(r)
+                }
+                return [...groupMap.entries()].map(([tcName, rows], gi) => {
+                  const scores = rows.map(r => r.totalScore)
+                  const avg = scores.reduce((a, b) => a + b, 0) / scores.length
+                  const trend = scores.length >= 2 ? scores[0] - scores[scores.length - 1] : 0
+                  const trendIcon = trend > 0.5 ? '↑' : trend < -0.5 ? '↓' : '→'
+                  const trendColor = trend > 0.5 ? 'var(--success)' : trend < -0.5 ? 'var(--danger)' : 'var(--text-muted)'
+                  return (
+                  <div key={gi} className="history-tc-group">
+                    {tcName && (
+                      <div className="history-tc-group-header" onClick={() => setCollapsedTcGroups(prev => {
+                        const next = new Set(prev)
+                        next.has(tcName) ? next.delete(tcName) : next.add(tcName)
+                        return next
+                      })}>
+                        <span>{collapsedTcGroups.has(tcName) ? '▸' : '▾'}</span>
+                        <span className="history-tc-group-name">{tcName}</span>
+                        <span className="history-tc-group-count">{rows.length} 次</span>
+                        <span className="history-tc-group-avg" style={{ color: avg >= 7 ? 'var(--success)' : avg >= 4 ? 'var(--warning)' : 'var(--danger)' }}>
+                          均 {avg.toFixed(1)}
+                        </span>
+                        {scores.length >= 2 && (
+                          <span className="history-tc-group-trend" style={{ color: trendColor }}>{trendIcon}</span>
+                        )}
                       </div>
-                      <div className="detail-dims-grid">
-                        {Object.entries(r.scores).map(([dim, s]) => (
-                          <div key={dim} className="detail-dim">
-                            <div className="detail-dim-header">
-                              <span className="detail-dim-name" style={{ color: DIM_COLORS[dim] ?? 'var(--text)' }}>{DIM_LABELS[dim] ?? dim}</span>
-                              <span className="detail-dim-score">{s.score}/10</span>
-                            </div>
-                            {s.details && <p className="detail-text">{s.details}</p>}
-                            {s.violations?.length > 0 && (
-                              <ul className="violations">{s.violations.map((v, i) => <li key={i}>{v}</li>)}</ul>
-                            )}
+                    )}
+                    {!collapsedTcGroups.has(tcName) && rows.map((r) => (
+                      <div key={r.id} className={`result-row ${expandedId === r.id ? 'result-row-open' : ''}`}>
+                        <div className="result-row-header">
+                          <input
+                            type="checkbox"
+                            className="history-cmp-cb"
+                            checked={compareSet.has(r.id)}
+                            disabled={!compareSet.has(r.id) && compareSet.size >= 2}
+                            onChange={() => toggleCompare(r.id)}
+                            onClick={e => e.stopPropagation()}
+                            title="选中后可对比两条记录"
+                          />
+                          <span className={`status-dot ${r.status}`} />
+                          <span className="result-date">{new Date(r.createdAt).toLocaleString()}</span>
+                          {r.testCaseName && !tcName && (
+                            <span className="result-tc-name" title={r.testCaseName}>{r.testCaseName}</span>
+                          )}
+                          <div className="result-dim-bars">
+                            {DIM_ORDER.filter((d) => d in r.scores).map((d) => (
+                              <div key={d} className="inline-bar-wrap" title={`${DIM_LABELS[d] ?? d}: ${r.scores[d].score}/10${r.scores[d].details ? '\n' + r.scores[d].details : ''}`}>
+                                <div className="inline-bar" style={{ width: `${(r.scores[d].score / 10) * 100}%`, background: DIM_COLORS[d] }} />
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                      {r.status === 'error' && <div className="error-detail">{r.output}</div>}
-                      <div className="detail-io-row">
-                        <div className="detail-io-col">
-                          <span className="detail-label">Input</span>
-                          <pre className="detail-pre">{r.inputPrompt}</pre>
+                          <span className="result-total" style={{ color: r.totalScore >= 7 ? 'var(--success)' : r.totalScore >= 4 ? 'var(--warning)' : 'var(--danger)' }}>
+                            {r.totalScore.toFixed(1)}
+                          </span>
+                          <button
+                            className="expand-btn"
+                            onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                            title={expandedId === r.id ? '收起' : '展开详情'}
+                          >
+                            {expandedId === r.id ? '▾' : '▸'}
+                          </button>
+                          <button
+                            className="expand-btn history-del-btn"
+                            title="删除此记录"
+                            onClick={async (e) => {
+                              e.stopPropagation()
+                              await window.api.eval.deleteRecord(r.id)
+                              refreshHistory(historyPage)
+                            }}
+                          >🗑</button>
                         </div>
-                        <div className="detail-io-col">
-                          <span className="detail-label">Output</span>
-                          <AgentOutputRenderer output={r.output} />
-                        </div>
+
+                        {expandedId === r.id && (
+                          <div className="result-detail">
+                            <div className="result-viz-row">
+                              <RadarChart scores={Object.fromEntries(Object.entries(r.scores).map(([d, s]) => [d, s.score]))} size={160} />
+                              <DimBarChart scores={r.scores} />
+                            </div>
+                            <div className="detail-dims-grid">
+                              {Object.entries(r.scores).map(([dim, s]) => (
+                                <div key={dim} className="detail-dim">
+                                  <div className="detail-dim-header">
+                                    <span className="detail-dim-name" style={{ color: DIM_COLORS[dim] ?? 'var(--text)' }}>{DIM_LABELS[dim] ?? dim}</span>
+                                    <span className="detail-dim-score">{s.score}/10</span>
+                                  </div>
+                                  {s.details && (
+                                    <blockquote className="detail-rationale">
+                                      <span className="detail-rationale-label">评分依据</span>
+                                      {s.details}
+                                    </blockquote>
+                                  )}
+                                  {s.violations?.length > 0 && (
+                                    <div className="violations-block">
+                                      <span className="violations-label">扣分原因</span>
+                                      <ul className="violations">{s.violations.map((v, i) => <li key={i}>{v}</li>)}</ul>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                            {r.status === 'error' && <div className="error-detail">{r.output}</div>}
+                            <div className="detail-io-row">
+                              <div className="detail-io-col">
+                                <span className="detail-label">Input</span>
+                                <pre className="detail-pre">{r.inputPrompt}</pre>
+                              </div>
+                              <div className="detail-io-col">
+                                <span className="detail-label">Output</span>
+                                <AgentOutputRenderer output={r.output} />
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+                    ))}
+                  </div>
+                  )
+                })
+              })()}
             </div>
 
             {totalPages > 1 && (
@@ -1050,6 +1514,63 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
           </div>
         </>)}
       </>)}
+
+      {/* 历史对比 Modal */}
+      {showCompareModal && compareSet.size === 2 && (() => {
+        const [idA, idB] = [...compareSet]
+        const rA = history.find(r => r.id === idA)
+        const rB = history.find(r => r.id === idB)
+        if (!rA || !rB) return null
+        const dims = DIM_ORDER.filter(d => d in rA.scores && d in rB.scores)
+        return (
+          <div className="modal-overlay" onClick={() => setShowCompareModal(false)}>
+            <div className="modal-box hist-cmp-modal" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <span className="modal-title">历史评测对比</span>
+                <button className="modal-close" onClick={() => setShowCompareModal(false)}>✕</button>
+              </div>
+              <div className="hist-cmp-body">
+                {/* 日期行 */}
+                <div className="hist-cmp-dates">
+                  <span className="hist-cmp-date-a">{new Date(rA.createdAt).toLocaleString()}</span>
+                  <span className="hist-cmp-vs">vs</span>
+                  <span className="hist-cmp-date-b">{new Date(rB.createdAt).toLocaleString()}</span>
+                </div>
+                {/* 总分 */}
+                <div className="hist-cmp-totals">
+                  <span className="hist-cmp-total" style={{ color: rA.totalScore >= 7 ? 'var(--success)' : 'var(--warning)' }}>{rA.totalScore.toFixed(1)}</span>
+                  <span className="hist-cmp-total-label">总分</span>
+                  <span className="hist-cmp-total" style={{ color: rB.totalScore >= 7 ? 'var(--success)' : 'var(--warning)' }}>{rB.totalScore.toFixed(1)}</span>
+                </div>
+                {/* 维度对比 */}
+                <div className="hist-cmp-dims">
+                  {dims.map(d => {
+                    const sA = rA.scores[d].score, sB = rB.scores[d].score
+                    const delta = sB - sA
+                    return (
+                      <div key={d} className="hist-cmp-dim-row">
+                        <span className="hist-cmp-dim-val" style={{ color: DIM_COLORS[d] }}>{sA.toFixed(1)}</span>
+                        <div className="hist-cmp-dim-center">
+                          <span className="hist-cmp-dim-name" style={{ color: DIM_COLORS[d] }}>{DIM_LABELS[d] ?? d}</span>
+                          <div className="hist-cmp-bar-wrap">
+                            <div className="hist-cmp-bar hist-cmp-bar-a" style={{ width: `${(sA / 10) * 50}%`, background: DIM_COLORS[d] + '88' }} />
+                            <div className="hist-cmp-bar-mid" />
+                            <div className="hist-cmp-bar hist-cmp-bar-b" style={{ width: `${(sB / 10) * 50}%`, background: DIM_COLORS[d] }} />
+                          </div>
+                        </div>
+                        <span className="hist-cmp-dim-val" style={{ color: DIM_COLORS[d] }}>{sB.toFixed(1)}</span>
+                        <span className={`hist-cmp-delta ${delta > 0 ? 'pos' : delta < 0 ? 'neg' : 'neu'}`}>
+                          {delta > 0 ? '+' : ''}{delta.toFixed(1)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       <style>{`
         /* Framework panel */
@@ -1096,7 +1617,8 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
         .tab-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; line-height: 1; }
         .link-btn { background: none; border: none; color: var(--accent); font-size: inherit; cursor: pointer; padding: 0; text-decoration: underline; }
         .link-btn:hover { opacity: 0.8; }
-        .run-done-banner { padding: 12px 16px; background: rgba(74,222,128,0.06); border: 1px solid rgba(74,222,128,0.25); border-radius: var(--radius); font-size: 13px; color: var(--text-muted); }
+        .link-btn.evo-link { color: var(--success); }
+        .run-done-banner { padding: 12px 16px; background: rgba(74,222,128,0.06); border: 1px solid rgba(74,222,128,0.25); border-radius: var(--radius); font-size: 13px; color: var(--text-muted); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
         .history-controls { display: flex; gap: 8px; align-items: center; }
         .status-filter { padding: 5px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 12px; }
         .pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 12px; }
@@ -1138,6 +1660,8 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
         .gen-error { margin-top: 10px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: var(--radius); padding: 8px 12px; color: var(--danger); font-size: 13px; }
         .gen-success { margin-top: 10px; background: rgba(74,222,128,0.08); border: 1px solid var(--success); border-radius: var(--radius); padding: 8px 12px; color: var(--success); font-size: 13px; }
         .gen-warn { margin-top: 10px; background: rgba(250,204,21,0.08); border: 1px solid rgba(250,204,21,0.3); border-radius: var(--radius); padding: 8px 12px; color: var(--warning); font-size: 12px; }
+        .gen-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 4px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
         /* Search */
         .tc-search-wrap { position: relative; display: flex; align-items: center; }
@@ -1148,12 +1672,19 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
 
         /* Add form */
         .add-toggle { margin-top: 4px; }
+        .tc-add-row { display: flex; gap: 8px; margin-top: 4px; }
         .add-form { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-top: 8px; }
         .add-form-header { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; margin-bottom: 12px; }
         .btn-icon-sm { background: transparent; color: var(--text-muted); font-size: 11px; padding: 2px 5px; border-radius: 3px; }
         .btn-icon-sm:hover { color: var(--danger); }
         .add-form-row { display: flex; gap: 8px; margin-bottom: 10px; }
         .add-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+        .import-result { margin-top: 8px; border-radius: var(--radius); padding: 8px 12px; font-size: 13px; }
+        .import-result-ok { background: rgba(74,222,128,0.08); border: 1px solid var(--success); color: var(--success); }
+        .import-result-error { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); color: var(--danger); }
+        .import-result summary { cursor: pointer; color: var(--warning); }
+        .import-errors { margin: 6px 0 0 0; padding-left: 16px; }
+        .import-errors li { font-size: 12px; color: var(--text-muted); margin-bottom: 2px; }
 
         /* Run CTA */
         .run-cta { display: flex; align-items: center; justify-content: space-between; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 20px; }
@@ -1180,6 +1711,9 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
 
         /* Multi-dim trend */
         .multidim-wrap { display: flex; flex-direction: column; gap: 10px; }
+        .multidim-controls { display: flex; align-items: center; gap: 8px; }
+        .mdl-toggle { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-muted); font-size: 11px; padding: 3px 10px; cursor: pointer; }
+        .mdl-toggle:hover, .mdl-toggle.active { border-color: var(--accent); color: var(--accent); background: var(--surface); }
         .multidim-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; }
         .mdl-item { display: flex; align-items: center; gap: 5px; cursor: pointer; padding: 2px 4px; border-radius: 4px; transition: background var(--transition); }
         .mdl-item:hover, .mdl-item.active { background: var(--surface2); }
@@ -1208,7 +1742,7 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
         /* Viz (legacy, kept for per-result mini charts) */
         .viz-grid { display: grid; grid-template-columns: auto 1fr; gap: 16px; }
         .viz-card { }
-        .radar-wrap { display: flex; align-items: center; gap: 20px; }
+        .radar-wrap { display: flex; align-items: center; justify-content: center; gap: 20px; }
         .radar-legend { display: flex; flex-direction: column; gap: 8px; }
         .legend-row { display: flex; align-items: center; gap: 8px; }
         .legend-row.overall { margin-top: 6px; border-top: 1px solid var(--border); padding-top: 6px; }
@@ -1223,12 +1757,18 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
         .ts-val.danger { color: var(--danger); }
         .ts-val.accent { color: var(--accent); }
         .ts-val.success { color: var(--success); }
+        .trend-filter-row { display: flex; align-items: center; gap: 8px; padding: 6px 0 4px; }
+        .trend-tc-select { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 11px; padding: 3px 8px; cursor: pointer; }
+        .trend-tc-select:focus { outline: none; border-color: var(--accent); }
 
         /* History list */
         .history-list { display: flex; flex-direction: column; gap: 4px; }
-        .result-row { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; cursor: pointer; }
+        .result-row { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+        .result-row-open { border-color: var(--accent); }
         .result-row-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--surface2); transition: background var(--transition); }
         .result-row-header:hover { background: rgba(108,99,255,0.06); }
+        .history-cmp-cb { width: 13px; height: 13px; cursor: pointer; accent-color: var(--accent); flex-shrink: 0; }
+        .history-cmp-cb:disabled { opacity: 0.3; cursor: not-allowed; }
         .status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
         .status-dot.success { background: var(--success); }
         .status-dot.error { background: var(--danger); }
@@ -1237,7 +1777,9 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
         .inline-bar-wrap { width: 36px; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
         .inline-bar { height: 100%; border-radius: 3px; }
         .result-total { font-size: 14px; font-weight: 700; width: 32px; text-align: right; }
-        .expand-icon { font-size: 11px; color: var(--text-muted); width: 12px; }
+        .expand-btn { background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; padding: 2px 4px; border-radius: 3px; flex-shrink: 0; }
+        .expand-btn:hover { background: var(--surface); color: var(--text); }
+        .history-del-btn:hover { color: var(--danger) !important; }
 
         /* Detail */
         .result-detail { padding: 14px 16px; background: var(--bg); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; }
@@ -1246,8 +1788,32 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
         .detail-dim-name { font-size: 12px; font-weight: 700; text-transform: capitalize; }
         .detail-dim-score { font-size: 13px; font-weight: 700; }
         .detail-text { font-size: 12px; color: var(--text-muted); margin: 0; line-height: 1.5; }
-        .violations { margin: 6px 0 0 0; padding-left: 16px; }
+        .violations { margin: 4px 0 0 0; padding-left: 16px; }
         .violations li { font-size: 12px; color: var(--danger); }
+        .detail-rationale { margin: 4px 0 0; padding: 6px 10px; border-left: 3px solid var(--accent); background: var(--surface2); border-radius: 0 4px 4px 0; font-size: 12px; color: var(--text); line-height: 1.5; }
+        .detail-rationale-label, .violations-label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 3px; }
+        .violations-block { margin-top: 4px; }
+        .history-tc-group-header { display: flex; align-items: center; gap: 8px; padding: 4px 8px; cursor: pointer; font-size: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); user-select: none; }
+        .history-tc-group-header:hover { background: var(--surface2); }
+        .history-tc-group-name { font-weight: 600; color: var(--text); }
+        .history-tc-group-count { margin-left: auto; font-size: 11px; }
+        .history-tc-group-avg { font-weight: 700; font-size: 11px; }
+        .history-tc-group-trend { font-weight: 700; font-size: 13px; }
+        .result-tc-name { font-size: 11px; color: var(--text-muted); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+        .bycase-table { display: flex; flex-direction: column; gap: 6px; padding: 12px; }
+        .bycase-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; background: var(--surface2); border-radius: 6px; cursor: pointer; }
+        .bycase-row:hover { background: var(--surface); }
+        .bycase-name { flex: 1; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bycase-name.unnamed { color: var(--text-muted); font-style: italic; }
+        .bycase-count { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+        .bycase-total { font-size: 14px; font-weight: 700; min-width: 32px; text-align: right; flex-shrink: 0; }
+        .bycase-trend { font-size: 13px; font-weight: 700; flex-shrink: 0; }
+        .bycase-dim-bars { display: flex; gap: 3px; flex-shrink: 0; }
+        .bycase-sparkline { padding: 8px 10px 10px; background: var(--bg); border-top: 1px solid var(--border); border-radius: 0 0 6px 6px; }
+        .bycase-sort-row { display: flex; align-items: center; gap: 8px; padding: 0 12px 8px; }
+        .bycase-sort-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-muted); font-size: 11px; padding: 3px 10px; cursor: pointer; }
+        .bycase-sort-btn.active { border-color: var(--accent); color: var(--accent); }
+        .bp-tooltip { position: fixed; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 11px; color: var(--text); white-space: pre; pointer-events: none; z-index: 999; box-shadow: 0 4px 12px rgba(0,0,0,0.3); line-height: 1.6; }
         .error-detail { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: var(--radius); padding: 8px 12px; color: var(--danger); font-size: 12px; }
         .detail-input { }
         .detail-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); display: block; margin-bottom: 4px; }
@@ -1294,6 +1860,25 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
         .three-cond-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); text-align: center; }
         .three-cond-score { font-size: 32px; font-weight: 800; line-height: 1; }
 
+        /* Three-condition per-TC detail */
+        .tc-detail-section { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+        .tc-detail-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--surface2); cursor: pointer; user-select: none; }
+        .tc-detail-header:hover { background: rgba(108,99,255,0.06); }
+        .tc-detail-chevron { font-size: 10px; color: var(--text-muted); }
+        .tc-detail-title { font-size: 12px; font-weight: 700; color: var(--text); }
+        .tc-detail-count { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+        .tc-detail-table { display: flex; flex-direction: column; }
+        .tc-detail-thead { display: grid; grid-template-columns: 1fr 64px 64px 72px; gap: 4px; padding: 6px 12px; background: var(--surface2); border-top: 1px solid var(--border); font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+        .tc-detail-group { border-top: 1px solid var(--border); }
+        .tc-detail-row { display: grid; grid-template-columns: 1fr 64px 64px 72px; gap: 4px; padding: 7px 12px; cursor: pointer; align-items: center; }
+        .tc-detail-row:hover { background: var(--surface2); }
+        .tc-detail-row.expanded { background: rgba(108,99,255,0.04); }
+        .tc-detail-col-name { display: flex; align-items: center; gap: 6px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .tc-detail-chevron-sm { font-size: 9px; color: var(--text-muted); flex-shrink: 0; }
+        .tc-detail-col-score { font-size: 13px; font-weight: 700; text-align: right; }
+        .tc-detail-dim-row { display: grid; grid-template-columns: 1fr 64px 64px 72px; gap: 4px; padding: 3px 12px 3px 28px; background: rgba(0,0,0,0.02); align-items: center; }
+        .tc-detail-dim-name { font-size: 11px; font-style: italic; }
+
         /* Agent trace */
         .agent-output { display: flex; flex-direction: column; gap: 8px; }
         .agent-trace { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
@@ -1307,6 +1892,31 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
         .trace-error-badge { font-size: 10px; background: var(--danger); color: #fff; border-radius: 3px; padding: 1px 5px; }
         .trace-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); display: block; margin-bottom: 2px; }
         .trace-pre { margin: 0; font-size: 11px; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow-y: auto; background: var(--surface); padding: 6px 8px; border-radius: 4px; border: 1px solid var(--border); }
+
+        /* History compare modal */
+        .hist-cmp-modal { width: min(720px, 95vw); }
+        .hist-cmp-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+        .hist-cmp-dates { display: flex; align-items: center; justify-content: center; gap: 16px; font-size: 13px; font-weight: 600; }
+        .hist-cmp-date-a { color: var(--text-muted); }
+        .hist-cmp-date-b { color: var(--accent); }
+        .hist-cmp-vs { font-size: 12px; font-weight: 800; color: var(--text-muted); }
+        .hist-cmp-totals { display: flex; align-items: center; justify-content: center; gap: 20px; }
+        .hist-cmp-total { font-size: 28px; font-weight: 800; }
+        .hist-cmp-total-label { font-size: 12px; color: var(--text-muted); }
+        .hist-cmp-dims { display: flex; flex-direction: column; gap: 6px; }
+        .hist-cmp-dim-row { display: flex; align-items: center; gap: 8px; }
+        .hist-cmp-dim-val { font-size: 12px; font-weight: 700; width: 32px; text-align: right; flex-shrink: 0; }
+        .hist-cmp-dim-center { flex: 1; min-width: 0; }
+        .hist-cmp-dim-name { font-size: 12px; font-weight: 600; text-align: center; display: block; }
+        .hist-cmp-bar-wrap { display: flex; align-items: center; gap: 0; margin-top: 3px; }
+        .hist-cmp-bar { height: 6px; border-radius: 3px 0 0 3px; }
+        .hist-cmp-bar-a { align-self: flex-end; border-radius: 3px 0 0 3px; }
+        .hist-cmp-bar-b { align-self: flex-end; border-radius: 0 3px 3px 0; }
+        .hist-cmp-bar-mid { width: 1px; background: var(--border); flex-shrink: 0; margin: 0 1px; }
+        .hist-cmp-delta { font-size: 11px; font-weight: 700; width: 48px; text-align: right; flex-shrink: 0; }
+        .hist-cmp-delta.pos { color: var(--success); }
+        .hist-cmp-delta.neg { color: var(--danger); }
+        .hist-cmp-delta.neu { color: var(--text-muted); }
       `}</style>
     </div>
   )

@@ -13,6 +13,18 @@ const DIM_COLORS: Record<string, string> = {
   overall:               '#6c63ff'
 }
 
+const DIM_LABELS: Record<string, string> = {
+  overall:               '⭐ 综合',
+  correctness:           'G1 正确性',
+  instruction_following: 'G2 指令遵循',
+  safety:                'G3 安全性',
+  completeness:          'G4 完整性',
+  robustness:            'G5 鲁棒性',
+  executability:         'S1 可执行性',
+  cost_awareness:        'S2 成本意识',
+  maintainability:       'S3 可维护性'
+}
+
 const DIMS = ['overall', 'correctness', 'instruction_following', 'safety', 'completeness', 'robustness', 'executability', 'cost_awareness', 'maintainability']
 const MEDALS = ['🥇', '🥈', '🥉']
 
@@ -58,7 +70,7 @@ function ScoreBar({ score, color, max = 10 }: { score: number; color: string; ma
 
 // ── Main TrendingPage ─────────────────────────────────────────────────────────
 
-export default function TrendingPage() {
+export default function TrendingPage({ onNavigate }: { onNavigate?: (page: string, skillId?: string) => void }) {
   const [ranked, setRanked] = useState<RankedSkill[]>([])
   const [loading, setLoading] = useState(true)
   const [activeDim, setActiveDim] = useState('overall')
@@ -94,6 +106,7 @@ export default function TrendingPage() {
   const color = DIM_COLORS[activeDim] ?? '#6c63ff'
   const withEvals = sorted.filter((s) => s.evalCount > 0)
   const noEvals = sorted.filter((s) => s.evalCount === 0)
+  const totalEvals = ranked.reduce((s, r) => s + r.evalCount, 0)
 
   return (
     <div className="trending-root">
@@ -107,6 +120,34 @@ export default function TrendingPage() {
         </button>
       </div>
 
+      {/* Stats bar */}
+      {!loading && ranked.length > 0 && (
+        <div className="trending-stats">
+          <div className="trending-stat">
+            <span className="trending-stat-val">{ranked.length}</span>
+            <span className="trending-stat-label">已评测 Skill</span>
+          </div>
+          <div className="trending-stat">
+            <span className="trending-stat-val">{totalEvals}</span>
+            <span className="trending-stat-label">评测次数</span>
+          </div>
+          {withEvals.length > 0 && (
+            <div className="trending-stat">
+              <span className="trending-stat-val" style={{ color: DIM_COLORS.overall }}>
+                {(withEvals.reduce((s, r) => s + r.scores.overall, 0) / withEvals.length).toFixed(1)}
+              </span>
+              <span className="trending-stat-label">平均综合分</span>
+            </div>
+          )}
+          {withEvals[0] && (
+            <div className="trending-stat">
+              <span className="trending-stat-val" style={{ color: DIM_COLORS.overall, fontSize: 13 }}>{withEvals[0].skillName}</span>
+              <span className="trending-stat-label">当前榜首</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Dimension tabs */}
       <div className="dim-tabs">
         {DIMS.map((d) => (
@@ -116,7 +157,7 @@ export default function TrendingPage() {
             style={activeDim === d ? { borderColor: DIM_COLORS[d], color: DIM_COLORS[d] } : {}}
             onClick={() => setActiveDim(d)}
           >
-            {d === 'overall' ? '⭐ 综合' : d}
+            {DIM_LABELS[d] ?? d}
           </button>
         ))}
       </div>
@@ -126,7 +167,7 @@ export default function TrendingPage() {
       ) : withEvals.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon">📊</div>
-          <p>还没有评测数据。安装 Skill 并运行评测后，排名将显示在这里。</p>
+          <p>还没有评测数据。<button className="link-btn" onClick={() => onNavigate?.('eval')}>去运行评测 →</button></p>
         </div>
       ) : (
         <div className="leaderboard">
@@ -181,7 +222,7 @@ export default function TrendingPage() {
                     <div className="detail-dims">
                       {DIMS.filter((d) => d !== 'overall' && d in skill.scores).map((d) => (
                         <div key={d} className="detail-dim-row">
-                          <span className="detail-dim-name" style={{ color: DIM_COLORS[d] }}>{d}</span>
+                          <span className="detail-dim-name" style={{ color: DIM_COLORS[d] }}>{DIM_LABELS[d] ?? d}</span>
                           <div className="detail-bar-track">
                             <div className="detail-bar-fill" style={{ width: `${(skill.scores[d] / 10) * 100}%`, background: DIM_COLORS[d] }} />
                           </div>
@@ -208,7 +249,11 @@ export default function TrendingPage() {
                       <div className="rank-meta">
                       </div>
                     </div>
-                    <span className="no-eval-hint">运行评测后显示排名</span>
+                    <span className="no-eval-hint">
+                      {onNavigate
+                        ? <button className="link-btn" onClick={() => onNavigate('eval', skill.skillId)}>去评测 →</button>
+                        : '运行评测后显示排名'}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -224,9 +269,15 @@ export default function TrendingPage() {
         .subtitle { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
         .refresh-btn { font-size: 13px; }
 
+        /* Stats */
+        .trending-stats { display: flex; gap: 12px; flex-wrap: wrap; }
+        .trending-stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 16px; min-width: 100px; }
+        .trending-stat-val { display: block; font-size: 20px; font-weight: 700; color: var(--text); }
+        .trending-stat-label { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
         /* Dim tabs */
         .dim-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
-        .dim-tab { padding: 6px 16px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 13px; font-weight: 500; cursor: pointer; transition: all var(--transition); text-transform: capitalize; }
+        .dim-tab { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 12px; font-weight: 500; cursor: pointer; transition: all var(--transition); }
         .dim-tab:hover { color: var(--text); border-color: var(--text-muted); }
         .dim-tab.active { background: var(--surface2); font-weight: 700; }
 
@@ -272,7 +323,7 @@ export default function TrendingPage() {
         .rank-detail { padding: 12px 18px 14px; border-top: 1px solid var(--border); background: var(--bg); }
         .detail-dims { display: flex; flex-direction: column; gap: 8px; }
         .detail-dim-row { display: flex; align-items: center; gap: 10px; }
-        .detail-dim-name { font-size: 12px; font-weight: 600; text-transform: capitalize; width: 100px; flex-shrink: 0; }
+        .detail-dim-name { font-size: 12px; font-weight: 600; width: 110px; flex-shrink: 0; }
         .detail-bar-track { flex: 1; height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
         .detail-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s; }
         .detail-dim-val { font-size: 12px; font-weight: 700; width: 28px; text-align: right; flex-shrink: 0; }
@@ -281,6 +332,8 @@ export default function TrendingPage() {
         .no-evals-section { margin-top: 8px; }
         .no-evals-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 6px; padding: 0 4px; }
         .no-eval-hint { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+        .link-btn { background: none; border: none; color: var(--accent); font-size: inherit; cursor: pointer; padding: 0; text-decoration: underline; }
+        .link-btn:hover { opacity: 0.8; }
       `}</style>
     </div>
   )

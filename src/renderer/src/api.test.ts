@@ -41,7 +41,8 @@ const mockApi = {
     getBySkill: vi.fn().mockResolvedValue([]),
     create: vi.fn(),
     delete: vi.fn(),
-    generate: vi.fn().mockResolvedValue([])
+    generate: vi.fn().mockResolvedValue([]),
+    importJson: vi.fn().mockResolvedValue({ imported: [], errors: [] })
   },
   evo: {
     installAndEval: vi.fn().mockResolvedValue({ evolvedSkill: null, originalJobId: '', evolvedJobId: '' })

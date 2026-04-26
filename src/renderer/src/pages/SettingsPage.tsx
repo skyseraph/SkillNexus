@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import type { AppConfigPublic, AppConfig, ToolTarget, LLMProvider, LLMProviderPreset } from '../../../shared/types'
 import { LLM_PROVIDER_PRESETS } from '../../../shared/types'
 import type { Theme } from '../App'
+import { useTrack } from '../hooks/useTrack'
 
 interface Props {
   onConfigSaved?: () => void
@@ -34,6 +35,7 @@ function slugify(s: string) {
 }
 
 export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toast }: Props) {
+  const track = useTrack()
   const [config, setConfig] = useState<AppConfigPublic | null>(null)
   const [toolTargets, setToolTargets] = useState<ToolTarget[]>([])
   const [toolPathOverrides, setToolPathOverrides] = useState<Record<string, string>>({})
@@ -51,6 +53,18 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [toolAutoSaved, setToolAutoSaved] = useState(false)
   const toolSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // API Keys state
+  const [githubTokenInput, setGithubTokenInput] = useState('')
+  const [editingGithubToken, setEditingGithubToken] = useState(false)
+  const [tavilyInput, setTavilyInput] = useState('')
+  const [editingTavily, setEditingTavily] = useState(false)
+
+  // Telemetry state
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(true)
+  useEffect(() => {
+    window.api.telemetry.getConsent().then(({ enabled }) => setAnalyticsEnabled(enabled)).catch(() => {})
+  }, [])
 
   const reload = useCallback(async () => {
     const c = await window.api.config.get()
@@ -119,6 +133,7 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
       presetId: form.presetId || undefined
     }
     await window.api.config.saveProvider(provider)
+    track('provider_added', { provider_category: form.category, is_preset: form.isPreset })
     const fresh = await window.api.config.get()
     if (fresh.providers.length === 1 || !fresh.activeProviderId) {
       await window.api.config.setActive(finalId)
@@ -171,12 +186,47 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
     onConfigSaved?.()
   }
 
+  const saveGithubToken = async () => {
+    if (!githubTokenInput.trim()) return
+    await window.api.config.set({ githubToken: githubTokenInput.trim() } as Parameters<typeof window.api.config.set>[0])
+    setGithubTokenInput('')
+    setEditingGithubToken(false)
+    await reload()
+    toast?.('GitHub token saved', 'success')
+  }
+
+  const clearGithubToken = async () => {
+    await window.api.config.set({ githubToken: '' } as Parameters<typeof window.api.config.set>[0])
+    setGithubTokenInput('')
+    setEditingGithubToken(false)
+    await reload()
+    toast?.('GitHub token cleared', 'info')
+  }
+
+  const saveTavilyKey = async () => {
+    if (!tavilyInput.trim()) return
+    await window.api.config.set({ toolApiKeys: { tavily: tavilyInput.trim() } })
+    setTavilyInput('')
+    setEditingTavily(false)
+    await reload()
+    toast?.('Tavily key saved', 'success')
+  }
+
+  const clearTavilyKey = async () => {
+    await window.api.config.set({ toolApiKeys: { tavily: '' } })
+    setTavilyInput('')
+    setEditingTavily(false)
+    await reload()
+    toast?.('Tavily key cleared', 'info')
+  }
+
   const handleTest = async (id: string) => {
     setTestingId(id)
     setTestResults(r => ({ ...r, [id]: { ok: false } }))
     const result = await window.api.config.test(id)
     setTestResults(r => ({ ...r, [id]: result }))
     setTestingId(null)
+    track('provider_tested', { test_ok: result.ok })
     if (result.ok) toast?.('Connection successful', 'success')
     else toast?.(result.error?.slice(0, 80) ?? 'Connection failed', 'error')
   }
@@ -253,6 +303,11 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
                       {p.model}
                       {p.apiKeySet && <span className="key-badge">Key set</span>}
                       <span className="cat-badge">{CATEGORY_LABELS[p.category] ?? p.category}</span>
+                      {p.websiteUrl && (
+                        <a className="provider-link" href="#" onClick={e => { e.preventDefault(); window.api.shell.openExternal(p.websiteUrl!) }}>
+                          ↗ Website
+                        </a>
+                      )}
                       {tr && (
                         <span className={`test-badge ${tr.ok ? 'ok' : 'fail'}`}>
                           {tr.ok ? '✓ OK' : `✗ ${tr.error?.slice(0, 60) ?? 'Failed'}`}
@@ -354,6 +409,30 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
         </div>
       </section>
 
+      {/* ── Privacy & Analytics ── */}
+      <section className="settings-section">
+        <h2>Privacy &amp; Analytics</h2>
+        <p className="section-desc">匿名使用数据，帮助改进 SkillNexus。从不收集 Skill 内容、提示词或 API 密钥。</p>
+        <div className="analytics-row">
+          <div className="analytics-info">
+            <span className="analytics-name">Usage Analytics</span>
+            <span className="analytics-desc">功能使用频次、引擎选择等匿名统计，数据由 PostHog 处理</span>
+          </div>
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              checked={analyticsEnabled}
+              onChange={e => {
+                const v = e.target.checked
+                setAnalyticsEnabled(v)
+                window.api.telemetry.setConsent(v).catch(() => {})
+              }}
+            />
+            <span className="toggle-track"><span className="toggle-thumb" /></span>
+          </label>
+        </div>
+      </section>
+
       {/* ── Appearance ── */}
       <section className="settings-section">
         <h2>Appearance</h2>
@@ -369,6 +448,64 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
         </div>
       </section>
 
+      {/* ── API Keys ── */}
+      <section className="settings-section">
+        <h2>API Keys</h2>
+        <p className="section-desc">Optional keys for Studio GitHub Code Search and Agent web_search tool.</p>
+        <div className="apikeys-list">
+          <div className="apikey-row">
+            <div className="apikey-info">
+              <span className="apikey-name">GitHub Token</span>
+              <span className="apikey-desc">Studio GitHub Code Search: raises rate limit from 60 to 5000 req/h</span>
+            </div>
+            <div className="apikey-input-wrap">
+              {config?.githubTokenSet && !editingGithubToken
+                ? <span className="key-set-badge">Token set ✓</span>
+                : <input
+                    type="password"
+                    className="apikey-input"
+                    placeholder="ghp_..."
+                    value={githubTokenInput}
+                    onChange={e => setGithubTokenInput(e.target.value)}
+                  />
+              }
+              {config?.githubTokenSet && !editingGithubToken
+                ? <button className="btn btn-ghost btn-xs" onClick={() => setEditingGithubToken(true)}>Change</button>
+                : <button className="btn btn-primary btn-xs" onClick={saveGithubToken} disabled={!githubTokenInput.trim()}>Save</button>
+              }
+              {config?.githubTokenSet && (
+                <button className="btn btn-ghost btn-xs danger" onClick={clearGithubToken}>Clear</button>
+              )}
+            </div>
+          </div>
+          <div className="apikey-row">
+            <div className="apikey-info">
+              <span className="apikey-name">Tavily API Key</span>
+              <span className="apikey-desc">Required for web_search tool in Agent Skills</span>
+            </div>
+            <div className="apikey-input-wrap">
+              {config?.toolApiKeysSet?.tavily && !editingTavily
+                ? <span className="key-set-badge">Key set ✓</span>
+                : <input
+                    type="password"
+                    className="apikey-input"
+                    placeholder="tvly-..."
+                    value={tavilyInput}
+                    onChange={e => setTavilyInput(e.target.value)}
+                  />
+              }
+              {config?.toolApiKeysSet?.tavily && !editingTavily
+                ? <button className="btn btn-ghost btn-xs" onClick={() => setEditingTavily(true)}>Change</button>
+                : <button className="btn btn-primary btn-xs" onClick={saveTavilyKey} disabled={!tavilyInput.trim()}>Save</button>
+              }
+              {config?.toolApiKeysSet?.tavily && (
+                <button className="btn btn-ghost btn-xs danger" onClick={clearTavilyKey}>Clear</button>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── About ── */}
       <section className="settings-section about-section">
         <h2>About</h2>
@@ -379,22 +516,31 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
             <span>{config?.providers.find(p => p.id === activeId)?.name ?? '—'}</span></div>
           <div className="about-item"><span className="about-label">Active Model</span>
             <span>{config?.providers.find(p => p.id === activeId)?.model ?? '—'}</span></div>
+          <div className="about-item"><span className="about-label">Providers</span>
+            <span>{config?.providers.length ?? 0} configured</span></div>
+          <div className="about-item"><span className="about-label">GitHub Token</span>
+            <span>{config?.githubTokenSet ? '✓ Set' : '✗ Not set'}</span></div>
+          <div className="about-item"><span className="about-label">Tavily Key</span>
+            <span>{config?.toolApiKeysSet?.tavily ? '✓ Set' : '✗ Not set'}</span></div>
+          <div className="about-item"><span className="about-label">Platform</span>
+            <span>{navigator.platform}</span></div>
         </div>
       </section>
 
       <style>{`
-        .settings-page { max-width: 680px; }
+        .settings-page { max-width: 900px; width: 100%; margin: 0 auto; }
         .page-header { margin-bottom: 28px; }
         .page-header h1 { font-size: 24px; font-weight: 700; }
         .settings-subtitle { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
-        .settings-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; margin-bottom: 20px; }
-        .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-        .settings-section h2 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 0; }
-        .section-actions { display: flex; gap: 8px; }
+        .settings-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; margin-bottom: 20px; width: 100%; box-sizing: border-box; }
+        .settings-section h2 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 0 0 12px; }
+        .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
+        .section-head h2 { margin: 0; }
+        .section-actions { display: flex; gap: 8px; flex-shrink: 0; }
         .btn-sm { padding: 5px 12px; font-size: 12px; }
 
         /* Preset grid */
-        .preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin-bottom: 16px; padding: 14px; background: var(--surface2); border-radius: var(--radius); border: 1px solid var(--border); }
+        .preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin-bottom: 16px; padding: 14px; background: var(--surface2); border-radius: var(--radius); border: 1px solid var(--border); }
         .preset-cat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 4px; }
         .preset-cat { display: flex; flex-direction: column; gap: 3px; }
         .preset-item { display: flex; flex-direction: column; align-items: flex-start; padding: 6px 10px; border-radius: calc(var(--radius) - 2px); border: 1px solid var(--border); background: var(--surface); cursor: pointer; transition: all var(--transition); text-align: left; }
@@ -419,6 +565,8 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
         .test-badge { border-radius: 3px; padding: 1px 5px; font-size: 10px; font-weight: 600; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .test-badge.ok { background: rgba(74,222,128,0.15); color: var(--success); }
         .test-badge.fail { background: rgba(239,68,68,0.12); color: var(--danger); }
+        .provider-link { font-size: 10px; color: var(--accent); text-decoration: none; }
+        .provider-link:hover { text-decoration: underline; }
         .provider-row-actions { display: flex; gap: 6px; }
         .danger { color: var(--danger) !important; }
 
@@ -441,14 +589,14 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
         .test-result.fail { color: var(--danger); max-width: 320px; word-break: break-all; }
 
         /* Tools */
-        .section-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; margin-top: -8px; }
+        .section-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; margin-top: 6px; }
         .tool-paths-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
         .tool-path-row { display: flex; align-items: center; gap: 10px; }
-        .tool-toggle-label { display: flex; align-items: center; gap: 7px; cursor: pointer; width: 160px; flex-shrink: 0; }
+        .tool-toggle-label { display: flex; align-items: center; gap: 7px; cursor: pointer; width: 200px; flex-shrink: 0; }
         .tool-toggle-label input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; accent-color: var(--accent); }
         .tool-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
         .tool-dot.exists { background: var(--success); }
-        .tool-path-name { font-size: 13px; font-weight: 500; }
+        .tool-path-name { font-size: 13px; font-weight: 500; white-space: nowrap; }
         .tool-path-inputs { display: flex; gap: 6px; flex: 1; align-items: center; }
         .tool-path-input { flex: 1; padding: 5px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 12px; font-family: 'Courier New', monospace; }
         .tool-path-input:focus { outline: none; border-color: var(--accent); }
@@ -457,10 +605,21 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
         .saved-msg { font-size: 13px; color: var(--success); font-weight: 500; }
 
         /* About */
-        .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .about-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
         .about-item { display: flex; flex-direction: column; gap: 3px; }
         .about-label { font-size: 11px; color: var(--text-muted); }
         .about-item span:last-child { font-size: 13px; font-weight: 500; }
+
+        /* API Keys */
+        .apikeys-list { display: flex; flex-direction: column; gap: 12px; }
+        .apikey-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface2); }
+        .apikey-info { display: flex; flex-direction: column; gap: 2px; }
+        .apikey-name { font-size: 13px; font-weight: 600; }
+        .apikey-desc { font-size: 11px; color: var(--text-muted); }
+        .apikey-input-wrap { display: flex; align-items: center; gap: 6px; }
+        .apikey-input { flex: 1; min-width: 0; padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 12px; font-family: 'Courier New', monospace; }
+        .apikey-input:focus { outline: none; border-color: var(--accent); }
+        .key-set-badge { font-size: 11px; font-weight: 600; color: var(--success); background: rgba(74,222,128,0.12); padding: 3px 8px; border-radius: 3px; white-space: nowrap; }
 
         /* Appearance */
         .appearance-row { display: flex; align-items: center; gap: 16px; margin-top: 12px; }
@@ -469,6 +628,18 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
         .theme-btn { padding: 6px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface2); color: var(--text-muted); font-size: 12px; cursor: pointer; transition: all var(--transition); }
         .theme-btn:hover { border-color: var(--accent); color: var(--text); }
         .theme-btn.active { border-color: var(--accent); background: rgba(108,99,255,0.15); color: var(--accent); font-weight: 600; }
+
+        /* Analytics */
+        .analytics-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+        .analytics-info { display: flex; flex-direction: column; gap: 2px; }
+        .analytics-name { font-size: 13px; font-weight: 600; color: var(--text); }
+        .analytics-desc { font-size: 11px; color: var(--text-muted); }
+        .toggle-switch { position: relative; display: inline-block; flex-shrink: 0; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+        .toggle-track { display: block; width: 40px; height: 22px; background: var(--border); border-radius: 11px; cursor: pointer; transition: background var(--transition); position: relative; }
+        .toggle-switch input:checked + .toggle-track { background: var(--accent); }
+        .toggle-thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: transform var(--transition); }
+        .toggle-switch input:checked + .toggle-track .toggle-thumb { transform: translateX(18px); }
       `}</style>
     </div>
   )

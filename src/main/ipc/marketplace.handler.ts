@@ -5,6 +5,7 @@ import { app } from 'electron'
 import yaml from 'js-yaml'
 import { getDb } from '../db'
 import { fetchJson, fetchText } from './github-fetch'
+import { getConfig } from './config.handler'
 import type { MarketSkill, Skill, SkillType } from '../../shared/types'
 
 const GH_API = 'https://api.github.com'
@@ -35,21 +36,27 @@ function repoToMarketSkill(repo: Record<string, unknown>): MarketSkill {
 
 export function registerMarketplaceHandlers(): void {
   ipcMain.handle('marketplace:search', async (_event, query: string): Promise<MarketSkill[]> => {
-    const q = query?.trim() ? `${query} ${DEFAULT_QUERY}` : DEFAULT_QUERY
+    // Free-text search: use query as-is but add language hint; empty query falls back to topic discovery
+    const trimmed = query?.trim()
+    const q = trimmed
+      ? `${trimmed} in:name,description,readme language:markdown`
+      : DEFAULT_QUERY
     const url = `${GH_API}/search/repositories?q=${encodeURIComponent(q)}&sort=stars&order=desc&per_page=30`
-    const data = await fetchJson(url) as { items?: Record<string, unknown>[] }
+    const token = getConfig().githubToken
+    const data = await fetchJson(url, token) as { items?: Record<string, unknown>[] }
     return (data.items || []).map(repoToMarketSkill)
   })
 
   ipcMain.handle('marketplace:install', async (_event, skill: MarketSkill): Promise<Skill> => {
     // Try SKILL.md first, then README.md
     let content: string
+    const token = getConfig().githubToken
     try {
-      content = await fetchText(skill.installUrl)
+      content = await fetchText(skill.installUrl, token)
     } catch {
       const [owner, repo] = skill.id.split('/')
       const branch = 'main'
-      content = await fetchText(`${GH_RAW}/${owner}/${repo}/${branch}/README.md`)
+      content = await fetchText(`${GH_RAW}/${owner}/${repo}/${branch}/README.md`, token)
     }
 
     const skillsDir = join(app.getPath('userData'), 'skills', 'marketplace')

@@ -57,13 +57,36 @@ export function registerEvalHandlers(): void {
       provider: r.provider,
       inputPrompt: r.input_prompt,
       output: r.output,
-      scores: JSON.parse(r.scores as string),
+      scores: (() => { try { return JSON.parse(r.scores as string) } catch { return {} } })(),
       totalScore: r.total_score,
       durationMs: r.duration_ms,
       status: r.status,
-      createdAt: r.created_at
+      createdAt: r.created_at,
+      testCaseId: (r.test_case_id as string) ?? undefined,
+      testCaseName: (r.test_case_name as string) ?? undefined
     }))
     return { items, total, limit, offset }
+  })
+
+  ipcMain.handle('eval:getById', (_event, evalId: string) => {
+    const db = getDb()
+    const r = db.prepare('SELECT * FROM eval_history WHERE id = ?').get(evalId) as Record<string, unknown> | undefined
+    if (!r) return null
+    return {
+      id: r.id,
+      skillId: r.skill_id,
+      model: r.model,
+      provider: r.provider,
+      inputPrompt: r.input_prompt,
+      output: r.output,
+      scores: (() => { try { return JSON.parse(r.scores as string) } catch { return {} } })(),
+      totalScore: r.total_score,
+      durationMs: r.duration_ms,
+      status: r.status,
+      createdAt: r.created_at,
+      testCaseId: (r.test_case_id as string) ?? undefined,
+      testCaseName: (r.test_case_name as string) ?? undefined
+    }
   })
 
   ipcMain.handle('eval:exportHistory', (_event, skillId: string) => {
@@ -75,7 +98,7 @@ export function registerEvalHandlers(): void {
     return {
       skill: { id: skillId, name: skill?.name, version: skill?.version },
       exportedAt: new Date().toISOString(),
-      framework: 'AgentSkills G1-G5 + SkillNet (8 dimensions)',
+      framework: 'SkillNexus 8-Dimension Eval Framework (G1-G5 task quality + S1-S3 skill quality)',
       dimensions: ['correctness', 'instruction_following', 'safety', 'completeness', 'robustness', 'executability', 'cost_awareness', 'maintainability'],
       records: rows.map((r) => ({
         id: r.id,
@@ -258,5 +281,39 @@ Output ONLY the Skill content.`,
         trend
       }
     })
+  })
+
+  ipcMain.handle('eval:delete', (_event, evalId: string) => {
+    const db = getDb()
+    db.prepare('DELETE FROM eval_history WHERE id = ?').run(evalId)
+  })
+
+  ipcMain.handle('eval:getByJobId', (_event, jobId: string) => {
+    const db = getDb()
+    const rows = db.prepare(`
+      SELECT * FROM eval_history
+      WHERE COALESCE(job_id, id) = ?
+      ORDER BY created_at ASC
+    `).all(jobId) as Record<string, unknown>[]
+    return rows.map((r) => ({
+      id: r.id,
+      skillId: r.skill_id,
+      model: r.model,
+      provider: r.provider,
+      inputPrompt: r.input_prompt,
+      output: r.output,
+      scores: (() => { try { return JSON.parse(r.scores as string) } catch { return {} } })(),
+      totalScore: r.total_score,
+      durationMs: r.duration_ms,
+      status: r.status,
+      createdAt: r.created_at,
+      testCaseId: (r.test_case_id as string) ?? undefined,
+      testCaseName: (r.test_case_name as string) ?? undefined
+    }))
+  })
+
+  ipcMain.handle('eval:deleteByJobId', (_event, jobId: string) => {
+    const db = getDb()
+    db.prepare(`DELETE FROM eval_history WHERE COALESCE(job_id, id) = ?`).run(jobId)
   })
 }

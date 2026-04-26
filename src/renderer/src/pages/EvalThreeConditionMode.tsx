@@ -2,10 +2,14 @@ import { useState, useEffect, useRef } from 'react'
 import type { Skill, TestCase, EvalResult, ThreeConditionResult } from '../../../shared/types'
 
 const DIM_COLORS: Record<string, string> = {
-  correctness:  '#6c63ff',
-  clarity:      '#00d4aa',
-  completeness: '#f59e0b',
-  safety:       '#ef4444'
+  correctness:           '#6c63ff',
+  instruction_following: '#00d4aa',
+  safety:                '#ef4444',
+  completeness:          '#f59e0b',
+  robustness:            '#8b5cf6',
+  executability:         '#06b6d4',
+  cost_awareness:        '#10b981',
+  maintainability:       '#f97316'
 }
 
 function avgDims(history: EvalResult[]): Record<string, number> {
@@ -19,7 +23,7 @@ function avgDims(history: EvalResult[]): Record<string, number> {
   return Object.fromEntries(Object.entries(totals).map(([d, { sum, count }]) => [d, sum / count]))
 }
 
-export default function ThreeConditionMode({ skills, apiKeySet }: { skills: Skill[]; apiKeySet: boolean | null }) {
+export default function ThreeConditionMode({ skills, apiKeySet, onNavigate }: { skills: Skill[]; apiKeySet: boolean | null; onNavigate?: (page: string, skillId?: string) => void }) {
   const [skillId, setSkillId] = useState('')
   const [testCases, setTestCases] = useState<TestCase[]>([])
   const [selectedTcIds, setSelectedTcIds] = useState<Set<string>>(new Set())
@@ -29,6 +33,11 @@ export default function ThreeConditionMode({ skills, apiKeySet }: { skills: Skil
   const [scoresA, setScoresA] = useState<Record<string, number> | null>(null)
   const [scoresB, setScoresB] = useState<Record<string, number> | null>(null)
   const [scoresC, setScoresC] = useState<Record<string, number> | null>(null)
+  const [detailsA, setDetailsA] = useState<EvalResult[]>([])
+  const [detailsB, setDetailsB] = useState<EvalResult[]>([])
+  const [detailsC, setDetailsC] = useState<EvalResult[]>([])
+  const [expandedTc, setExpandedTc] = useState<string | null>(null)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -49,6 +58,7 @@ export default function ThreeConditionMode({ skills, apiKeySet }: { skills: Skil
     if (!skillId || selectedTcIds.size === 0) return
     setRunning(true); setPhase('generating'); setProgress(10)
     setError(null); setResult(null); setScoresA(null); setScoresB(null); setScoresC(null)
+    setDetailsA([]); setDetailsB([]); setDetailsC([]); setExpandedTc(null); setDetailsOpen(false)
     cleanupRef.current?.()
     cleanupRef.current = window.api.eval.onProgress((data) => {
       setProgress(p => Math.max(p, data.progress < 100 ? 30 + Math.round(data.progress * 0.6) : 90))
@@ -60,14 +70,15 @@ export default function ThreeConditionMode({ skills, apiKeySet }: { skills: Skil
       const poll = setInterval(async () => {
         const recent = Date.now() - 120_000
         const [histA, histB, histC] = await Promise.all([
-          window.api.eval.history(r.noSkillId).then(h => h.filter(x => x.createdAt > recent)),
-          window.api.eval.history(skillId).then(h => h.filter(x => x.createdAt > recent)),
-          window.api.eval.history(r.generatedSkillId).then(h => h.filter(x => x.createdAt > recent))
+          window.api.eval.history(r.noSkillId).then(h => h.items.filter(x => x.createdAt > recent)),
+          window.api.eval.history(skillId).then(h => h.items.filter(x => x.createdAt > recent)),
+          window.api.eval.history(r.generatedSkillId).then(h => h.items.filter(x => x.createdAt > recent))
         ])
         if (histA.length > 0 && histB.length > 0 && histC.length > 0) {
           clearInterval(poll); pollRef.current = null
           cleanupRef.current?.(); cleanupRef.current = null
           setScoresA(avgDims(histA)); setScoresB(avgDims(histB)); setScoresC(avgDims(histC))
+          setDetailsA(histA); setDetailsB(histB); setDetailsC(histC)
           setPhase('done'); setRunning(false); setProgress(100)
         }
       }, 2500)
@@ -92,7 +103,7 @@ export default function ThreeConditionMode({ skills, apiKeySet }: { skills: Skil
 
   return (
     <div className="compare-mode">
-      {apiKeySet === false && <div className="guard-banner">⚠️ 未配置 LLM 供应商，请先在 Settings 添加。</div>}
+      {apiKeySet === false && <div className="guard-banner">⚠️ 未配置 LLM 供应商，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>Settings</button> 添加。</div>}
 
       <div className="eval-card">
         <span className="card-title">三条件评测（SkillsBench）</span>
@@ -128,13 +139,13 @@ export default function ThreeConditionMode({ skills, apiKeySet }: { skills: Skil
         )}
 
         {skillId && testCases.length === 0 && (
-          <div className="info-banner">Skill 还没有测试用例，请先在 TestCase 页面添加。</div>
+          <div className="info-banner">Skill 还没有测试用例，请先<button className="link-btn" onClick={() => onNavigate?.('eval')}>在 TestCase 页面添加</button>。</div>
         )}
 
         <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleRun}
           disabled={!skillId || selectedTcIds.size === 0 || running || apiKeySet === false}>
           {running
-            ? phase === 'generating' ? '⏳ AI 生成 Skill C...' : `▶ 评测中 ${progress}%...`
+            ? phase === 'generating' ? <><span className="gen-spinner" />{` AI 生成 Skill C...`}</> : <><span className="gen-spinner" />{` 评测中 ${progress}%...`}</>
             : `▶ 开始三条件评测 (${selectedTcIds.size} 用例)`}
         </button>
         {error && <div className="guard-banner" style={{ marginTop: 10 }}>⚠️ {error}</div>}
@@ -212,6 +223,70 @@ export default function ThreeConditionMode({ skills, apiKeySet }: { skills: Skil
                   : <span className="winner-badge neu">平局</span>
             )}
           </div>
+
+          {detailsB.length > 0 && (
+            <div className="tc-detail-section" style={{ marginTop: 16 }}>
+              <div className="tc-detail-header" onClick={() => setDetailsOpen(o => !o)}>
+                <span className="tc-detail-chevron">{detailsOpen ? '▼' : '▶'}</span>
+                <span className="tc-detail-title">按用例查看详情</span>
+                <span className="tc-detail-count">{detailsB.length} 条</span>
+              </div>
+              {detailsOpen && (() => {
+                const tcNames = [...new Set([...detailsA, ...detailsB, ...detailsC].map(r => r.testCaseName ?? '(未命名)'))]
+                return (
+                  <div className="tc-detail-table">
+                    <div className="tc-detail-thead">
+                      <span className="tc-detail-col-name">用例</span>
+                      <span className="tc-detail-col-score">A 基线</span>
+                      <span className="tc-detail-col-score">B 当前</span>
+                      <span className="tc-detail-col-score">C AI生成</span>
+                    </div>
+                    {tcNames.map(tcName => {
+                      const rA = detailsA.find(r => (r.testCaseName ?? '(未命名)') === tcName)
+                      const rB = detailsB.find(r => (r.testCaseName ?? '(未命名)') === tcName)
+                      const rC = detailsC.find(r => (r.testCaseName ?? '(未命名)') === tcName)
+                      const isExpanded = expandedTc === tcName
+                      const dims = [...new Set([...Object.keys(rB?.scores ?? {}), ...Object.keys(rC?.scores ?? {})])]
+                      return (
+                        <div key={tcName} className="tc-detail-group">
+                          <div className={`tc-detail-row ${isExpanded ? 'expanded' : ''}`}
+                            onClick={() => setExpandedTc(isExpanded ? null : tcName)}>
+                            <span className="tc-detail-col-name">
+                              <span className="tc-detail-chevron-sm">{isExpanded ? '▼' : '▶'}</span>
+                              {tcName}
+                            </span>
+                            <span className="tc-detail-col-score" style={{ color: 'var(--text-muted)' }}>
+                              {rA ? rA.totalScore.toFixed(1) : '—'}
+                            </span>
+                            <span className="tc-detail-col-score" style={{ color: 'var(--accent)' }}>
+                              {rB ? rB.totalScore.toFixed(1) : '—'}
+                            </span>
+                            <span className="tc-detail-col-score" style={{ color: 'var(--success)' }}>
+                              {rC ? rC.totalScore.toFixed(1) : '—'}
+                            </span>
+                          </div>
+                          {isExpanded && dims.map(dim => {
+                            const sA = rA?.scores[dim]?.score ?? null
+                            const sB = rB?.scores[dim]?.score ?? null
+                            const sC = rC?.scores[dim]?.score ?? null
+                            const color = DIM_COLORS[dim] ?? '#888'
+                            return (
+                              <div key={dim} className="tc-detail-dim-row">
+                                <span className="tc-detail-dim-name" style={{ color }}>{dim}</span>
+                                <span className="tc-detail-col-score" style={{ color: 'var(--text-muted)', fontSize: 12 }}>{sA !== null ? sA.toFixed(1) : '—'}</span>
+                                <span className="tc-detail-col-score" style={{ color, fontSize: 12 }}>{sB !== null ? sB.toFixed(1) : '—'}</span>
+                                <span className="tc-detail-col-score" style={{ color, fontSize: 12 }}>{sC !== null ? sC.toFixed(1) : '—'}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import type { MutableRefObject } from 'react'
 import type { Skill, EvalResult, EvalHistoryPage, EvoRunResult, EvoSession, EvoPhase, EvoParadigm, EvoAnalysis, EvoConfig, EvoChainEntry, EvolutionEngine, ParetoPoint, EvoSkillResult, CoEvoResult, TransferReport, SkillXResult, SkillClawResult } from '../../../shared/types'
+import { useTrack } from '../hooks/useTrack'
 
 const MIN_MEANINGFUL_IMPROVEMENT = 0.3
 const PER_DIM_REGRESSION_TOLERANCE = 1.0
@@ -377,6 +378,7 @@ interface EvoPageProps {
 }
 
 export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPageProps) {
+  const track = useTrack()
   const initial = session.current ?? makeDefaultSession(initialSkillId ?? '')
 
   const [skills, setSkills] = useState<Skill[]>([])
@@ -398,6 +400,12 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
   const [diffMode, setDiffMode] = useState(false)            // false = side-by-side, true = diff highlight
   const [evoChain, setEvoChain] = useState<EvoChainEntry[]>([])
   const [engine, setEngine] = useState<EvolutionEngine>('skvm-evidence')
+  const [showAdvancedEngines, setShowAdvancedEngines] = useState(false)
+  const [plugins, setPlugins] = useState<import('../../../shared/types').PluginManifest[]>([])
+
+  useEffect(() => {
+    window.api.evo.listPlugins().then(setPlugins).catch(() => setPlugins([]))
+  }, [])
   const [evoSkillProgress, setEvoSkillProgress] = useState<{ iteration: number; total: number }>({ iteration: 0, total: 3 })
   const [evoSkillResult, setEvoSkillResult] = useState<EvoSkillResult | null>(null)
   const [coEvoResult, setCoEvoResult] = useState<CoEvoResult | null>(null)
@@ -523,6 +531,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
     try {
       const result = await window.api.evo.installAndEval(selectedId, evolvedContent)
       setEvoResult(result)
+      track('evo_ran', { engine: 'skvm', paradigm: paradigm })
       if (result.evolvedJobId) {
         cleanupRef.current?.()
         let origDone = !result.originalJobId; let evolDone = false
@@ -575,6 +584,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
         removeProgress()
         if (!v2AbortRef.current) {
           setEvoSkillResult(result)
+          track('evo_evoskill_ran', { iterations: result.iterations })
           const pareto = await window.api.evo.getParetoFrontier(selectedId)
           setParetoPoints(pareto)
         }
@@ -585,11 +595,12 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
         const result = await window.api.evo.runCoEvo({ skillId: selectedId, maxRounds: coEvoMaxRounds })
         if (!v2AbortRef.current) {
           setCoEvoResult(result)
+          track('evo_coevo_ran', { iterations: result.rounds })
           if (result.evolvedContent) await window.api.evo.installAndEval(selectedId, result.evolvedContent)
         }
       } else if (engine === 'skillx') {
         const result = await window.api.evo.runSkillX({ skillId: selectedId, minScore: skillXMinScore })
-        if (!v2AbortRef.current) setSkillXResult(result)
+        if (!v2AbortRef.current) { setSkillXResult(result); track('evo_skillx_ran') }
       } else if (engine === 'skillclaw') {
         const removeProgress = window.api.studio.onProgress((data) => {
           if (v2AbortRef.current) return
@@ -597,7 +608,14 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
         })
         const result = await window.api.evo.runSkillClaw({ skillId: selectedId, windowSize: skillClawWindowSize })
         removeProgress()
-        if (!v2AbortRef.current) setSkillClawResult(result)
+        if (!v2AbortRef.current) { setSkillClawResult(result); track('evo_skillclaw_ran') }
+      } else if (engine.startsWith('plugin:')) {
+        const pluginId = engine.slice(7)
+        const result = await window.api.evo.runPlugin({ skillId: selectedId, pluginId })
+        if (!v2AbortRef.current && result?.evolvedContent) {
+          await window.api.evo.installAndEval(selectedId, result.evolvedContent)
+          track('evo_plugin_ran', { pluginId })
+        }
       }
     } catch (e) {
       if (!v2AbortRef.current) setError(friendlyError(e))
@@ -661,6 +679,9 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
             <option value="">选择 Skill...</option>
             {skills.map((s) => <option key={s.id} value={s.id}>{s.name} v{s.version}</option>)}
           </select>
+          {skills.length === 0 && onNavigate && (
+            <button className="btn btn-ghost btn-sm" style={{ marginTop: 6 }} onClick={() => onNavigate('studio')}>✦ 去 Studio 创建 Skill</button>
+          )}
 
           {selectedId && origHistory.length > 0 && (
             <div className="orig-scores">
@@ -674,7 +695,12 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
               ))}
             </div>
           )}
-          {selectedId && origHistory.length === 0 && <p className="text-muted" style={{ fontSize: 12, marginTop: 8 }}>暂无评测记录</p>}
+          {selectedId && origHistory.length === 0 && (
+            <p className="text-muted" style={{ fontSize: 12, marginTop: 8 }}>
+              暂无评测记录
+              {onNavigate && <> · <button className="link-btn" style={{ fontSize: 12 }} onClick={() => onNavigate('eval', selectedId)}>去评测 →</button></>}
+            </p>
+          )}
 
           <EvoTree chain={evoChain} currentId={selectedId}
             onSelect={(id) => { if (phase === 'idle') setSelectedId(id) }} />
@@ -694,34 +720,87 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
           {(phase === 'idle' || phase === 'configured') && (
             <div className="evo-card">
               <div className="card-title">① 进化引擎</div>
-              {ENGINE_GROUPS.map(group => (
-                <div key={group.label} className="engine-group">
-                  <div className="engine-group-label">{group.label}</div>
-                  <div className="engine-chip-row">
-                    {group.ids.map(id => {
-                      const e = ENGINES.find(x => x.id === id)!
-                      const hasPrereq = !!e.prereq
-                      return (
-                        <label key={id} className={`engine-chip ${engine === id ? 'active' : ''}`} title={e.prereq ?? ''}>
-                          <input type="radio" name="engine" value={id} checked={engine === id} onChange={() => setEngine(id)} />
-                          {e.label}
-                          {hasPrereq && <span className="engine-chip-dot" title={e.prereq}>·</span>}
-                        </label>
-                      )
-                    })}
-                  </div>
+              {/* Default: SkVM engines */}
+              <div className="engine-group">
+                <div className="engine-group-label">SkVM 经典</div>
+                <div className="engine-chip-row">
+                  {ENGINE_GROUPS[0].ids.map(id => {
+                    const e = ENGINES.find(x => x.id === id)!
+                    return (
+                      <label key={id} className={`engine-chip ${engine === id ? 'active' : ''}`} title={e.prereq ?? ''}>
+                        <input type="radio" name="engine" value={id} checked={engine === id} onChange={() => setEngine(id)} />
+                        {e.label}
+                        {e.prereq && <span className="engine-chip-dot" title={e.prereq}>·</span>}
+                      </label>
+                    )
+                  })}
                 </div>
-              ))}
+              </div>
+              {/* Advanced engines — collapsed by default */}
+              <button
+                className="engine-advanced-toggle"
+                onClick={() => setShowAdvancedEngines(v => !v)}
+              >
+                {showAdvancedEngines ? '▾' : '▸'} 高级引擎
+                {!showAdvancedEngines && <span className="engine-advanced-hint">v2 算法 · 本地插件</span>}
+              </button>
+              {showAdvancedEngines && (
+                <>
+                  <div className="engine-group">
+                    <div className="engine-group-label">v2 算法</div>
+                    <div className="engine-chip-row">
+                      {ENGINE_GROUPS[1].ids.map(id => {
+                        const e = ENGINES.find(x => x.id === id)!
+                        return (
+                          <label key={id} className={`engine-chip ${engine === id ? 'active' : ''}`} title={e.prereq ?? ''}>
+                            <input type="radio" name="engine" value={id} checked={engine === id} onChange={() => setEngine(id)} />
+                            {e.label}
+                            {e.prereq && <span className="engine-chip-dot" title={e.prereq}>·</span>}
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                  {plugins.length > 0 && (
+                    <div className="engine-group">
+                      <div className="engine-group-label">本地插件</div>
+                      <div className="engine-chip-row">
+                        {plugins.map(p => {
+                          const pluginEngineId = `plugin:${p.id}` as EvolutionEngine
+                          return (
+                            <label key={p.id} className={`engine-chip ${engine === pluginEngineId ? 'active' : ''}`} title={p.description}>
+                              <input type="radio" name="engine" value={pluginEngineId} checked={engine === pluginEngineId} onChange={() => setEngine(pluginEngineId)} />
+                              {p.name}
+                              <span className="engine-chip-dot" title="本地插件">·</span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
               {/* Selected engine description */}
               {(() => {
                 const sel = ENGINES.find(e => e.id === engine)
-                return sel ? (
+                if (sel) return (
                   <div className="engine-desc">
                     <span className="engine-desc-name">{sel.label}</span>
                     <span className="engine-desc-hint">{sel.hint}</span>
                     {sel.prereq && <span className="engine-desc-prereq">前提：{sel.prereq}</span>}
                   </div>
-                ) : null
+                )
+                if (engine.startsWith('plugin:')) {
+                  const pluginId = engine.slice(7)
+                  const plug = plugins.find(p => p.id === pluginId)
+                  if (plug) return (
+                    <div className="engine-desc">
+                      <span className="engine-desc-name">{plug.name} <span style={{fontSize:10,opacity:.6}}>本地插件 v{plug.version}</span></span>
+                      {plug.description && <span className="engine-desc-hint">{plug.description}</span>}
+                    </div>
+                  )
+                }
+                return null
               })()}
 
               {/* SkVM paradigm sub-options */}
@@ -757,6 +836,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
                   <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleEvolve} disabled={!selectedId || apiKeySet === false}>
                     启动进化 (SkVM)
                   </button>
+                  {apiKeySet === false && <div className="gen-warn" style={{ marginTop: 8 }}>⚠️ 未配置 API Key，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 添加。</div>}
                 </>
               )}
 
@@ -806,8 +886,9 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
                   )}
                   <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={handleV2Evolve}
                     disabled={!selectedId || apiKeySet === false || v2Running}>
-                    {v2Running ? '进化中...' : `启动 ${ENGINES.find(e => e.id === engine)?.label}`}
+                    {v2Running ? '进化中...' : `启动 ${ENGINES.find(e => e.id === engine)?.label ?? (engine.startsWith('plugin:') ? plugins.find(p => p.id === engine.slice(7))?.name ?? engine : engine)}`}
                   </button>
+                  {apiKeySet === false && !v2Running && <div className="gen-warn" style={{ marginTop: 8 }}>⚠️ 未配置 API Key，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 添加。</div>}
                   {v2Running && !v2Cancelled && (
                     <button className="btn btn-ghost btn-sm" onClick={handleCancelV2} style={{ marginLeft: 6 }}>取消</button>
                   )}
@@ -974,7 +1055,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
             <div className="evo-card transfer-card">
               <div className="card-title">跨 LLM 迁移率测试</div>
               {availableProviders.length === 0 ? (
-                <p className="text-muted" style={{ fontSize: 12 }}>请先在设置中配置 LLM Provider</p>
+                <p className="text-muted" style={{ fontSize: 12 }}>请先<button className="link-btn" style={{ fontSize: 12 }} onClick={() => onNavigate?.('settings')}>在设置中配置 LLM Provider</button></p>
               ) : (
                 <>
                   <div className="transfer-model-grid">
@@ -1138,6 +1219,9 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
                   <div className="no-testcases-info">No test cases — 无测试用例，无法评测对比</div>
                 )}
                 <div className="result-actions">
+                  {onNavigate && evoResult.evolvedSkill && (
+                    <button className="btn btn-primary btn-sm" onClick={() => onNavigate('eval', evoResult.evolvedSkill.id)}>📊 去评测</button>
+                  )}
                   <button className="btn btn-ghost" onClick={handleEvolve}>再次进化</button>
                   <button className="btn btn-ghost" onClick={handleReset}>重新配置</button>
                 </div>
@@ -1183,6 +1267,10 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
         .demo-banner { display: flex; align-items: center; gap: 12px; background: rgba(249,115,22,0.12); border-bottom: 1px solid rgba(249,115,22,0.35); padding: 8px 20px; font-size: 13px; color: #f97316; flex-shrink: 0; }
         .demo-banner-exit { margin-left: auto; font-size: 12px; padding: 3px 10px; border-radius: var(--radius); border: 1px solid rgba(249,115,22,0.5); background: transparent; color: #f97316; cursor: pointer; }
         .demo-banner-exit:hover { background: rgba(249,115,22,0.15); }
+        .link-btn { background: none; border: none; color: var(--accent); font-size: inherit; cursor: pointer; padding: 0; text-decoration: underline; }
+        .link-btn:hover { opacity: 0.8; }
+        .gen-warn { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: var(--radius); padding: 8px 12px; color: var(--danger); font-size: 13px; }
+
         .demo-entry { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
         .demo-entry-btn { font-size: 12px; padding: 3px 10px; border-radius: var(--radius); border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; }
         .demo-entry-btn:hover { border-color: #f97316; color: #f97316; }
@@ -1339,6 +1427,9 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
         .engine-desc-name { font-size: 12px; font-weight: 700; color: var(--accent); }
         .engine-desc-hint { font-size: 11px; color: var(--text); line-height: 1.5; }
         .engine-desc-prereq { font-size: 10px; color: var(--warning); margin-top: 2px; }
+        .engine-advanced-toggle { display: flex; align-items: center; gap: 6px; background: none; border: 1px dashed var(--border); border-radius: 6px; color: var(--text-muted); font-size: 12px; padding: 5px 10px; cursor: pointer; margin-top: 4px; transition: all var(--transition); width: 100%; }
+        .engine-advanced-toggle:hover { border-color: var(--accent); color: var(--text); }
+        .engine-advanced-hint { font-size: 10px; color: var(--text-muted); margin-left: auto; opacity: 0.7; }
 
         /* Pareto scatter */
         .pareto-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }

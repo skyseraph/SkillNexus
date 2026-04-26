@@ -8,13 +8,19 @@ import { getConfig } from './config.handler'
 import type { Skill, SkillFileEntry, SkillType, ToolTarget, ScannedSkill, ScanResult, EvoChainEntry, EvoAnalysis } from '../../shared/types'
 
 // ── Security: allowed root directories ───────────────────────────────────────
-const ALLOWED_PATH_PREFIXES = () => [
-  resolve(app.getPath('userData')),
-  resolve(app.getPath('home')),
-  resolve(app.getPath('downloads')),
-  resolve(app.getPath('documents')),
-  resolve(app.getPath('desktop'))
-]
+let _allowedPrefixes: string[] | null = null
+const ALLOWED_PATH_PREFIXES = () => {
+  if (!_allowedPrefixes) {
+    _allowedPrefixes = [
+      resolve(app.getPath('userData')),
+      resolve(app.getPath('home')),
+      resolve(app.getPath('downloads')),
+      resolve(app.getPath('documents')),
+      resolve(app.getPath('desktop'))
+    ]
+  }
+  return _allowedPrefixes
+}
 
 function assertPathAllowed(p: string): void {
   const r = resolve(p)
@@ -57,7 +63,10 @@ function resolveToolDir(toolId: string): { name: string; exportDir: string; ext:
   const home = app.getPath('home')
   const cfg = getConfig()
   const override = cfg.toolPaths?.[toolId]
-  const exportDir = resolve(home, override ?? def.exportDir)
+  const raw = override ?? def.exportDir
+  // Expand leading ~ to home directory before resolving
+  const expanded = raw.startsWith('~') ? raw.replace(/^~/, home) : raw
+  const exportDir = resolve(home, expanded)
   return { name: def.name, exportDir, ext: def.ext }
 }
 
@@ -168,7 +177,7 @@ function rowToSkill(r: Record<string, unknown>): Skill {
     filePath: r.file_path as string,
     rootDir: (r.root_dir as string) || dirname(r.file_path as string),
     skillType: ((r.skill_type as string) || 'single') as SkillType,
-    trustLevel: ((r.trust_level as number) || 1) as 1 | 2 | 3 | 4,
+    trustLevel: (r.trust_level != null ? r.trust_level as number : 1) as 1 | 2 | 3 | 4,
     installedAt: r.installed_at as number,
     updatedAt: r.updated_at as number
   }
@@ -391,6 +400,12 @@ export function registerSkillsHandlers(): void {
   // Set trust level (T1-T4)
   ipcMain.handle('skills:setTrustLevel', (_event, id: string, level: 1 | 2 | 3 | 4) => {
     if (![1, 2, 3, 4].includes(level)) throw new Error('Invalid trust level')
+    // T4 requires the skill to have already reached T2 (5D quality) and T3 (eval-tested)
+    if (level === 4) {
+      const row = getDb().prepare('SELECT trust_level FROM skills WHERE id = ?').get(id) as { trust_level: number } | undefined
+      if (!row) throw new Error(`Skill ${id} not found`)
+      if (row.trust_level < 2) throw new Error('Cannot approve to T4: skill has not passed 5D quality check (T2) or 8D eval (T3)')
+    }
     getDb().prepare('UPDATE skills SET trust_level = ?, updated_at = ? WHERE id = ?').run(level, Date.now(), id)
   })
 
@@ -431,71 +446,89 @@ export function registerSkillsHandlers(): void {
 
   ipcMain.handle('skills:getEvoChain', (_event, skillId: string): EvoChainEntry[] => {
     const db = getDb()
-    const chain: EvoChainEntry[] = []
-    let cursorId: string | null = skillId
-    const visited = new Set<string>()
 
-    for (let depth = 0; depth < 20 && cursorId; depth++) {
-      if (visited.has(cursorId)) break
-      visited.add(cursorId)
+    type SkillRow = { id: string; name: string; version: string; installed_at: number; parent_skill_id: string | null; evolution_notes: string | null }
 
-      const row = db.prepare(
-        'SELECT id, name, version, installed_at, parent_skill_id, evolution_notes FROM skills WHERE id = ?'
-      ).get(cursorId) as { id: string; name: string; version: string; installed_at: number; parent_skill_id: string | null; evolution_notes: string | null } | undefined
+    const getRow = (id: string) => db.prepare(
+      'SELECT id, name, version, installed_at, parent_skill_id, evolution_notes FROM skills WHERE id = ?'
+    ).get(id) as SkillRow | undefined
 
-      if (!row) break
-
-      // Aggregate avg score from eval_history for this node
-      const evalRows = db.prepare(
-        'SELECT scores FROM eval_history WHERE skill_id = ? AND status = ? ORDER BY created_at DESC LIMIT 20'
-      ).all(row.id, 'success') as { scores: string }[]
-
-      let avgScore: number | undefined
-      if (evalRows.length > 0) {
-        let totalSum = 0
-        let totalCount = 0
-        for (const er of evalRows) {
-          try {
-            const scores = JSON.parse(er.scores) as Record<string, { score: number }>
-            const vals = Object.values(scores)
-            if (vals.length > 0) {
-              totalSum += vals.reduce((s, v) => s + v.score, 0) / vals.length
-              totalCount++
-            }
-          } catch { /* corrupt */ }
+    const parseNotes = (notes: string | null): { paradigm?: string; evolutionNotes?: EvoAnalysis } => {
+      if (!notes) return {}
+      try {
+        const p = JSON.parse(notes) as Record<string, string>
+        return {
+          paradigm: p.paradigm,
+          evolutionNotes: { rootCause: p.rootCause ?? '', generalityTest: p.generalityTest ?? '', regressionRisk: p.regressionRisk ?? '' }
         }
-        if (totalCount > 0) avgScore = totalSum / totalCount
-      }
+      } catch { return {} }
+    }
 
-      // Parse evolution_notes if present
-      let evolutionNotes: EvoAnalysis | undefined
-      let paradigm: string | undefined
-      if (row.evolution_notes) {
+    // Step 1: walk UP to find the root
+    let rootId = skillId
+    const visited = new Set<string>()
+    let cursor: SkillRow | undefined = getRow(skillId)
+    while (cursor?.parent_skill_id && !visited.has(cursor.parent_skill_id)) {
+      visited.add(cursor.id)
+      rootId = cursor.parent_skill_id
+      cursor = getRow(cursor.parent_skill_id)
+    }
+
+    // Step 2: BFS DOWN from root to collect all IDs in order
+    const chain: SkillRow[] = []
+    const queue: string[] = [rootId]
+    const seen = new Set<string>()
+    while (queue.length > 0 && chain.length < 50) {
+      const id = queue.shift()!
+      if (seen.has(id)) continue
+      seen.add(id)
+      const row = getRow(id)
+      if (!row) continue
+      chain.push(row)
+      const children = db.prepare(
+        'SELECT id FROM skills WHERE parent_skill_id = ? ORDER BY installed_at ASC'
+      ).all(id) as { id: string }[]
+      for (const c of children) queue.push(c.id)
+    }
+
+    // Step 3: bulk-fetch eval scores for all chain IDs in one query (avoids N+1)
+    const chainIds = chain.map(r => r.id)
+    const avgScoreMap = new Map<string, number>()
+    if (chainIds.length > 0) {
+      const placeholders = chainIds.map(() => '?').join(',')
+      const evalRows = db.prepare(
+        `SELECT skill_id, scores FROM eval_history WHERE skill_id IN (${placeholders}) AND status = 'success' ORDER BY created_at DESC`
+      ).all(...chainIds) as { skill_id: string; scores: string }[]
+
+      const perSkill = new Map<string, { sum: number; count: number }>()
+      for (const er of evalRows) {
         try {
-          const parsed = JSON.parse(row.evolution_notes) as Record<string, string>
-          evolutionNotes = {
-            rootCause: parsed.rootCause ?? '',
-            generalityTest: parsed.generalityTest ?? '',
-            regressionRisk: parsed.regressionRisk ?? ''
-          }
-          if (parsed.paradigm) paradigm = parsed.paradigm
+          const vals = Object.values(JSON.parse(er.scores) as Record<string, { score: number }>)
+          if (vals.length === 0) continue
+          const avg = vals.reduce((s, v) => s + v.score, 0) / vals.length
+          const acc = perSkill.get(er.skill_id) ?? { sum: 0, count: 0 }
+          acc.sum += avg
+          acc.count++
+          perSkill.set(er.skill_id, acc)
         } catch { /* corrupt */ }
       }
+      for (const [id, { sum, count }] of perSkill) {
+        if (count > 0) avgScoreMap.set(id, sum / count)
+      }
+    }
 
-      chain.unshift({
+    return chain.map(row => {
+      const { paradigm, evolutionNotes } = parseNotes(row.evolution_notes)
+      return {
         id: row.id,
         name: row.name,
         version: row.version,
         installedAt: row.installed_at,
         paradigm,
-        avgScore,
+        avgScore: avgScoreMap.get(row.id),
         evolutionNotes,
         isRoot: !row.parent_skill_id
-      })
-
-      cursorId = row.parent_skill_id
-    }
-
-    return chain
+      }
+    })
   })
 }

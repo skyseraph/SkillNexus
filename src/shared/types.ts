@@ -12,7 +12,7 @@ export interface Skill {
   filePath: string       // entry .md for single; main entry for agent
   rootDir: string        // same as filePath dir for single; folder root for agent
   skillType: SkillType
-  trustLevel: TrustLevel // 1=AI-generated, 2=format+safety, 3=eval-tested, 4=user-approved
+  trustLevel: TrustLevel // 1=未验证，2=5D 均分≥6, 3=8D avgScore≥7, 4=用户批准
   installedAt: number
   updatedAt: number
   evolutionNotes?: string
@@ -64,6 +64,8 @@ export interface EvalResult {
   durationMs: number
   status: 'success' | 'error'
   createdAt: number
+  testCaseId?: string
+  testCaseName?: string
 }
 
 export interface SkillRankEntry {
@@ -77,7 +79,7 @@ export interface SkillRankEntry {
   avgSafety: number
   avgCompleteness: number
   avgRobustness: number
-  // SkillNet
+  // SkillNexus S1-S3
   avgExecutability: number
   avgCostAwareness: number
   avgMaintainability: number
@@ -190,6 +192,7 @@ export interface AppConfigPublic {
   providers: Array<Omit<LLMProvider, 'apiKey'> & { apiKeySet: boolean }>
   activeProviderId: string
   toolApiKeysSet?: { tavily: boolean }
+  githubTokenSet?: boolean
 }
 
 export interface EvalHistoryPage {
@@ -274,6 +277,15 @@ export type EvolutionEngine =
   | 'skillmoo'
   | 'skillclaw'
   | 'manual'
+  | (string & {})  // allows plugin:{id} dynamic engine IDs
+
+export interface PluginManifest {
+  id: string
+  name: string
+  description: string
+  version: string
+  filePath: string
+}
 
 export interface EvoChainEntry {
   id: string
@@ -357,17 +369,29 @@ export interface JobEntry {
   totalScore?: number
   status?: 'success' | 'error'
   durationMs?: number
+  testCaseName?: string
+  // eval job-level aggregation (when id is a job_id)
+  jobId?: string
+  totalCases?: number
+  successCases?: number
+  failedCases?: number
+  avgJobScore?: number
   // evo fields
   engine?: EvolutionEngine
   parentSkillId?: string
   parentSkillName?: string
   avgScore?: number
+  parentAvgScore?: number
   evalCount?: number
   createdAt: number
 }
 
 export interface IpcChannels {
+  'telemetry:track': (name: string, properties?: Record<string, unknown>) => Promise<void>
+  'telemetry:getConsent': () => Promise<{ enabled: boolean; asked: boolean }>
+  'telemetry:setConsent': (enabled: boolean) => Promise<void>
   'skills:getAll': () => Promise<Skill[]>
+  'skills:getEvolved': () => Promise<Skill[]>
   'skills:install': (filePath: string) => Promise<Skill>
   'skills:installDir': (dirPath: string) => Promise<Skill>
   'skills:uninstall': (id: string) => Promise<void>
@@ -384,6 +408,9 @@ export interface IpcChannels {
   'marketplace:install': (skill: MarketSkill) => Promise<Skill>
   'eval:start': (skillId: string, testCaseIds: string[]) => Promise<string>
   'eval:history': (skillId: string, limit?: number, offset?: number) => Promise<EvalHistoryPage>
+  'eval:getById': (evalId: string) => Promise<EvalResult | null>
+  'eval:getByJobId': (jobId: string) => Promise<EvalResult[]>
+  'eval:deleteByJobId': (jobId: string) => Promise<void>
   'eval:exportHistory': (skillId: string) => Promise<EvalExport>
   'eval:historyAll': () => Promise<SkillRankEntry[]>
   'eval:startThreeCondition': (skillId: string, testCaseIds: string[]) => Promise<ThreeConditionResult>
@@ -393,6 +420,7 @@ export interface IpcChannels {
   'testcases:create': (tc: Omit<TestCase, 'id' | 'createdAt'>) => Promise<TestCase>
   'testcases:delete': (id: string) => Promise<void>
   'testcases:generate': (skillId: string, count: number) => Promise<TestCase[]>
+  'testcases:importJson': (skillId: string, items: unknown[]) => Promise<{ imported: TestCase[]; errors: string[] }>
   'evo:installAndEval': (originalSkillId: string, evolvedContent: string) => Promise<EvoRunResult>
   'evo:runEvoSkill': (config: { skillId: string; maxIterations?: number }) => Promise<EvoSkillResult>
   'evo:getParetoFrontier': (skillId: string) => Promise<ParetoPoint[]>
@@ -401,6 +429,7 @@ export interface IpcChannels {
   'evo:runSkillX': (config: { skillId: string; minScore?: number; sampleLimit?: number }) => Promise<SkillXResult>
   'evo:runSkillClaw': (config: { skillId: string; windowSize?: number }) => Promise<SkillClawResult>
   'jobs:list': (filter?: 'all' | 'eval' | 'evo') => Promise<JobEntry[]>
+  'shell:openPath': (filePath: string) => Promise<void>
   'studio:evolve': (skillId: string, strategy: string) => Promise<void>
   'studio:generateFromExamples': (examples: Array<{ input: string; output: string }>, description?: string) => Promise<void>
   'studio:generateStream': (prompt: string) => Promise<void>
