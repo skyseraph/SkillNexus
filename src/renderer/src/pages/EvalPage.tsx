@@ -1058,11 +1058,11 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
       setHistory(res.items)
       setHistoryTotal(res.total)
       setHistoryPage(page)
-    }).catch(() => {})
+    }).catch((e) => console.error('[EvalPage] history load failed:', e))
     // Load full history for charts (no pagination limit)
     window.api.eval.history(selectedSkill, 10000, 0).then((res) => {
       setChartHistory(res.items.filter(r => r.status === 'success'))
-    }).catch(() => {})
+    }).catch((e) => console.error('[EvalPage] chart history load failed:', e))
   }, [selectedSkill])
 
   useEffect(() => {
@@ -1085,7 +1085,7 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
 
   const handleRunEval = async (tcIds?: string[]) => {
     const ids = tcIds ?? [...selectedTcIds]
-    if (!selectedSkill || ids.length === 0) return
+    if (!selectedSkill || ids.length === 0 || running) return
     setSelectedTcIds(new Set(ids))
     setPageTab('eval')
     setEvalMode('single')
@@ -1213,7 +1213,7 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
                 <button className="btn btn-primary"
                   onClick={() => handleRunEval()}
                   disabled={!selectedSkill || running || selectedTcIds.size === 0 || apiKeySet === false}>
-                  {running ? `${progress}%` : `▶ 运行（${selectedTcIds.size} 个用例）`}
+                  {running ? <><span className="gen-spinner" />{`${progress}%`}</> : `▶ 运行（${selectedTcIds.size} 个用例）`}
                 </button>
               </div>
               {testCases.length > 0 && (

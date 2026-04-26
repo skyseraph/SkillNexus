@@ -740,7 +740,7 @@ function SkillRow({ skill, onClick, onUninstall, onCtxMenu, toast }: { skill: Sk
   )
 }
 
-function MySkillsTab({ skills, loading, onInstallFile, onInstallDir, onCardClick, onScanDone, installing, onUninstall, onNavigate, toast }: {
+function MySkillsTab({ skills, loading, onInstallFile, onInstallDir, onCardClick, onScanDone, installing, onUninstall, onNavigate, toast, onRefresh }: {
   skills: Skill[]; loading: boolean; installing: boolean
   onInstallFile: () => void; onInstallDir: () => void
   onCardClick: (s: Skill) => void
@@ -748,6 +748,7 @@ function MySkillsTab({ skills, loading, onInstallFile, onInstallDir, onCardClick
   onUninstall: (id: string) => void
   onNavigate?: (page: string, skillId?: string) => void
   toast?: (msg: string, type?: 'success' | 'error' | 'info') => void
+  onRefresh?: () => void
 }) {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'single' | 'agent'>('all')
@@ -819,7 +820,7 @@ function MySkillsTab({ skills, loading, onInstallFile, onInstallDir, onCardClick
           </button>
         ))}
         <div className="sidebar-section-label" style={{ marginTop: 16 }}>Quick</div>
-        <button className="sidebar-filter-item" onClick={() => window.api.skills.getAll().then(() => {})}>↺ Refresh</button>
+        <button className="sidebar-filter-item" onClick={onRefresh} disabled={loading}>↺ Refresh</button>
       </div>
 
       {/* Main */}
@@ -949,6 +950,14 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
   const [drawerSkill, setDrawerSkill] = useState<Skill | null>(null)
   const [uninstallTarget, setUninstallTarget] = useState<{ id: string; name: string; info: { evalCount: number; tcCount: number; evolvedCount: number } } | null>(null)
 
+  const loadSkills = useCallback(async () => {
+    if (loading) return
+    setLoading(true)
+    try { setSkills(await window.api.skills.getAll()) }
+    catch (e) { toast?.(String(e), 'error') }
+    finally { setLoading(false) }
+  }, [loading, toast])
+
   useEffect(() => {
     window.api.skills.getAll().then(data => { setSkills(data); setLoading(false) })
   }, [])
@@ -1037,6 +1046,7 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
           onUninstall={handleUninstall}
           onNavigate={onNavigate}
           toast={toast}
+          onRefresh={loadSkills}
         />
       )}
 

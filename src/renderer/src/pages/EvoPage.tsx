@@ -916,7 +916,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
                   )}
                   <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={handleV2Evolve}
                     disabled={!selectedId || apiKeySet === false || v2Running}>
-                    {v2Running ? '进化中...' : `启动 ${ENGINES.find(e => e.id === engine)?.label ?? (engine.startsWith('plugin:') ? plugins.find(p => p.id === engine.slice(7))?.name ?? engine : engine)}`}
+                    {v2Running ? <><span className="evo-spinner" />{'进化中...'}</> : `启动 ${ENGINES.find(e => e.id === engine)?.label ?? (engine.startsWith('plugin:') ? plugins.find(p => p.id === engine.slice(7))?.name ?? engine : engine)}`}
                   </button>
                   {!selectedId && !v2Running && <div className="no-skill-hint">← 请先在左侧选择一个 Skill</div>}
                   {apiKeySet === false && !v2Running && <div className="gen-warn" style={{ marginTop: 8 }}>⚠️ 未配置 API Key，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 添加。</div>}
@@ -1547,6 +1547,8 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
         .modal-close:hover { background: var(--surface2); color: var(--text); }
         .modal-code { flex: 1; overflow-y: auto; padding: 16px 20px; margin: 0; font-family: 'Courier New', monospace; font-size: 11px; line-height: 1.65; white-space: pre-wrap; word-break: break-all; color: var(--text); background: var(--bg); }
         .modal-footer { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+        .evo-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: evo-spin 0.7s linear infinite; vertical-align: middle; margin-right: 4px; }
+        @keyframes evo-spin { to { transform: rotate(360deg); } }
       `}</style>
     </div>
   )

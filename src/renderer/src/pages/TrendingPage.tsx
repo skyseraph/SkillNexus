@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import type { SkillRankEntry } from '../../../shared/types'
 
 const DIM_COLORS: Record<string, string> = {
@@ -75,8 +75,11 @@ export default function TrendingPage({ onNavigate }: { onNavigate?: (page: strin
   const [loading, setLoading] = useState(true)
   const [activeDim, setActiveDim] = useState('overall')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const loadingRef = useRef(false)
 
   const load = useCallback(async () => {
+    if (loadingRef.current) return
+    loadingRef.current = true
     setLoading(true)
     try {
       const entries = await window.api.eval.historyAll()
@@ -97,6 +100,7 @@ export default function TrendingPage({ onNavigate }: { onNavigate?: (page: strin
       setRanked(rankedList)
     } finally {
       setLoading(false)
+      loadingRef.current = false
     }
   }, [])
 

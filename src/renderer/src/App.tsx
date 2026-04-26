@@ -135,7 +135,7 @@ export default function App() {
             {mounted.has('evo') && <EvoPage key={v('evo')} session={evoSessionRef} initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} />}
           </div>
           <div style={{ display: page === 'tasks' ? undefined : 'none', height: '100%' }}>
-            {mounted.has('tasks') && <TasksPage key={v('tasks')} initialJobId={navJobId ?? undefined} onNavigate={handleNavigate} />}
+            {mounted.has('tasks') && <TasksPage key={v('tasks')} initialJobId={navJobId ?? undefined} onNavigate={handleNavigate} toast={toast} />}
           </div>
           <div style={{ display: page === 'trending' ? undefined : 'none', height: '100%' }}>
             {mounted.has('trending') && <TrendingPage onNavigate={handleNavigate} />}

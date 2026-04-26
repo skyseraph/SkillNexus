@@ -1515,7 +1515,7 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
 
         /* ── Header ── */
         .studio-v2-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0; }
-        .studio-v2-header h1 { font-size: 22px; font-weight: 700; }
+        .studio-v2-header h1 { font-size: 24px; font-weight: 700; }
         .studio-v2-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
         .studio-v2-header-right { display: flex; gap: 8px; align-items: center; }
         .studio-v2-header-badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 10px; border: 1px solid; }

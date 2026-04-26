@@ -5,6 +5,7 @@ import { exportEvalReport, exportEvoReport } from '../utils/report-export'
 interface TasksPageProps {
   onNavigate: (page: string, skillId?: string, jobId?: string) => void
   initialJobId?: string
+  toast?: (msg: string, type?: 'success' | 'error' | 'info') => void
 }
 
 type Filter = 'all' | 'eval' | 'evo'
@@ -716,7 +717,7 @@ function DeleteConfirm({ job, onConfirm, onCancel }: { job: JobEntry; onConfirm:
 }
 
 // ── main page ─────────────────────────────────────────────────────────────────
-export default function TasksPage({ onNavigate, initialJobId }: TasksPageProps) {
+export default function TasksPage({ onNavigate, initialJobId, toast }: TasksPageProps) {
   const [jobs, setJobs] = useState<JobEntry[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [evalSubFilter, setEvalSubFilter] = useState<EvalSubFilter>('all')
@@ -731,8 +732,9 @@ export default function TasksPage({ onNavigate, initialJobId }: TasksPageProps) 
   const load = useCallback(async (f: Filter) => {
     setLoading(true); setSelected(new Set())
     try { setJobs(await window.api.jobs.list(f)) }
+    catch { toast?.('加载失败，请重试', 'error') }
     finally { setLoading(false) }
-  }, [])
+  }, [toast])
 
   useEffect(() => { load(filter) }, [filter, load])
 
@@ -787,7 +789,10 @@ export default function TasksPage({ onNavigate, initialJobId }: TasksPageProps) 
       setJobs(prev => prev.filter(j => j.id !== job.id))
       setSelected(prev => { const n = new Set(prev); n.delete(job.id); return n })
       if (activeJobId === job.id) setActiveJobId(null)
-    } catch { /* ignore */ }
+      toast?.('已删除', 'success')
+    } catch {
+      toast?.('删除失败，请重试', 'error')
+    }
     setDeleteTarget(null)
   }
 
@@ -796,12 +801,18 @@ export default function TasksPage({ onNavigate, initialJobId }: TasksPageProps) 
     if (ids.length !== 2) return
     const [a, b] = ids.map(id => filtered.find(j => j.id === id)!)
     try {
-      const [ca, cb] = await Promise.all([
+      const results = await Promise.allSettled([
         window.api.skills.getContent(a.skillId),
         window.api.skills.getContent(b.skillId)
       ])
-      setDiffModal({ jobA: a, jobB: b, contentA: ca, contentB: cb })
-    } catch { /* ignore */ }
+      if (results[0].status === 'rejected' || results[1].status === 'rejected') {
+        toast?.('获取 Skill 内容失败', 'error')
+        return
+      }
+      setDiffModal({ jobA: a, jobB: b, contentA: results[0].value, contentB: results[1].value })
+    } catch {
+      toast?.('对比失败，请重试', 'error')
+    }
   }
 
   // Stats
