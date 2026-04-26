@@ -206,14 +206,15 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-
-ref/*
+refs/*
 doc/*
 progress.md
 CLAUDE.md
 refs/CLAUDE copy.md
 refs/index.html
 refs/spec.md
+example/*
+openspec/
 openspec/*.*
 openspec/changes/*
 openspec/changes/studio-redesign/prototype.html
@@ -224,6 +225,7 @@ openspec/specs/*
 .plans/*.*
 .plans/skill-nexus/*
 .vscode/*.*
+out/
 out/main/index.js
 out/preload/index.js
 out/renderer/index.html
@@ -231,3 +233,4 @@ out/renderer/assets/index-B_AXYFK0.css
 out/renderer/assets/index-k4WdKCLc.js
 node_modules/
 .DS_Store
+e2e/

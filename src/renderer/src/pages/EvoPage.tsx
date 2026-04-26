@@ -177,8 +177,8 @@ function ParetoScatter({ points }: { points: ParetoPoint[] }) {
         {/* Axes */}
         <line x1={PAD} y1={H - PAD} x2={W - PAD / 2} y2={H - PAD} stroke="var(--border)" strokeWidth={1} />
         <line x1={PAD} y1={PAD / 2} x2={PAD} y2={H - PAD} stroke="var(--border)" strokeWidth={1} />
-        <text x={W / 2} y={H - 6} textAnchor="middle" fontSize={10} fill="var(--text-muted)">Accuracy</text>
-        <text x={8} y={H / 2} textAnchor="middle" fontSize={10} fill="var(--text-muted)" transform={`rotate(-90, 8, ${H / 2})`}>Cost Aware</text>
+        <text x={W / 2} y={H - 6} textAnchor="middle" fontSize={10} fill="var(--text-muted)">准确性</text>
+        <text x={8} y={H / 2} textAnchor="middle" fontSize={10} fill="var(--text-muted)" transform={`rotate(-90, 8, ${H / 2})`}>成本意识</text>
         {points.map((p) => {
           const cx = PAD + ((p.x / 10) * (W - PAD * 1.5))
           const cy = (H - PAD) - ((p.y / 10) * (H - PAD * 1.5))
@@ -201,7 +201,10 @@ function ParetoScatter({ points }: { points: ParetoPoint[] }) {
 
 function RadarChart({ dims, before, after }: { dims: string[]; before: Record<string, number>; after: Record<string, number> }) {
   if (dims.length === 0) return null
-  const SIZE = 220; const CX = SIZE / 2; const CY = SIZE / 2; const R = 82; const MAX = 10
+  const [zoom, setZoom] = useState(1)
+  const SIZE = 220; const CX = SIZE / 2; const CY = SIZE / 2; const R = 80; const MAX = 10
+  const LABEL_R = R + 20
+  const PAD = 38
   const n = dims.length
   const angle = (i: number) => (Math.PI * 2 * i) / n - Math.PI / 2
 
@@ -209,14 +212,28 @@ function RadarChart({ dims, before, after }: { dims: string[]; before: Record<st
     const r = (val / MAX) * R
     return { x: CX + r * Math.cos(angle(i)), y: CY + r * Math.sin(angle(i)) }
   }
+  const labelXY = (i: number) => ({
+    x: CX + LABEL_R * Math.cos(angle(i)),
+    y: CY + LABEL_R * Math.sin(angle(i))
+  })
 
   const gridLevels = [2, 4, 6, 8, 10]
   const polyPoints = (scores: Record<string, number>) =>
     dims.map((d, i) => { const p = toXY(i, scores[d] ?? 0); return `${p.x},${p.y}` }).join(' ')
 
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault()
+    setZoom(z => Math.min(3, Math.max(0.5, z - e.deltaY * 0.001)))
+  }
+
   return (
-    <div className="radar-wrap">
-      <svg width={SIZE} height={SIZE} style={{ display: 'block', margin: '0 auto' }}>
+    <div className="radar-wrap" onWheel={handleWheel} onDoubleClick={() => setZoom(1)} title="滚轮缩放，双击重置">
+      <svg
+        viewBox={`${-PAD} ${-PAD} ${SIZE + PAD * 2} ${SIZE + PAD * 2}`}
+        width={SIZE} height={SIZE}
+        overflow="visible"
+        style={{ display: 'block', margin: '0 auto', transform: `scale(${zoom})`, transformOrigin: 'center', transition: 'transform 0.15s ease' }}
+      >
         {/* Grid rings */}
         {gridLevels.map(lv => (
           <polygon key={lv}
@@ -234,7 +251,7 @@ function RadarChart({ dims, before, after }: { dims: string[]; before: Record<st
         <polygon points={polyPoints(after)} fill="rgba(108,99,255,0.18)" stroke="#6c63ff" strokeWidth={2} />
         {/* Dimension labels */}
         {dims.map((d, i) => {
-          const p = toXY(i, MAX + 1.5)
+          const p = labelXY(i)
           const anchor = p.x < CX - 4 ? 'end' : p.x > CX + 4 ? 'start' : 'middle'
           return (
             <text key={d} x={p.x} y={p.y + 4} textAnchor={anchor} fontSize={9} fill="var(--text-muted)" style={{ textTransform: 'capitalize' }}>
@@ -341,9 +358,9 @@ function AnalysisPanel({ data }: { data: EvoAnalysis }) {
   return (
     <div className="analysis-panel">
       <div className="analysis-title">优化器诊断</div>
-      <div className="analysis-field"><span className="analysis-label">ROOT CAUSE</span><span className="analysis-value">{data.rootCause || '—'}</span></div>
-      <div className="analysis-field"><span className="analysis-label">GENERALITY TEST</span><span className="analysis-value">{data.generalityTest || '—'}</span></div>
-      <div className="analysis-field"><span className="analysis-label">REGRESSION RISK</span><span className="analysis-value">{data.regressionRisk || '—'}</span></div>
+      <div className="analysis-field"><span className="analysis-label">根因分析</span><span className="analysis-value">{data.rootCause || '—'}</span></div>
+      <div className="analysis-field"><span className="analysis-label">泛化测试</span><span className="analysis-value">{data.generalityTest || '—'}</span></div>
+      <div className="analysis-field"><span className="analysis-label">回归风险</span><span className="analysis-value">{data.regressionRisk || '—'}</span></div>
     </div>
   )
 }
@@ -925,9 +942,9 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
           {phase === 'analyzing' && !analysisData && (
             <div className="analysis-panel loading">
               <div className="analysis-title">优化器诊断 <span className="streaming-dot">●</span></div>
-              <div className="analysis-field"><span className="analysis-label">ROOT CAUSE</span><span className="analysis-value dim">分析中...</span></div>
-              <div className="analysis-field"><span className="analysis-label">GENERALITY TEST</span><span className="analysis-value dim">—</span></div>
-              <div className="analysis-field"><span className="analysis-label">REGRESSION RISK</span><span className="analysis-value dim">—</span></div>
+              <div className="analysis-field"><span className="analysis-label">根因分析</span><span className="analysis-value dim">分析中...</span></div>
+              <div className="analysis-field"><span className="analysis-label">泛化测试</span><span className="analysis-value dim">—</span></div>
+              <div className="analysis-field"><span className="analysis-label">回归风险</span><span className="analysis-value dim">—</span></div>
             </div>
           )}
 
@@ -1452,7 +1469,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
         .engine-param-val { width: 28px; text-align: right; font-weight: 600; color: var(--accent); font-size: 12px; }
 
         /* Radar chart */
-        .radar-wrap { margin: 0 auto 16px; width: 220px; }
+        .radar-wrap { margin: 0 auto 16px; width: 220px; overflow: visible; cursor: zoom-in; }
         .radar-legend { display: flex; justify-content: center; gap: 16px; margin-top: 6px; font-size: 11px; color: var(--text-muted); }
         .radar-leg-orig { color: rgba(136,136,136,0.8); }
         .radar-leg-evo { color: #6c63ff; }
