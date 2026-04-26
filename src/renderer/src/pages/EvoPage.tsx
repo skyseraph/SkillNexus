@@ -480,6 +480,9 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
   useEffect(() => {
     const skill = skills.find((s) => s.id === selectedId) ?? null
     setSelectedSkill(skill)
+    // clear v2 results when skill changes
+    setEvoSkillResult(null); setCoEvoResult(null); setParetoPoints([])
+    setSkillXResult(null); setSkillClawResult(null)
   }, [selectedId, skills])
 
   useEffect(() => {
