@@ -191,7 +191,7 @@ export default function TrendingPage({ onNavigate }: { onNavigate?: (page: strin
 
                   {/* Info */}
                   <div className="rank-info">
-                    <div className="rank-name">{skill.skillName}</div>
+                    <div className="rank-name">{skill.skillName}{skill.skillType === 'agent' && <span className="rank-agent-badge">Agent</span>}</div>
                     <div className="rank-meta">
                       <span className="eval-count">{skill.evalCount} evals</span>
                     </div>
@@ -245,7 +245,7 @@ export default function TrendingPage({ onNavigate }: { onNavigate?: (page: strin
                   <div className="rank-main">
                     <div className="rank-pos"><span className="rank-num">—</span></div>
                     <div className="rank-info">
-                      <div className="rank-name">{skill.skillName}</div>
+                      <div className="rank-name">{skill.skillName}{skill.skillType === 'agent' && <span className="rank-agent-badge">Agent</span>}</div>
                       <div className="rank-meta">
                       </div>
                     </div>
@@ -300,6 +300,7 @@ export default function TrendingPage({ onNavigate }: { onNavigate?: (page: strin
 
         .rank-info { flex: 1; min-width: 0; }
         .rank-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+        .rank-agent-badge { font-size: 10px; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 0 4px; margin-left: 6px; vertical-align: middle; }
         .rank-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
         .version { font-size: 11px; color: var(--text-muted); }
         .tag { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; font-size: 10px; color: var(--text-muted); }
