@@ -1,4 +1,5 @@
 import { BaseEvolutionEngine } from './base-engine'
+import { getLanguage } from '../../ipc/config.handler'
 import type { SkillXResult, SkillXEntry } from '../../../shared/types'
 
 const DEFAULT_MIN_SCORE = 7.0
@@ -13,6 +14,9 @@ interface SkillXConfig {
 
 export class SkillXEngine extends BaseEvolutionEngine<SkillXConfig, SkillXResult> {
   private async extractEntries(skillContent: string, samplesText: string): Promise<SkillXEntry[]> {
+    const langInstruction = getLanguage() === 'en'
+      ? 'IMPORTANT: The "content" field of each entry MUST be written in English.'
+      : 'IMPORTANT: The "content" field of each entry MUST be written in Chinese (简体中文).'
     const text = await this.callAI({
       systemPrompt: `You are a Skill knowledge extractor. Analyze successful skill execution examples and extract reusable skill patterns.
 Classify each pattern into exactly one level:
@@ -21,7 +25,8 @@ Classify each pattern into exactly one level:
 - Level 3 (atomic): Single-step best practices, constraints, guardrails
 
 Output only valid JSON: {"entries": [{"level": 1|2|3, "levelName": "planning"|"functional"|"atomic", "content": "...", "sourceCount": number}]}
-Extract 3–8 entries total. Focus on structural patterns, not task-specific details.`,
+Extract 3–8 entries total. Focus on structural patterns, not task-specific details.
+${langInstruction}`,
       userMessage: `Skill content:\n${skillContent}\n\nHigh-score execution examples:\n${samplesText}\n\nExtract skill patterns:`
     })
     try {

@@ -143,12 +143,10 @@ function RadarChart({ scores, minScores, maxScores, size = 200 }: {
   )
 }
 
-function timeAgo(ms: number): string {
-  const diff = Date.now() - ms
-  if (diff < 60_000) return `${Math.floor(diff / 1000)}s ago`
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
-  return `${Math.floor(diff / 86_400_000)}d ago`
+function formatDateTime(ms: number): string {
+  const d = new Date(ms)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 // ── row components ────────────────────────────────────────────────────────────
@@ -197,7 +195,7 @@ function EvalRow({ job, selected, active, onSelect, onClick, onDelete, onNavigat
         )}
       </td>
       <td className="task-meta-cell" onClick={onClick}>
-        <span className="task-time">{timeAgo(job.createdAt)}</span>
+        <span className="task-time">{formatDateTime(job.createdAt)}</span>
       </td>
       <td className="task-actions-cell">
         <div className="task-actions">
@@ -241,7 +239,7 @@ function EvoRow({ job, selected, active, onSelect, onClick, onDelete, onNavigate
         }
       </td>
       <td className="task-meta-cell" onClick={onClick}>
-        <span className="task-time">{timeAgo(job.createdAt)}</span>
+        <span className="task-time">{formatDateTime(job.createdAt)}</span>
       </td>
       <td className="task-actions-cell">
         <div className="task-actions">
@@ -738,7 +736,7 @@ export default function TasksPage({ onNavigate, initialJobId }: TasksPageProps) 
 
   useEffect(() => { load(filter) }, [filter, load])
 
-  const skillNames = [...new Set(jobs.map(j => j.skillName))].sort()
+  const skillNames = [...new Set(jobs.map(j => j.parentSkillName ?? j.skillName))].sort()
 
   const filtered = jobs
     .filter(j => !skillFilter || j.skillName === skillFilter || j.parentSkillName === skillFilter)
@@ -898,7 +896,7 @@ export default function TasksPage({ onNavigate, initialJobId }: TasksPageProps) 
         .task-score { color: var(--accent); font-weight: 600; }
         .task-score-error { color: #f87171; font-size: 11px; }
         .task-score-na { color: var(--text-muted); font-size: 11px; }
-        .task-meta-cell { width: 110px; display: flex; gap: 8px; align-items: center; padding-top: 10px; }
+        .task-meta-cell { width: 140px; display: flex; gap: 8px; align-items: center; padding-top: 10px; }
         .task-dur { font-size: 11px; color: var(--text-muted); }
         .task-time { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
         .task-actions-cell { width: 40px; }

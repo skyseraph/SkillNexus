@@ -1,4 +1,5 @@
 import { BaseEvolutionEngine } from './base-engine'
+import { getLanguage } from '../../ipc/config.handler'
 import type { CoEvoResult } from '../../../shared/types'
 
 const DEFAULT_MAX_ROUNDS = 5
@@ -21,8 +22,11 @@ export class CoEvoSkillEngine extends BaseEvolutionEngine<CoEvoConfig, CoEvoResu
   private async runVerifier(skillContent: string, testCases: string[], level: EscalationLevel): Promise<{ feedback: string; passRate: number }> {
     const hint = escalationHint(level)
     const casesText = testCases.map((tc, i) => `[TC${i + 1}] ${tc}`).join('\n')
+    const langInstruction = getLanguage() === 'en'
+      ? 'IMPORTANT: The Feedback section MUST be written in English.'
+      : 'IMPORTANT: The Feedback section MUST be written in Chinese (简体中文).'
     const text = await this.callAI({
-      systemPrompt: 'You are a Skill Verifier. Evaluate the Skill against test cases. For each test case respond only PASS or FAIL. Then provide brief feedback on failures. Do not reveal correct answers.',
+      systemPrompt: `You are a Skill Verifier. Evaluate the Skill against test cases. For each test case respond only PASS or FAIL. Then provide brief feedback on failures. Do not reveal correct answers. ${langInstruction}`,
       userMessage: `Skill:\n${skillContent}\n\nTest Escalation: ${hint}\n\nTest Cases:\n${casesText}\n\nFormat: list each result as "TC1: PASS/FAIL" then a Feedback section.`
     })
     const passCount = (text.match(/:\s*PASS/gi) ?? []).length

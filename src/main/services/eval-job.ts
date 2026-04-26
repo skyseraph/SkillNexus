@@ -1,5 +1,5 @@
 import { getAIProvider, callWithTools } from './ai-provider'
-import { getActiveModel, getToolApiKeys } from '../ipc/config.handler'
+import { getActiveModel, getToolApiKeys, getLanguage } from '../ipc/config.handler'
 import { insertEvalHistory } from './eval-history'
 import { getMainWindow } from '../index'
 import { getDb } from '../db'
@@ -75,7 +75,19 @@ const DIM_RUBRICS: Record<string, string> = {
 
 const JUDGE_SYSTEM_PROMPT = `You are an expert Skill evaluator using the SkillNexus 8-dimension evaluation framework.
 Score the AI response on the given dimension from 0 to 10 using the provided rubric.
-Respond ONLY in JSON format: {"score": number, "violations": string[], "details": string}`
+Respond ONLY in JSON format: {"score": number, "violations": string[], "details": string}
+IMPORTANT: The "details" and "violations" fields MUST be written in Chinese (简体中文).`
+
+function getJudgeSystemPrompt(): string {
+  const lang = getLanguage()
+  if (lang === 'en') {
+    return `You are an expert Skill evaluator using the SkillNexus 8-dimension evaluation framework.
+Score the AI response on the given dimension from 0 to 10 using the provided rubric.
+Respond ONLY in JSON format: {"score": number, "violations": string[], "details": string}
+IMPORTANT: The "details" and "violations" fields MUST be written in English.`
+  }
+  return JUDGE_SYSTEM_PROMPT
+}
 
 export async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -101,7 +113,7 @@ export async function judgeOneDimension(
   const result = await withTimeout(
     provider.call({
       model,
-      systemPrompt: JUDGE_SYSTEM_PROMPT,
+      systemPrompt: getJudgeSystemPrompt(),
       userMessage:
         `Rubric: ${rubric}\n\n` +
         `Skill:\n${skillContent}\n\n` +

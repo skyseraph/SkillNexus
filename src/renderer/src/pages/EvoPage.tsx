@@ -865,6 +865,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
                   <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleEvolve} disabled={!selectedId || apiKeySet === false}>
                     启动进化 (SkVM)
                   </button>
+                  {!selectedId && <div className="no-skill-hint">← 请先在左侧选择一个 Skill</div>}
                   {apiKeySet === false && <div className="gen-warn" style={{ marginTop: 8 }}>⚠️ 未配置 API Key，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 添加。</div>}
                 </>
               )}
@@ -917,6 +918,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
                     disabled={!selectedId || apiKeySet === false || v2Running}>
                     {v2Running ? '进化中...' : `启动 ${ENGINES.find(e => e.id === engine)?.label ?? (engine.startsWith('plugin:') ? plugins.find(p => p.id === engine.slice(7))?.name ?? engine : engine)}`}
                   </button>
+                  {!selectedId && !v2Running && <div className="no-skill-hint">← 请先在左侧选择一个 Skill</div>}
                   {apiKeySet === false && !v2Running && <div className="gen-warn" style={{ marginTop: 8 }}>⚠️ 未配置 API Key，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 添加。</div>}
                   {v2Running && !v2Cancelled && (
                     <button className="btn btn-ghost btn-sm" onClick={handleCancelV2} style={{ marginLeft: 6 }}>取消</button>
@@ -1530,6 +1532,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
         .evo-back-btn { align-self: flex-start; padding: 5px 12px; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text-muted); cursor: pointer; transition: all var(--transition); }
         .evo-back-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
         .evo-back-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .no-skill-hint { margin-top: 8px; font-size: 12px; color: var(--accent); opacity: 0.8; }
 
         /* v2 result actions */
         .v2-result-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }

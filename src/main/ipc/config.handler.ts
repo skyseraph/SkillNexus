@@ -22,17 +22,19 @@ export function registerConfigHandlers(): void {
       providers: s.providers.map(p => ({ ...p, apiKey: undefined as unknown as string, apiKeySet: !!p.apiKey })),
       activeProviderId: s.activeProviderId,
       toolApiKeysSet: { tavily: !!(s.toolApiKeys?.tavily) },
-      githubTokenSet: !!(s.githubToken)
+      githubTokenSet: !!(s.githubToken),
+      language: s.language ?? 'zh'
     }
   })
 
-type ConfigSetPayload = Pick<AppConfig, 'toolPaths' | 'enabledTools' | 'toolApiKeys' | 'githubToken'>
+type ConfigSetPayload = Pick<AppConfig, 'toolPaths' | 'enabledTools' | 'toolApiKeys' | 'githubToken' | 'language'>
 
   ipcMain.handle('config:set', (_event, config: Partial<ConfigSetPayload>) => {
     if ('toolPaths' in config) store.set('toolPaths', config.toolPaths)
     if ('enabledTools' in config) store.set('enabledTools', config.enabledTools)
     if ('toolApiKeys' in config) store.set('toolApiKeys', config.toolApiKeys)
     if ('githubToken' in config) store.set('githubToken', config.githubToken)
+    if ('language' in config) store.set('language', config.language)
   })
 
   ipcMain.handle('config:saveProvider', (_event, p: LLMProvider) => {
@@ -109,4 +111,8 @@ export function getActiveProviderName(): string {
 
 export function getToolApiKeys(): { tavily?: string } {
   return store.get('toolApiKeys') ?? {}
+}
+
+export function getLanguage(): 'zh' | 'en' {
+  return store.get('language') ?? 'zh'
 }

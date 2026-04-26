@@ -187,6 +187,7 @@ export interface AppConfig {
   enabledTools?: Record<string, boolean>
   githubToken?: string
   toolApiKeys?: { tavily?: string }
+  language?: 'zh' | 'en'
 }
 
 export interface AppConfigPublic {
@@ -194,6 +195,7 @@ export interface AppConfigPublic {
   activeProviderId: string
   toolApiKeysSet?: { tavily: boolean }
   githubTokenSet?: boolean
+  language?: 'zh' | 'en'
 }
 
 export interface EvalHistoryPage {

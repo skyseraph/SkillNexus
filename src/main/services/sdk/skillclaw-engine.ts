@@ -1,4 +1,5 @@
 import { BaseEvolutionEngine } from './base-engine'
+import { getLanguage } from '../../ipc/config.handler'
 import type { SkillClawResult } from '../../../shared/types'
 
 const DEFAULT_WINDOW_SIZE = 20
@@ -24,7 +25,8 @@ export class SkillClawEngine extends BaseEvolutionEngine<SkillClawConfig, SkillC
       systemPrompt: `You are a collective failure pattern analyzer. Identify recurring weakness patterns across multiple skill execution samples.
 Focus on structural skill deficiencies (not one-off input quirks). Look for patterns that appear in multiple samples.
 Output only valid JSON: {"commonFailures": ["pattern 1", "pattern 2", ...], "improvementSummary": "one paragraph summary"}
-List 2–5 common failure patterns. Be specific about the structural skill weakness, not the input content.`,
+List 2–5 common failure patterns. Be specific about the structural skill weakness, not the input content.
+IMPORTANT: The "commonFailures" and "improvementSummary" fields MUST be written in ${getLanguage() === 'en' ? 'English' : 'Chinese (简体中文)'}.`,
       userMessage: `Skill content:\n${skillContent}\n\nAll recent execution samples (${allRecords.length} total):\n${allRecords.map(fmt).join('\n\n')}\n\nFailed/weak samples (score < ${WEAK_SCORE_THRESHOLD}):\n${weakRecords.map(fmt).join('\n\n')}\n\nIdentify common failure patterns:`
     })
     try {

@@ -446,6 +446,21 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
             ))}
           </div>
         </div>
+        <div className="appearance-row" style={{ marginTop: 12 }}>
+          <span className="appearance-label">语言 / Lang</span>
+          <div className="theme-toggle">
+            {(['zh', 'en'] as const).map(l => (
+              <button key={l} className={`theme-btn ${(config?.language ?? 'zh') === l ? 'active' : ''}`}
+                onClick={async () => {
+                  await window.api.config.set({ language: l } as Parameters<typeof window.api.config.set>[0])
+                  await reload()
+                  toast?.(l === 'zh' ? '已切换为中文' : 'Switched to English', 'success')
+                }}>
+                {l === 'zh' ? '🇨🇳 中文' : '🇺🇸 English'}
+              </button>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* ── API Keys ── */}
@@ -623,7 +638,7 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
 
         /* Appearance */
         .appearance-row { display: flex; align-items: center; gap: 16px; margin-top: 12px; }
-        .appearance-label { font-size: 13px; color: var(--text-muted); width: 60px; flex-shrink: 0; }
+        .appearance-label { font-size: 13px; color: var(--text-muted); width: 90px; flex-shrink: 0; }
         .theme-toggle { display: flex; gap: 6px; }
         .theme-btn { padding: 6px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface2); color: var(--text-muted); font-size: 12px; cursor: pointer; transition: all var(--transition); }
         .theme-btn:hover { border-color: var(--accent); color: var(--text); }
