@@ -396,6 +396,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
   const [evolvedScores, setEvolvedScores] = useState<Record<string, number>>(initial.evolvedScores)
   const [evalProgress, setEvalProgress] = useState(initial.evalProgress)
   const [apiKeySet, setApiKeySet] = useState<boolean | null>(null)
+  const [tavilyKeySet, setTavilyKeySet] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(initial.error)
   const [diffMode, setDiffMode] = useState(false)            // false = side-by-side, true = diff highlight
   const [evoChain, setEvoChain] = useState<EvoChainEntry[]>([])
@@ -438,6 +439,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
     window.api.skills.getAll().then(setSkills)
     window.api.config.get().then((c) => {
       setApiKeySet(c.providers.length > 0)
+      setTavilyKeySet(c.toolApiKeysSet?.tavily ?? false)
       setAvailableProviders(c.providers.map(p => ({ id: p.id, name: p.name || p.id })))
     })
     window.api.demo.isActive().then(setDemoMode)
@@ -681,6 +683,9 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
           </select>
           {skills.length === 0 && onNavigate && (
             <button className="btn btn-ghost btn-sm" style={{ marginTop: 6 }} onClick={() => onNavigate('studio')}>✦ 去 Studio 创建 Skill</button>
+          )}
+          {selectedSkill?.skillType === 'agent' && !tavilyKeySet && (
+            <div className="gen-warn" style={{ marginTop: 6 }}>⚠️ Agent Skill 评测需要 Tavily API Key，请前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 配置。</div>
           )}
 
           {selectedId && origHistory.length > 0 && (
