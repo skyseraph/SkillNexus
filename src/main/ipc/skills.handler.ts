@@ -405,9 +405,9 @@ export function registerSkillsHandlers(): void {
       INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, trust_level, installed_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, parsed.name, parsed.format, parsed.version, JSON.stringify(parsed.tags),
-      parsed.yamlFrontmatter, parsed.markdownContent, resolve(filePath), rootDir, 'single', 1, now, now)
+      parsed.yamlFrontmatter, parsed.markdownContent, resolve(filePath), rootDir, parsed.skillType, 1, now, now)
 
-    return { id, ...parsed, rootDir, skillType: 'single' as SkillType, trustLevel: 1 as const, installedAt: now, updatedAt: now }
+    return { id, ...parsed, rootDir, installedAt: now, updatedAt: now }
   })
 
   // Set trust level (T1-T4)
