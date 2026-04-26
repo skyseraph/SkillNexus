@@ -19,14 +19,14 @@ const DIM_ORDER = [
   'robustness', 'executability', 'cost_awareness', 'maintainability'
 ]
 const DIM_LABELS: Record<string, string> = {
-  correctness:           'Correctness',
-  instruction_following: 'Instr. Follow',
-  safety:                'Safety',
-  completeness:          'Completeness',
-  robustness:            'Robustness',
-  executability:         'Executability',
-  cost_awareness:        'Cost Aware',
-  maintainability:       'Maintainability'
+  correctness:           'G1 正确性',
+  instruction_following: 'G2 指令遵循',
+  safety:                'G3 安全性',
+  completeness:          'G4 完整性',
+  robustness:            'G5 鲁棒性',
+  executability:         'S1 可执行性',
+  cost_awareness:        'S2 成本意识',
+  maintainability:       'S3 可维护性'
 }
 
 // ── Framework Panel ───────────────────────────────────────────────────────────
@@ -651,7 +651,7 @@ function DimBarChart({ scores }: { scores: Record<string, EvalScore> }) {
 // ── TestCase Tab ──────────────────────────────────────────────────────────────
 
 const JUDGE_COLORS: Record<string, string> = { llm: '#6c63ff', grep: '#00d4aa', command: '#f59e0b' }
-const JUDGE_LABELS: Record<string, string> = { llm: 'LLM Judge', grep: 'Grep', command: 'Command' }
+const JUDGE_LABELS: Record<string, string> = { llm: 'LLM 评判', grep: 'Grep 匹配', command: '命令执行' }
 
 function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
   skillId: string
@@ -872,9 +872,9 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
               <textarea rows={3} placeholder="输入（Input）..." value={form.input} onChange={(e) => setForm((f) => ({ ...f, input: e.target.value }))} style={{ width: '100%', resize: 'vertical', marginBottom: 8 }} />
               <div className="add-form-row">
                 <select value={form.judgeType} onChange={(e) => setForm((f) => ({ ...f, judgeType: e.target.value as TestCase['judgeType'] }))}>
-                  <option value="llm">LLM Judge</option>
-                  <option value="grep">Grep</option>
-                  <option value="command">Command</option>
+                  <option value="llm">LLM 评判</option>
+                  <option value="grep">Grep 匹配</option>
+                  <option value="command">命令执行</option>
                 </select>
                 <input placeholder="Judge param（可选）..." value={form.judgeParam} onChange={(e) => setForm((f) => ({ ...f, judgeParam: e.target.value }))} style={{ flex: 1 }} />
               </div>

@@ -193,7 +193,7 @@ export default function TrendingPage({ onNavigate }: { onNavigate?: (page: strin
                   <div className="rank-info">
                     <div className="rank-name">{skill.skillName}{skill.skillType === 'agent' && <span className="rank-agent-badge">Agent</span>}</div>
                     <div className="rank-meta">
-                      <span className="eval-count">{skill.evalCount} evals</span>
+                      <span className="eval-count">{skill.evalCount} 次评测</span>
                     </div>
                   </div>
 

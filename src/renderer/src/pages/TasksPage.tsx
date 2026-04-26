@@ -173,7 +173,7 @@ function EvalRow({ job, selected, active, onSelect, onClick, onDelete, onNavigat
       </td>
       <td className="task-icon-cell" onClick={onClick}><span className="task-icon">📊</span></td>
       <td className="task-type-cell" onClick={onClick}>
-        <span className="task-type-label">Eval</span>
+        <span className="task-type-label">评测</span>
         {isThreeCond && <span className="task-badge task-badge-3cond">三条件</span>}
         {allFailed && <span className="task-badge task-badge-fail">失败</span>}
         {hasFailures && !allFailed && <span className="task-badge task-badge-warn">{job.failedCases}失败</span>}
@@ -363,7 +363,7 @@ function EvalDetailPanel({ job, onClose, onNavigate }: {
         <div className="detail-panel-title">
           <span className="detail-panel-icon">📊</span>
           <span>{job.skillName}</span>
-          <span className="detail-panel-sub">Eval 任务</span>
+          <span className="detail-panel-sub">评测任务</span>
         </div>
         <div className="detail-panel-actions">
           <button className="btn btn-ghost btn-sm" onClick={() => { onClose(); onNavigate('eval', job.skillId) }}>去评测</button>

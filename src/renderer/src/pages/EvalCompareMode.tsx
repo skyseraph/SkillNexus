@@ -11,6 +11,16 @@ const DIM_COLORS: Record<string, string> = {
   cost_awareness:        '#10b981',
   maintainability:       '#f97316'
 }
+const DIM_LABELS: Record<string, string> = {
+  correctness:           'G1 正确性',
+  instruction_following: 'G2 指令遵循',
+  safety:                'G3 安全性',
+  completeness:          'G4 完整性',
+  robustness:            'G5 鲁棒性',
+  executability:         'S1 可执行性',
+  cost_awareness:        'S2 成本意识',
+  maintainability:       'S3 可维护性'
+}
 
 function avgDims(history: EvalResult[]): Record<string, number> {
   const totals: Record<string, { sum: number; count: number }> = {}
@@ -182,7 +192,7 @@ export default function CompareMode({ skills, apiKeySet, onNavigate }: { skills:
                 const color = DIM_COLORS[dim] ?? '#888'
                 return (
                   <div key={dim} className="cmp-dim-row">
-                    <span className="cmp-dim-name" style={{ color }}>{dim}</span>
+                    <span className="cmp-dim-name" style={{ color }}>{DIM_LABELS[dim] ?? dim}</span>
                     <div className="cmp-bar-cell">
                       <div className="cmp-bar-track"><div className="cmp-bar-fill" style={{ width: `${(a / 10) * 100}%`, background: color + '88' }} /></div>
                       <span className="cmp-bar-val">{a.toFixed(1)}</span>

@@ -41,8 +41,8 @@ const SCORE_5D_COLORS: Record<string, string> = {
   maintainability: '#f59e0b', costAwareness: '#8b5cf6', orchestration: '#f97316'
 }
 const SCORE_5D_SHORT: Record<string, string> = {
-  safety: 'Safe', completeness: 'Comp', executability: 'Exec',
-  maintainability: 'Maint', costAwareness: 'Cost', orchestration: 'Orch'
+  safety: '安全', completeness: '完整', executability: '可执行',
+  maintainability: '可维护', costAwareness: '成本', orchestration: '编排'
 }
 const SCORE_5D_KEYS = ['safety', 'completeness', 'executability', 'maintainability', 'costAwareness'] as const
 
@@ -652,7 +652,7 @@ function Score5DMini({ scores, loading }: { scores: SkillScore5D | null; loading
           )
         })}
         <span className="studio-v2-score-avg" style={{ color: avg >= 7 ? 'var(--success)' : avg >= 5 ? 'var(--warning)' : 'var(--danger)' }}>
-          avg {avg.toFixed(1)}
+          均 {avg.toFixed(1)}
         </span>
         {weakDims.length > 0 && (
           <button className="studio-v2-score-hint-toggle" onClick={() => setHintOpen(v => !v)}>
