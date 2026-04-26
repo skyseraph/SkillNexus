@@ -71,7 +71,7 @@ function resolveToolDir(toolId: string): { name: string; exportDir: string; ext:
 }
 
 // ── Parse single .md skill file ───────────────────────────────────────────────
-function parseSkillFile(filePath: string): Omit<Skill, 'id' | 'installedAt' | 'updatedAt' | 'rootDir' | 'skillType'> {
+function parseSkillFile(filePath: string): Omit<Skill, 'id' | 'installedAt' | 'updatedAt' | 'rootDir'> {
   const content = readFileSync(filePath, 'utf-8')
   const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/)
   let frontmatter: Record<string, unknown> = {}
@@ -87,7 +87,9 @@ function parseSkillFile(filePath: string): Omit<Skill, 'id' | 'installedAt' | 'u
     tags: (frontmatter.tags as string[]) || [],
     yamlFrontmatter: match ? match[1] : '',
     markdownContent,
-    filePath
+    filePath,
+    skillType: ((frontmatter.skill_type as string) === 'agent' ? 'agent' : 'single') as SkillType,
+    trustLevel: 1 as const
   }
 }
 
@@ -237,9 +239,9 @@ export function registerSkillsHandlers(): void {
       INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, trust_level, installed_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, parsed.name, parsed.format, parsed.version, JSON.stringify(parsed.tags),
-      parsed.yamlFrontmatter, parsed.markdownContent, parsed.filePath, rootDir, 'single', 1, now, now)
+      parsed.yamlFrontmatter, parsed.markdownContent, parsed.filePath, rootDir, parsed.skillType, 1, now, now)
 
-    return { id, ...parsed, rootDir, skillType: 'single' as SkillType, trustLevel: 1 as const, installedAt: now, updatedAt: now }
+    return { id, ...parsed, rootDir, installedAt: now, updatedAt: now }
   })
 
   // Install agent skill from directory

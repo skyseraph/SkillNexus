@@ -94,7 +94,7 @@ export function registerMarketplaceHandlers(): void {
       markdownContent,
       filePath,
       rootDir,
-      'single',
+      ((frontmatter.skill_type as string) === 'agent' ? 'agent' : 'single'),
       1,
       now,
       now
@@ -109,7 +109,7 @@ export function registerMarketplaceHandlers(): void {
       markdownContent,
       filePath,
       rootDir,
-      skillType: 'single' as SkillType,
+      skillType: (((frontmatter.skill_type as string) === 'agent' ? 'agent' : 'single')) as SkillType,
       trustLevel: 1 as const,
       installedAt: now,
       updatedAt: now
