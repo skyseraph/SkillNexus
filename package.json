@@ -1,7 +1,7 @@
 {
   "name": "skill-nexus",
   "version": "0.1.0",
-  "description": "Skill 创造平台：让能力可量化、可管理、可成长",
+  "description": "Skill 创造平台：让Skill可生成、可量化、可管理、可成长",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",

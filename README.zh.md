@@ -6,7 +6,7 @@
 
 **AI Skill 全生命周期创造平台**
 
-*让能力可量化、可管理、可成长*
+*让Skill可生成、可量化、可管理、可成长*
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](package.json)

@@ -1026,7 +1026,7 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
     <div className="home-root">
       <div className="home-page-header">
         <h1>SkillNexus</h1>
-        <p className="home-subtitle">让能力可量化、可管理、可成长</p>
+        <p className="home-subtitle">让Skill可生成、可量化、可管理、可成长</p>
       </div>
       <div className="page-tabs">
         <button className={`page-tab ${activeTab === 'mine' ? 'active' : ''}`} onClick={() => setActiveTab('mine')}>
