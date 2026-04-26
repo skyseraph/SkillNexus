@@ -1,6 +1,6 @@
 # SkillNexus — 示例案例
 
-三个完整的 Skill 案例，覆盖 Studio 生成 → Eval 评测 → Evo 进化全链路。
+四个完整的 Skill 案例，覆盖 Studio 生成 → Eval 评测 → Evo 进化全链路。
 
 ---
 
@@ -11,6 +11,7 @@
 | [`codereview/`](codereview/README.md) | CodeReview — 代码审查助手 | SkVM 证据驱动 → EvoSkill | 6.8 → 8.1（+1.3） |
 | [`commit-message/`](commit-message/README.md) | CommitMessage — 提交信息生成器 | SkVM 证据驱动 → EvoSkill | 5.9 → 8.4（+2.5） |
 | [`agent-skill/`](agent-skill/README.md) | PR Review Agent — 多步骤 PR 审查 Agent | Agent Skill 示例（三子 Skill 编排） | — |
+| [`deep-research/`](deep-research/README.md) | Deep Research Agent — 深度研究 Agent | SkVM 证据驱动（反幻觉强化） | 6.6 → 8.9（+2.3） |
 
 ---
 
