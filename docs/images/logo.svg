@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 152" width="120" height="152">
   <defs>
     <!-- Main gradient: purple to teal -->
     <linearGradient id="grad-main" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -10,6 +10,12 @@
     <linearGradient id="grad-s" x1="0%" y1="100%" x2="100%" y2="0%">
       <stop offset="0%" style="stop-color:#00d4aa;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0.95" />
+    </linearGradient>
+
+    <!-- Gradient for brand text -->
+    <linearGradient id="grad-text" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#6c63ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00d4aa;stop-opacity:1" />
     </linearGradient>
 
     <!-- Subtle dark fill for hexagon body -->
@@ -32,18 +38,14 @@
       <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#6c63ff" flood-opacity="0.35"/>
     </filter>
 
-    <!-- Clip path for hexagon -->
-    <clipPath id="hex-clip">
-      <!-- Regular hexagon flat-top, centered at 60,60, radius ~52 -->
-      <polygon points="
-        60,8
-        112,34
-        112,86
-        60,112
-        8,86
-        8,34
-      "/>
-    </clipPath>
+    <!-- Glow filter for brand text -->
+    <filter id="text-glow" x="-10%" y="-40%" width="120%" height="180%">
+      <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
 
   <!-- ── Drop shadow group ── -->
@@ -65,43 +67,24 @@
     />
 
     <!-- ── Connector nodes at hexagon vertices (circuit-nexus motif) ── -->
-    <!-- Top -->
-    <circle cx="60" cy="8"   r="3.5" fill="url(#grad-main)" opacity="0.85"/>
-    <!-- Top-right -->
-    <circle cx="112" cy="34" r="3.5" fill="url(#grad-main)" opacity="0.85"/>
-    <!-- Bottom-right -->
-    <circle cx="112" cy="86" r="3.5" fill="url(#grad-main)" opacity="0.85"/>
-    <!-- Bottom -->
+    <circle cx="60"  cy="8"   r="3.5" fill="url(#grad-main)" opacity="0.85"/>
+    <circle cx="112" cy="34"  r="3.5" fill="url(#grad-main)" opacity="0.85"/>
+    <circle cx="112" cy="86"  r="3.5" fill="url(#grad-main)" opacity="0.85"/>
     <circle cx="60"  cy="112" r="3.5" fill="url(#grad-main)" opacity="0.85"/>
-    <!-- Bottom-left -->
-    <circle cx="8"  cy="86"  r="3.5" fill="url(#grad-main)" opacity="0.85"/>
-    <!-- Top-left -->
-    <circle cx="8"  cy="34"  r="3.5" fill="url(#grad-main)" opacity="0.85"/>
+    <circle cx="8"   cy="86"  r="3.5" fill="url(#grad-main)" opacity="0.85"/>
+    <circle cx="8"   cy="34"  r="3.5" fill="url(#grad-main)" opacity="0.85"/>
 
-    <!-- ── Inner faint circuit lines radiating from center to mid-edges ── -->
+    <!-- ── Inner faint circuit lines radiating from center to vertices ── -->
     <g stroke="url(#grad-main)" stroke-width="0.8" opacity="0.18">
-      <!-- To top vertex -->
-      <line x1="60" y1="60" x2="60" y2="8"/>
-      <!-- To top-right vertex -->
-      <line x1="60" y1="60" x2="112" y2="34"/>
-      <!-- To bottom-right vertex -->
-      <line x1="60" y1="60" x2="112" y2="86"/>
-      <!-- To bottom vertex -->
-      <line x1="60" y1="60" x2="60" y2="112"/>
-      <!-- To bottom-left vertex -->
-      <line x1="60" y1="60" x2="8" y2="86"/>
-      <!-- To top-left vertex -->
-      <line x1="60" y1="60" x2="8" y2="34"/>
+      <line x1="60" y1="60" x2="60"  y2="8"  />
+      <line x1="60" y1="60" x2="112" y2="34" />
+      <line x1="60" y1="60" x2="112" y2="86" />
+      <line x1="60" y1="60" x2="60"  y2="112"/>
+      <line x1="60" y1="60" x2="8"   y2="86" />
+      <line x1="60" y1="60" x2="8"   y2="34" />
     </g>
 
-    <!-- ── Stylized "S" letterform — drawn as a path for precision ── -->
-    <!--
-      The S is constructed from two arcs meeting at center,
-      forming a clean geometric letterform.
-      Overall bounds: x 34–86, y 26–94
-      Top arc center: (60, 47), radius 20
-      Bottom arc center: (60, 73), radius 20
-    -->
+    <!-- ── Stylized "S" letterform ── -->
     <path
       d="
         M 76,34
@@ -117,10 +100,7 @@
       stroke-linejoin="round"
     />
 
-    <!-- ── Upward spark / growth arrow above S top ── -->
-    <!--
-      A small upward chevron at the top of the S to hint at "growth/evolution"
-    -->
+    <!-- ── Upward spark / growth arrow ── -->
     <polyline
       points="54,30 60,22 66,30"
       fill="none"
@@ -132,4 +112,21 @@
     />
 
   </g>
+
+  <!-- ── Brand name below hexagon ── -->
+  <!-- Subtle separator line -->
+  <line x1="20" y1="124" x2="100" y2="124" stroke="url(#grad-main)" stroke-width="0.8" opacity="0.3"/>
+
+  <!-- "SkillNexus" text -->
+  <text
+    x="60"
+    y="142"
+    text-anchor="middle"
+    font-family="'Segoe UI', 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+    font-size="14"
+    font-weight="700"
+    letter-spacing="1.5"
+    fill="url(#grad-text)"
+    filter="url(#text-glow)"
+  >SkillNexus</text>
 </svg>

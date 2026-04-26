@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/logo.png" alt="SkillNexus Logo" width="120" />
+<img src="docs/images/logo.svg" alt="SkillNexus Logo" width="120" />
 
 # SkillNexus
 
@@ -14,7 +14,7 @@
 [![Electron](https://img.shields.io/badge/Electron-31-47848F.svg)](https://electronjs.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](#)
 
-[English](README.md)
+[English](README.md) · [作者博客](https://skyseraph.github.io)
 
 </div>
 
@@ -343,6 +343,6 @@ SkillNexus/
 
 <div align="center">
 
-**Made with ❤️ · [报告 Bug](https://github.com/skyseraph/SkillNexus/issues) · [功能建议](https://github.com/skyseraph/SkillNexus/issues)**
+**Made with ❤️ · [作者博客](https://skyseraph.github.io) · [报告 Bug](https://github.com/skyseraph/SkillNexus/issues) · [功能建议](https://github.com/skyseraph/SkillNexus/issues)**
 
 </div>

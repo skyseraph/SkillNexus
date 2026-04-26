@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/logo.png" alt="SkillNexus Logo" width="120" />
+<img src="docs/images/logo.svg" alt="SkillNexus Logo" width="120" />
 
 # SkillNexus
 
@@ -14,7 +14,7 @@
 [![Electron](https://img.shields.io/badge/Electron-31-47848F.svg)](https://electronjs.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](#)
 
-[中文文档](README.zh.md)
+[中文文档](README.zh.md) · [Author Blog](https://skyseraph.github.io)
 
 </div>
 
@@ -288,6 +288,6 @@ See [CLAUDE.md](CLAUDE.md) for the Spec-First workflow and Karpathy coding princ
 
 <div align="center">
 
-**Made with ❤️ · [Report Bug](https://github.com/skyseraph/SkillNexus/issues) · [Request Feature](https://github.com/skyseraph/SkillNexus/issues)**
+**Made with ❤️ · [Author Blog](https://skyseraph.github.io) · [Report Bug](https://github.com/skyseraph/SkillNexus/issues) · [Request Feature](https://github.com/skyseraph/SkillNexus/issues)**
 
 </div>
