@@ -409,30 +409,6 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
         </div>
       </section>
 
-      {/* ── Privacy & Analytics ── */}
-      <section className="settings-section">
-        <h2>Privacy &amp; Analytics</h2>
-        <p className="section-desc">匿名使用数据，帮助改进 SkillNexus。从不收集 Skill 内容、提示词或 API 密钥。</p>
-        <div className="analytics-row">
-          <div className="analytics-info">
-            <span className="analytics-name">Usage Analytics</span>
-            <span className="analytics-desc">功能使用频次、引擎选择等匿名统计，数据由 PostHog 处理</span>
-          </div>
-          <label className="toggle-switch">
-            <input
-              type="checkbox"
-              checked={analyticsEnabled}
-              onChange={e => {
-                const v = e.target.checked
-                setAnalyticsEnabled(v)
-                window.api.telemetry.setConsent(v).catch(() => {})
-              }}
-            />
-            <span className="toggle-track"><span className="toggle-thumb" /></span>
-          </label>
-        </div>
-      </section>
-
       {/* ── Appearance ── */}
       <section className="settings-section">
         <h2>Appearance</h2>
@@ -521,12 +497,43 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
         </div>
       </section>
 
+      {/* ── Privacy & Analytics ── */}
+      <section className="settings-section">
+        <h2>Privacy &amp; Analytics</h2>
+        <p className="section-desc">匿名使用数据，帮助改进 SkillNexus。从不收集 Skill 内容、提示词或 API 密钥。</p>
+        <div className="analytics-row">
+          <div className="analytics-info">
+            <span className="analytics-name">Usage Analytics</span>
+            <span className="analytics-desc">功能使用频次、引擎选择等匿名统计，数据由 PostHog 处理</span>
+          </div>
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              checked={analyticsEnabled}
+              onChange={e => {
+                const v = e.target.checked
+                setAnalyticsEnabled(v)
+                window.api.telemetry.setConsent(v).catch(() => {})
+              }}
+            />
+            <span className="toggle-track"><span className="toggle-thumb" /></span>
+          </label>
+        </div>
+      </section>
+
       {/* ── About ── */}
       <section className="settings-section about-section">
         <h2>About</h2>
+        <div className="about-app-row">
+          <div className="about-app-logo">⚡</div>
+          <div className="about-app-info">
+            <span className="about-app-name">SkillNexus</span>
+            <span className="about-app-version">v0.1.0</span>
+            <span className="about-app-desc">LLM Skill 评测 · 进化 · 知识管理平台</span>
+          </div>
+        </div>
+        <div className="about-divider" />
         <div className="about-grid">
-          <div className="about-item"><span className="about-label">App</span><span>SkillNexus</span></div>
-          <div className="about-item"><span className="about-label">Version</span><span>0.1.0</span></div>
           <div className="about-item"><span className="about-label">Active Provider</span>
             <span>{config?.providers.find(p => p.id === activeId)?.name ?? '—'}</span></div>
           <div className="about-item"><span className="about-label">Active Model</span>
@@ -539,6 +546,23 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
             <span>{config?.toolApiKeysSet?.tavily ? '✓ Set' : '✗ Not set'}</span></div>
           <div className="about-item"><span className="about-label">Platform</span>
             <span>{navigator.platform}</span></div>
+        </div>
+        <div className="about-divider" />
+        <div className="about-author-row">
+          <div className="about-author-info">
+            <span className="about-author-name">SkySeraph</span>
+            <div className="about-author-links">
+              <a className="about-link" href="#" onClick={e => { e.preventDefault(); window.api.shell.openExternal('https://github.com/SkySeraph') }}>
+                <span className="about-link-icon">⌥</span> GitHub
+              </a>
+              <a className="about-link" href="#" onClick={e => { e.preventDefault(); window.api.shell.openExternal('mailto:skyseraph00@163.com') }}>
+                <span className="about-link-icon">✉</span> skyseraph00@163.com
+              </a>
+              <a className="about-link" href="#" onClick={e => { e.preventDefault(); window.api.shell.openExternal('https://skyseraph.com') }}>
+                <span className="about-link-icon">🌐</span> skyseraph.com
+              </a>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -620,10 +644,24 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
         .saved-msg { font-size: 13px; color: var(--success); font-weight: 500; }
 
         /* About */
+        .about-app-row { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+        .about-app-logo { font-size: 36px; width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; background: rgba(108,99,255,0.12); border-radius: 12px; flex-shrink: 0; }
+        .about-app-info { display: flex; flex-direction: column; gap: 3px; }
+        .about-app-name { font-size: 18px; font-weight: 700; color: var(--text); }
+        .about-app-version { font-size: 11px; color: var(--accent); font-weight: 600; background: rgba(108,99,255,0.12); padding: 1px 7px; border-radius: 10px; width: fit-content; }
+        .about-app-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+        .about-divider { height: 1px; background: var(--border); margin: 14px 0; }
         .about-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
         .about-item { display: flex; flex-direction: column; gap: 3px; }
         .about-label { font-size: 11px; color: var(--text-muted); }
         .about-item span:last-child { font-size: 13px; font-weight: 500; }
+        .about-author-row { display: flex; align-items: center; gap: 12px; }
+        .about-author-info { display: flex; flex-direction: column; gap: 8px; }
+        .about-author-name { font-size: 14px; font-weight: 600; color: var(--text); }
+        .about-author-links { display: flex; gap: 12px; flex-wrap: wrap; }
+        .about-link { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); text-decoration: none; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; transition: all var(--transition); }
+        .about-link:hover { border-color: var(--accent); color: var(--accent); background: rgba(108,99,255,0.06); }
+        .about-link-icon { font-size: 13px; }
 
         /* API Keys */
         .apikeys-list { display: flex; flex-direction: column; gap: 12px; }
