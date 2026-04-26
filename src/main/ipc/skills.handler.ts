@@ -260,9 +260,20 @@ export function registerSkillsHandlers(): void {
     return { id, ...parsed, trustLevel: 1 as const, installedAt: now, updatedAt: now }
   })
 
-  // Uninstall
+  // Uninstall info — returns counts of associated data before deletion
+  ipcMain.handle('skills:getUninstallInfo', (_event, id: string) => {
+    const db = getDb()
+    const evalCount = (db.prepare('SELECT COUNT(*) as n FROM eval_history WHERE skill_id = ?').get(id) as { n: number }).n
+    const tcCount = (db.prepare('SELECT COUNT(*) as n FROM test_cases WHERE skill_id = ?').get(id) as { n: number }).n
+    const evolvedCount = (db.prepare('SELECT COUNT(*) as n FROM skills WHERE parent_skill_id = ?').get(id) as { n: number }).n
+    return { evalCount, tcCount, evolvedCount }
+  })
+
+  // Uninstall — also cleans up eval_history (test_cases cascade via FK)
   ipcMain.handle('skills:uninstall', (_event, id: string) => {
-    getDb().prepare('DELETE FROM skills WHERE id = ?').run(id)
+    const db = getDb()
+    db.prepare('DELETE FROM eval_history WHERE skill_id = ?').run(id)
+    db.prepare('DELETE FROM skills WHERE id = ?').run(id)
   })
 
   // List files for a skill (directory walk)

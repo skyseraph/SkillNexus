@@ -206,7 +206,6 @@ function SkillDrawer({ skill, onClose, onUninstall, onTrustChange, toast, onNavi
   const [filesLoading, setFilesLoading] = useState(true)
   const [selectedFile, setSelectedFile] = useState<SkillFileEntry | null>(null)
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
-  const [confirmDelete, setConfirmDelete] = useState(false)
   const [activeTab, setActiveTab] = useState<'files' | 'history' | 'export'>('files')
   const [evoChain, setEvoChain] = useState<EvoChainEntry[]>([])
   const [evoChainOpen, setEvoChainOpen] = useState(true)
@@ -266,10 +265,9 @@ function SkillDrawer({ skill, onClose, onUninstall, onTrustChange, toast, onNavi
                   toast?.('已批准为 T4', 'success')
                 }}>✓ 批准</button>
             )}
-            <button className={`btn btn-sm ${confirmDelete ? 'btn-danger' : 'btn-ghost'}`}
-              onClick={() => { if (!confirmDelete) { setConfirmDelete(true); return } onUninstall(skill.id) }}
-              onBlur={() => setConfirmDelete(false)}>
-              {confirmDelete ? 'Confirm' : 'Uninstall'}
+            <button className="btn btn-sm btn-ghost" style={{ color: '#ef4444' }}
+              onClick={() => onUninstall(skill.id)}>
+              Uninstall
             </button>
             <button className="btn-icon" onClick={onClose}>✕</button>
           </div>
@@ -371,6 +369,61 @@ function SkillDrawer({ skill, onClose, onUninstall, onTrustChange, toast, onNavi
           )}
 
           {activeTab === 'export' && <ExportTab skill={skill} toast={toast} />}
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ── Uninstall Confirm Modal ───────────────────────────────────────────────────
+
+function UninstallModal({ skillName, info, onConfirm, onCancel }: {
+  skillName: string
+  info: { evalCount: number; tcCount: number; evolvedCount: number }
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  const hasData = info.evalCount > 0 || info.tcCount > 0 || info.evolvedCount > 0
+  return (
+    <>
+      <div className="modal-backdrop" onClick={onCancel} />
+      <div className="modal" style={{ maxWidth: 420 }}>
+        <div className="modal-header">
+          <h2>卸载 "{skillName}"</h2>
+          <button className="btn-icon" onClick={onCancel}>✕</button>
+        </div>
+        <div className="modal-body">
+          {hasData ? (
+            <>
+              <p style={{ marginBottom: 12, color: 'var(--text-muted)', fontSize: 13 }}>以下关联数据将被同步删除：</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {info.evalCount > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', background: 'rgba(239,68,68,0.08)', borderRadius: 6, fontSize: 13 }}>
+                    <span style={{ color: '#ef4444' }}>📊</span>
+                    <span>评测历史 <strong>{info.evalCount}</strong> 条</span>
+                  </div>
+                )}
+                {info.tcCount > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', background: 'rgba(239,68,68,0.08)', borderRadius: 6, fontSize: 13 }}>
+                    <span style={{ color: '#ef4444' }}>🧪</span>
+                    <span>测试用例 <strong>{info.tcCount}</strong> 个</span>
+                  </div>
+                )}
+                {info.evolvedCount > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', background: 'rgba(239,68,68,0.08)', borderRadius: 6, fontSize: 13 }}>
+                    <span style={{ color: '#ef4444' }}>⚡</span>
+                    <span>进化版本 <strong>{info.evolvedCount}</strong> 个（进化链断开）</span>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>该 Skill 没有关联的评测历史或测试用例。</p>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onCancel}>取消</button>
+          <button className="btn btn-danger" onClick={onConfirm}>确认卸载</button>
         </div>
       </div>
     </>
@@ -573,7 +626,6 @@ function SkillCtxMenu({ state, onClose, onCardClick, onUninstall, onNavigate }: 
 }
 
 function SkillCard({ skill, onClick, onUninstall, onCtxMenu, toast }: { skill: Skill; onClick: () => void; onUninstall: (id: string) => void; onCtxMenu: (e: React.MouseEvent, s: Skill) => void; toast?: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
-  const [confirm, setConfirm] = useState(false)
   return (
     <div className="skill-card" onClick={onClick} onContextMenu={e => { e.preventDefault(); onCtxMenu(e, skill) }}>
       <div className="card-icon">{skill.skillType === 'agent' ? '🤖' : '📝'}</div>
@@ -590,18 +642,16 @@ function SkillCard({ skill, onClick, onUninstall, onCtxMenu, toast }: { skill: S
       <div className="card-actions" onClick={e => e.stopPropagation()}>
         <QuickExportBtn skill={skill} toast={toast} />
         <button
-          className={`card-del-btn ${confirm ? 'confirm' : ''}`}
-          title={confirm ? 'Click again to confirm' : 'Uninstall'}
-          onClick={() => { if (!confirm) { setConfirm(true); return } onUninstall(skill.id) }}
-          onBlur={() => setConfirm(false)}
-        >{confirm ? '✓' : '✕'}</button>
+          className="card-del-btn"
+          title="Uninstall"
+          onClick={() => onUninstall(skill.id)}
+        >✕</button>
       </div>
     </div>
   )
 }
 
 function SkillRow({ skill, onClick, onUninstall, onCtxMenu, toast }: { skill: Skill; onClick: () => void; onUninstall: (id: string) => void; onCtxMenu: (e: React.MouseEvent, s: Skill) => void; toast?: (msg: string, type?: 'success' | 'error' | 'info') => void }) {
-  const [confirm, setConfirm] = useState(false)
   return (
     <div className="skill-row" onClick={onClick} onContextMenu={e => { e.preventDefault(); onCtxMenu(e, skill) }}>
       <span className="row-icon">{skill.skillType === 'agent' ? '🤖' : '📝'}</span>
@@ -616,11 +666,10 @@ function SkillRow({ skill, onClick, onUninstall, onCtxMenu, toast }: { skill: Sk
       <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4 }}>
         <QuickExportBtn skill={skill} toast={toast} />
         <button
-          className={`card-del-btn ${confirm ? 'confirm' : ''}`}
-          title={confirm ? 'Click again to confirm' : 'Uninstall'}
-          onClick={e => { e.stopPropagation(); if (!confirm) { setConfirm(true); return } onUninstall(skill.id) }}
-          onBlur={() => setConfirm(false)}
-        >{confirm ? '✓' : '✕'}</button>
+          className="card-del-btn"
+          title="Uninstall"
+          onClick={e => { e.stopPropagation(); onUninstall(skill.id) }}
+        >✕</button>
       </div>
     </div>
   )
@@ -834,6 +883,7 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
   const [installing, setInstalling] = useState(false)
   const [activeTab, setActiveTab] = useState<'mine' | 'market'>('mine')
   const [drawerSkill, setDrawerSkill] = useState<Skill | null>(null)
+  const [uninstallTarget, setUninstallTarget] = useState<{ id: string; name: string; info: { evalCount: number; tcCount: number; evolvedCount: number } } | null>(null)
 
   useEffect(() => {
     window.api.skills.getAll().then(data => { setSkills(data); setLoading(false) })
@@ -878,9 +928,21 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
   const handleUninstall = async (id: string) => {
     const name = skills.find(s => s.id === id)?.name ?? 'Skill'
     try {
+      const info = await window.api.skills.getUninstallInfo(id)
+      setUninstallTarget({ id, name, info })
+    } catch (e) {
+      toast?.(String(e), 'error')
+    }
+  }
+
+  const doUninstall = async () => {
+    if (!uninstallTarget) return
+    const { id, name } = uninstallTarget
+    setUninstallTarget(null)
+    try {
       await window.api.skills.uninstall(id)
       setSkills(prev => prev.filter(s => s.id !== id))
-      setDrawerSkill(null)
+      if (drawerSkill?.id === id) setDrawerSkill(null)
       toast?.(`"${name}" removed`, 'info')
     } catch (e) {
       toast?.(String(e), 'error')
@@ -927,6 +989,15 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
           }}
           toast={toast}
           onNavigate={onNavigate}
+        />
+      )}
+
+      {uninstallTarget && (
+        <UninstallModal
+          skillName={uninstallTarget.name}
+          info={uninstallTarget.info}
+          onConfirm={doUninstall}
+          onCancel={() => setUninstallTarget(null)}
         />
       )}
 

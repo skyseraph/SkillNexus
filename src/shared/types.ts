@@ -403,6 +403,7 @@ export interface IpcChannels {
   'skills:export': (skillId: string, toolId: string, mode: 'copy' | 'symlink') => Promise<void>
   'skills:getToolTargets': () => Promise<ToolTarget[]>
   'skills:setTrustLevel': (id: string, level: 1 | 2 | 3 | 4) => Promise<void>
+  'skills:getUninstallInfo': (id: string) => Promise<{ evalCount: number; tcCount: number; evolvedCount: number }>
   'skills:getContent': (skillId: string) => Promise<string>
   'marketplace:search': (query: string) => Promise<MarketSkill[]>
   'marketplace:install': (skill: MarketSkill) => Promise<Skill>

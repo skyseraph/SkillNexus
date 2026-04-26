@@ -1017,6 +1017,7 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
   const [testCases, setTestCases] = useState<TestCase[]>([])
   const [selectedTcIds, setSelectedTcIds] = useState<Set<string>>(new Set())
   const [history, setHistory] = useState<EvalResult[]>([])
+  const [chartHistory, setChartHistory] = useState<EvalResult[]>([])
   const [historyTotal, setHistoryTotal] = useState(0)
   const [historyPage, setHistoryPage] = useState(0)
   const PAGE_SIZE = 20
@@ -1054,10 +1055,14 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
       setHistoryTotal(res.total)
       setHistoryPage(page)
     }).catch(() => {})
+    // Load full history for charts (no pagination limit)
+    window.api.eval.history(selectedSkill, 10000, 0).then((res) => {
+      setChartHistory(res.items.filter(r => r.status === 'success'))
+    }).catch(() => {})
   }, [selectedSkill])
 
   useEffect(() => {
-    if (!selectedSkill) { setTestCases([]); setSelectedTcIds(new Set()); setHistory([]); setHistoryTotal(0); return }
+    if (!selectedSkill) { setTestCases([]); setSelectedTcIds(new Set()); setHistory([]); setChartHistory([]); setHistoryTotal(0); return }
     window.api.testcases.getBySkill(selectedSkill).then((tcs) => {
       setTestCases(tcs)
       setSelectedTcIds(new Set(tcs.map((tc) => tc.id)))
@@ -1109,7 +1114,7 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
 
   const [chartTab, setChartTab] = useState<'radar' | 'trend' | 'multidim' | 'heatmap' | 'boxplot' | 'bycase'>('radar')
 
-  const successHistory = history.filter((r) => r.status === 'success')
+  const successHistory = chartHistory  // full dataset for charts
   const avgScores = avgDimScores(successHistory)
   const minScores = successHistory.length >= 5 ? minDimScores(successHistory) : undefined
   const maxScores = successHistory.length >= 5 ? maxDimScores(successHistory) : undefined
@@ -1127,7 +1132,7 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
     return true
   })
 
-  const tcNames = [...new Set(history.map(r => r.testCaseName).filter(Boolean))] as string[]
+  const tcNames = [...new Set(successHistory.map(r => r.testCaseName).filter(Boolean))] as string[]
 
   const totalPages = Math.ceil(historyTotal / PAGE_SIZE)
 

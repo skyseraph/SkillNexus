@@ -19,7 +19,9 @@ const api = {
     getToolTargets: (): Promise<ToolTarget[]> => ipcRenderer.invoke('skills:getToolTargets'),
     setTrustLevel: (id: string, level: 1 | 2 | 3 | 4): Promise<void> => ipcRenderer.invoke('skills:setTrustLevel', id, level),
     getEvoChain: (skillId: string): Promise<EvoChainEntry[]> => ipcRenderer.invoke('skills:getEvoChain', skillId),
-    getContent: (skillId: string): Promise<string> => ipcRenderer.invoke('skills:getContent', skillId)
+    getContent: (skillId: string): Promise<string> => ipcRenderer.invoke('skills:getContent', skillId),
+    getUninstallInfo: (id: string): Promise<{ evalCount: number; tcCount: number; evolvedCount: number }> =>
+      ipcRenderer.invoke('skills:getUninstallInfo', id)
   },
   marketplace: {
     search: (query: string): Promise<MarketSkill[]> => ipcRenderer.invoke('marketplace:search', query),
