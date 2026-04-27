@@ -46,6 +46,12 @@ export function getAIProvider(): AIProvider {
   }
 }
 
+/** Returns the active Anthropic client instance (initialises default if needed). */
+export function getActiveClient(): Anthropic {
+  if (!_client) getAIProvider() // trigger default init
+  return _client!
+}
+
 async function callAnthropicSdk(client: Anthropic, options: AIRequestOptions): Promise<AIResponse> {
   const start = Date.now()
   const msg = await client.messages.create({
@@ -97,14 +103,11 @@ async function streamAnthropicSdk(
 
 export async function callWithTools(
   options: AIRequestOptions & { tools: object[] },
-  toolHandler: (name: string, input: Record<string, unknown>) => Promise<{ output: string; error?: string }>
+  toolHandler: (name: string, input: Record<string, unknown>) => Promise<{ output: string; error?: string }>,
+  client?: Anthropic
 ): Promise<{ answer: string; trace: AgentTraceStep[]; inputTokens: number; outputTokens: number; durationMs: number }> {
-  const client = (() => {
-    if (!_client) {
-      _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? 'no-key' })
-    }
-    return _client
-  })()
+  // Use provided client, or fall back to the active provider's client
+  if (!client) client = getActiveClient()
 
   const start = Date.now()
   const trace: AgentTraceStep[] = []
