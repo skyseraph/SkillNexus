@@ -392,9 +392,10 @@ interface EvoPageProps {
   session: MutableRefObject<EvoSession | null>
   initialSkillId?: string
   onNavigate?: (page: string, skillId?: string) => void
+  skillsRefreshKey?: number
 }
 
-export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPageProps) {
+export default function EvoPage({ session, initialSkillId, onNavigate, skillsRefreshKey }: EvoPageProps) {
   const track = useTrack()
   const initial = session.current ?? makeDefaultSession(initialSkillId ?? '')
 
@@ -460,7 +461,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate }: EvoPage
       setAvailableProviders(c.providers.map(p => ({ id: p.id, name: p.name || p.id })))
     })
     window.api.demo.isActive().then(setDemoMode)
-  }, [])
+  }, [skillsRefreshKey])
 
   const loadSkill = useCallback(async (id: string, keepPhase = false) => {
     if (!keepPhase) {

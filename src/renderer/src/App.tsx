@@ -42,6 +42,9 @@ export default function App() {
   const evoSessionRef = useRef<EvoSession | null>(null)
   // Track which pages have been visited (for lazy mount)
   const [mounted, setMounted] = useState<Set<Page>>(new Set(['home']))
+  // Incremented every time the user navigates to a page — used by skill-selector pages
+  // to re-fetch the skill list (in case new skills were installed on Home)
+  const [skillsRefreshKey, setSkillsRefreshKey] = useState(0)
 
   const handleNavigate = (p: string, skillId?: string, jobId?: string) => {
     const newPage = p as Page
@@ -53,6 +56,10 @@ export default function App() {
     }
     setNavSkillId(skillId ?? null)
     setNavJobId(jobId ?? null)
+    // Refresh skill list whenever navigating to a page that has a skill selector
+    if (['eval', 'evo', 'studio', 'trending'].includes(p)) {
+      setSkillsRefreshKey(k => k + 1)
+    }
   }
 
   const checkApiKey = () => {
@@ -129,10 +136,10 @@ export default function App() {
             {mounted.has('studio') && <StudioPage key={v('studio')} initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} />}
           </div>
           <div style={{ display: page === 'eval' ? undefined : 'none', height: '100%' }}>
-            {mounted.has('eval') && <EvalPage key={v('eval')} initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} />}
+            {mounted.has('eval') && <EvalPage key={v('eval')} initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} skillsRefreshKey={skillsRefreshKey} />}
           </div>
           <div style={{ display: page === 'evo' ? undefined : 'none', height: '100%' }}>
-            {mounted.has('evo') && <EvoPage key={v('evo')} session={evoSessionRef} initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} />}
+            {mounted.has('evo') && <EvoPage key={v('evo')} session={evoSessionRef} initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} skillsRefreshKey={skillsRefreshKey} />}
           </div>
           <div style={{ display: page === 'tasks' ? undefined : 'none', height: '100%' }}>
             {mounted.has('tasks') && <TasksPage key={v('tasks')} initialJobId={navJobId ?? undefined} onNavigate={handleNavigate} toast={toast} />}

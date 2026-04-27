@@ -1006,7 +1006,7 @@ function ByCasePanel({ caseMap }: { caseMap: Map<string, EvalResult[]> }) {
 
 // ── Main EvalPage ─────────────────────────────────────────────────────────────
 
-export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillId?: string; onNavigate?: (page: string, skillId?: string) => void } = {}) {
+export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey }: { initialSkillId?: string; onNavigate?: (page: string, skillId?: string) => void; skillsRefreshKey?: number } = {}) {
   const track = useTrack()
   const [skills, setSkills] = useState<Skill[]>([])
   const [selectedSkill, setSelectedSkill] = useState(initialSkillId ?? '')
@@ -1050,7 +1050,7 @@ export default function EvalPage({ initialSkillId, onNavigate }: { initialSkillI
       setApiKeySet(c.providers.length > 0)
       setTavilyKeySet(c.toolApiKeysSet?.tavily ?? false)
     })
-  }, [])
+  }, [skillsRefreshKey])
 
   const refreshHistory = useCallback((page = 0) => {
     if (!selectedSkill) return
