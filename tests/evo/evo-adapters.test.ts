@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ElectronDataStore } from '../src/main/services/adapters/electron-data-store'
-import { ElectronSkillStorage } from '../src/main/services/adapters/electron-storage'
-import { ElectronProgressReporter } from '../src/main/services/adapters/electron-progress'
+import { ElectronDataStore } from '../../src/main/services/adapters/electron-data-store'
+import { ElectronSkillStorage } from '../../src/main/services/adapters/electron-storage'
+import { ElectronProgressReporter } from '../../src/main/services/adapters/electron-progress'
 import type { Database, Statement } from 'better-sqlite3'
 
 // ── helpers ───────────────────────────────────────────────────────────────────

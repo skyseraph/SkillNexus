@@ -59,10 +59,6 @@ function parseScoreResponse(text: string): SkillScore5D | null {
   }
 }
 
-// ── Similarity threshold ─────────────────────────────────────────────────────
-
-const SIMILARITY_WARNING_THRESHOLD = 0.95
-
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('stripAnalysisBlock', () => {
@@ -186,47 +182,5 @@ describe('5D score response parsing', () => {
     const result = parseScoreResponse(text)
     expect(result!.completeness).toBe(0)
     expect(result!.executability).toBe(0)
-  })
-})
-
-describe('similarity threshold — 95% warning guard', () => {
-  function bigramSimilarity(a: string, b: string): number {
-    if (a === b) return 1
-    if (a.length < 2 || b.length < 2) return 0
-    const getBigrams = (s: string) => {
-      const bigrams = new Set<string>()
-      for (let i = 0; i < s.length - 1; i++) bigrams.add(s.slice(i, i + 2))
-      return bigrams
-    }
-    const aB = getBigrams(a), bB = getBigrams(b)
-    let intersect = 0
-    for (const bg of aB) if (bB.has(bg)) intersect++
-    return (2 * intersect) / (aB.size + bB.size)
-  }
-
-  it('identical strings give similarity 1.0', () => {
-    const text = 'This is a test skill with some content for review'
-    expect(bigramSimilarity(text, text)).toBe(1)
-  })
-
-  it('completely different strings give low similarity', () => {
-    const a = 'abcdef ghijkl'
-    const b = 'mnopqr stuvwx'
-    expect(bigramSimilarity(a, b)).toBeLessThan(0.2)
-  })
-
-  it('minor edit in long text stays above 95% threshold', () => {
-    // Use a longer, more varied string to get accurate bigram similarity
-    const base  = 'The quick brown fox jumps over the lazy dog and runs away into the forest path'
-    const small = 'The quick brown fox jumps over the lazy dog and runs away into the forest past'
-    const sim = bigramSimilarity(base, small)
-    expect(sim).toBeGreaterThan(SIMILARITY_WARNING_THRESHOLD)
-  })
-
-  it('significant evolution falls below 95% threshold', () => {
-    const original = 'Review code for bugs and issues in the codebase systematically'
-    const evolved  = 'Analyze code quality using static analysis and automated testing pipelines'
-    const sim = bigramSimilarity(original, evolved)
-    expect(sim).toBeLessThan(SIMILARITY_WARNING_THRESHOLD)
   })
 })

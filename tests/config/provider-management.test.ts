@@ -27,11 +27,6 @@ interface AppConfig {
   activeProviderId: string
 }
 
-interface AppConfigPublic {
-  providers: Array<Omit<LLMProvider, 'apiKey'> & { apiKeySet: boolean }>
-  activeProviderId: string
-}
-
 // ── Mirrors config.handler.ts logic ──────────────────────────────────────────
 
 function saveProvider(config: AppConfig, p: LLMProvider): AppConfig {
@@ -59,18 +54,6 @@ function setActive(config: AppConfig, id: string): AppConfig {
   return { ...config, activeProviderId: id }
 }
 
-function getPublicConfig(config: AppConfig): AppConfigPublic {
-  return {
-    providers: config.providers.map(p => ({
-      id: p.id,
-      name: p.name,
-      baseUrl: p.baseUrl,
-      model: p.model,
-      apiKeySet: !!p.apiKey
-    })),
-    activeProviderId: config.activeProviderId
-  }
-}
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -198,52 +181,5 @@ describe('setActive — active provider selection', () => {
     const config: AppConfig = { providers: [PROVIDER_A], activeProviderId: 'anthropic' }
     setActive(config, 'openai')
     expect(config.activeProviderId).toBe('anthropic')
-  })
-})
-
-// ── getPublicConfig — SEC-R3 apiKey not exposed ───────────────────────────────
-
-describe('getPublicConfig — apiKey never exposed (SEC-R3)', () => {
-  it('does not include apiKey field in public config', () => {
-    const config: AppConfig = { providers: [PROVIDER_A], activeProviderId: 'anthropic' }
-    const pub = getPublicConfig(config)
-    const json = JSON.stringify(pub)
-    expect(json).not.toContain('sk-ant-secret-key')
-    expect(json).not.toContain('"apiKey"')
-  })
-
-  it('sets apiKeySet to true when apiKey is present', () => {
-    const config: AppConfig = { providers: [PROVIDER_A], activeProviderId: 'anthropic' }
-    const pub = getPublicConfig(config)
-    expect(pub.providers[0].apiKeySet).toBe(true)
-  })
-
-  it('sets apiKeySet to false when apiKey is empty string', () => {
-    const noKey = { ...PROVIDER_A, apiKey: '' }
-    const config: AppConfig = { providers: [noKey], activeProviderId: 'anthropic' }
-    const pub = getPublicConfig(config)
-    expect(pub.providers[0].apiKeySet).toBe(false)
-  })
-
-  it('preserves non-sensitive fields in public config', () => {
-    const config: AppConfig = { providers: [PROVIDER_A], activeProviderId: 'anthropic' }
-    const pub = getPublicConfig(config)
-    expect(pub.providers[0].id).toBe('anthropic')
-    expect(pub.providers[0].name).toBe('Anthropic')
-    expect(pub.providers[0].baseUrl).toBe('https://api.anthropic.com')
-    expect(pub.providers[0].model).toBe('claude-sonnet-4-5')
-  })
-
-  it('returns empty providers array when no providers configured', () => {
-    const pub = getPublicConfig(EMPTY_CONFIG)
-    expect(pub.providers).toHaveLength(0)
-  })
-
-  it('handles multiple providers without leaking any apiKey', () => {
-    const config: AppConfig = { providers: [PROVIDER_A, PROVIDER_B], activeProviderId: 'anthropic' }
-    const pub = getPublicConfig(config)
-    const json = JSON.stringify(pub)
-    expect(json).not.toContain('sk-ant-secret-key')
-    expect(json).not.toContain('sk-openai-secret')
   })
 })

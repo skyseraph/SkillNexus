@@ -138,30 +138,3 @@ describe('sanitizeSkillName — marketplace install name normalization', () => {
     expect(sanitizeSkillName('!!!')).toBe('skill')
   })
 })
-
-// ── Trust Level semantics ────────────────────────────────────────────────────
-
-describe('trustLevel semantics (conceptual)', () => {
-  const TRUST_LABELS: Record<number, string> = {
-    1: 'AI Generated (Unverified)',
-    2: 'Format & Safety Verified',
-    3: 'Eval Tested',
-    4: 'User Approved'
-  }
-
-  it('maps each trust level to a distinct label', () => {
-    expect(TRUST_LABELS[1]).toBe('AI Generated (Unverified)')
-    expect(TRUST_LABELS[2]).toBe('Format & Safety Verified')
-    expect(TRUST_LABELS[3]).toBe('Eval Tested')
-    expect(TRUST_LABELS[4]).toBe('User Approved')
-  })
-
-  it('all 4 levels have labels', () => {
-    expect(Object.keys(TRUST_LABELS)).toHaveLength(4)
-  })
-
-  it('trust levels are ascending from 1 to 4', () => {
-    const levels = Object.keys(TRUST_LABELS).map(Number)
-    expect(levels).toEqual([1, 2, 3, 4])
-  })
-})

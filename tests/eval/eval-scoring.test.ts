@@ -47,12 +47,6 @@ function computeAvgScore(scores: Record<string, EvalScore>): number {
   return vals.reduce((a, b) => a + b, 0) / vals.length
 }
 
-// ── ThreeCondition delta computation ────────────────────────────────────────
-
-function computeDelta(scoreB: number, scoreA: number): number {
-  return parseFloat((scoreB - scoreA).toFixed(2))
-}
-
 // ── 8-dimension eval framework ───────────────────────────────────────────────
 
 const EVAL_DIMENSIONS_G = ['correctness', 'instruction_following', 'safety', 'completeness', 'robustness']
@@ -215,52 +209,3 @@ describe('8-dimension eval framework structure', () => {
   })
 })
 
-describe('MAX_TEST_CASES boundary guard', () => {
-  const MAX_TEST_CASES = 50
-
-  function validateTestCaseCount(ids: string[]): void {
-    if (!Array.isArray(ids) || ids.length > MAX_TEST_CASES) {
-      throw new Error(`testCaseIds must be an array of at most ${MAX_TEST_CASES} items`)
-    }
-  }
-
-  it('allows exactly MAX_TEST_CASES (50) ids', () => {
-    const ids = Array.from({ length: 50 }, (_, i) => `tc-${i}`)
-    expect(() => validateTestCaseCount(ids)).not.toThrow()
-  })
-
-  it('throws for 51 ids', () => {
-    const ids = Array.from({ length: 51 }, (_, i) => `tc-${i}`)
-    expect(() => validateTestCaseCount(ids)).toThrow('50')
-  })
-
-  it('allows empty array (runs all test cases)', () => {
-    expect(() => validateTestCaseCount([])).not.toThrow()
-  })
-
-  it('throws for non-array input', () => {
-    expect(() => validateTestCaseCount('not-array' as unknown as string[])).toThrow()
-  })
-})
-
-describe('ThreeConditionMode — Δpp (delta) computation', () => {
-  it('computes positive delta when B > A', () => {
-    expect(computeDelta(8.5, 6.0)).toBe(2.5)
-  })
-
-  it('computes negative delta when B < A (skill regresses)', () => {
-    expect(computeDelta(5.0, 7.0)).toBe(-2)
-  })
-
-  it('returns 0 when B equals A (no improvement)', () => {
-    expect(computeDelta(7.0, 7.0)).toBe(0)
-  })
-
-  it('rounds to 2 decimal places', () => {
-    expect(computeDelta(7.333, 5.111)).toBe(2.22)
-  })
-
-  it('maximum possible delta is 10 (A=0, B=10)', () => {
-    expect(computeDelta(10, 0)).toBe(10)
-  })
-})

@@ -192,36 +192,12 @@ describe('importJsonTestCases — bulk import validation', () => {
 // ── judgeType semantics ──────────────────────────────────────────────────────
 
 describe('judgeType semantics', () => {
-  it('llm: flexible scoring via AI, returns 0-10 score', () => {
-    // Conceptual: llm judge returns EvalScore with score in 0-10 range
-    const mockScore = { score: 8, violations: [], details: 'response looks correct' }
-    expect(mockScore.score).toBeGreaterThanOrEqual(0)
-    expect(mockScore.score).toBeLessThanOrEqual(10)
+  it('has exactly 3 valid judge types', () => {
+    expect([...VALID_JUDGE_TYPES]).toEqual(['llm', 'grep', 'command'])
   })
 
-  it('grep: deterministic — hit returns 10, miss returns 0', () => {
-    function grepScore(output: string, judgeParam: string) {
-      const hit = output.toLowerCase().includes((judgeParam ?? '').toLowerCase())
-      return { score: hit ? 10 : 0, violations: hit ? [] : [`Expected "${judgeParam}" in output`] }
-    }
-    expect(grepScore('The answer is 42', '42').score).toBe(10)
-    expect(grepScore('The answer is 42', 'wrong').score).toBe(0)
-    expect(grepScore('The answer is 42', 'wrong').violations).toHaveLength(1)
-  })
-
-  it('grep: case-insensitive matching', () => {
-    function grepScore(output: string, judgeParam: string) {
-      return output.toLowerCase().includes((judgeParam ?? '').toLowerCase()) ? 10 : 0
-    }
-    expect(grepScore('Hello World', 'hello')).toBe(10)
-    expect(grepScore('Hello World', 'WORLD')).toBe(10)
-  })
-
-  it('command: exit 0 returns score 10, non-zero returns score 0', () => {
-    // Mocked command judge outcome (actual uses execSync)
-    const successResult = { score: 10, violations: [], details: 'command exited 0' }
-    const failResult = { score: 0, violations: ['Command failed: exit code 1'], details: 'command exited non-zero' }
-    expect(successResult.score).toBe(10)
-    expect(failResult.score).toBe(0)
+  it('unknown judgeType falls back to llm', () => {
+    const line = JSON.stringify({ name: 'T', input: 'i', judgeType: 'unknown', judgeParam: '' })
+    expect(parseNdjsonLine(line)!.judgeType).toBe('llm')
   })
 })

@@ -1,6 +1,6 @@
-# Evo Module — Test Suite
+# SkillNexus — Test Suite
 
-215 tests across 15 files. All green.
+653 tests across 37 files. All green.
 
 ---
 
@@ -13,37 +13,70 @@ npx vitest run
 # Watch mode during development
 npx vitest
 
-# Run only the evo tests in tests/
-npx vitest run tests/
+# Run a specific directory
+npx vitest run tests/evo/
+npx vitest run tests/security/
 
 # Run a specific file
-npx vitest run tests/evo-page-pure.test.ts
+npx vitest run tests/evo/evo-page-pure.test.ts
 ```
 
 ---
 
-## Test Files
+## Directory Structure
 
-### `tests/` — New coverage (previously untested)
+```
+tests/
+├── config/
+│   ├── provider-config.test.ts       provider presets, baseURL validation, active model selection
+│   └── provider-management.test.ts   saveProvider, deleteProvider, setActive (CRUD + immutability)
+├── eval/
+│   ├── eval-history.test.ts          SkillRankEntry construction, trend array, ranking sort
+│   ├── eval-scoring.test.ts          grepScore, commandScore, 8-dim averaging, framework structure
+│   ├── eval-three-condition.test.ts  validateInput, buildJobIds, computeDeltas, condition semantics
+│   └── three-condition-cleanup.test.ts  skill-noskill-* / skill-gen-* 7-day cleanup predicate
+├── evo/
+│   ├── evo-adapters.test.ts          ElectronDataStore, ElectronSkillStorage, ElectronProgressReporter
+│   ├── evo-chain.test.ts             findRoot, bfsChain, buildChainEntries, computeAvgScore
+│   ├── evo-cycle-detection.test.ts   walkAncestors — linear chain, cycle breaking, depth limit
+│   ├── evo-install-and-eval.test.ts  YAML frontmatter parsing, filename sanitization, install flow
+│   ├── evo-page-pure.test.ts         bigramSimilarity, diffLines, avgScores, makeDefaultSession, friendlyError
+│   └── evo-transfer-test.test.ts     filterValidModels, validateTransferRequest, computePassRate
+├── security/
+│   ├── command-injection.test.ts     commandScore exit-code, OUTPUT truncation, timeout config
+│   ├── ipc-security.test.ts          SEC-R1 through SEC-R7 (path whitelist, sanitize, protocol guard)
+│   ├── ipc-security-extended.test.ts SEC-R1/R2/R4/R7 edge cases (sibling prefix, vbscript, blob, ws://)
+│   └── plugin-loader-security.test.ts  path containment, plugin schema validation
+├── skill/
+│   ├── skill-export.test.ts          TOOL_DEFAULTS (8 tools), resolveToolDir, buildExportPath
+│   ├── skill-parse.test.ts           parseSkillContent, sanitizeSkillName
+│   └── skill-trust-level.test.ts     validateTrustLevelUpgrade, T4 prerequisite, labels
+├── studio/
+│   ├── studio-agent-skill.test.ts    isAgentSkill, parseScore5D (agent vs single), clamp, fallback
+│   ├── studio-analysis.test.ts       stripAnalysisBlock, parseAnalysisBlock, 5D score parsing
+│   ├── studio-generation-modes.test.ts  creation modes, EvoConfig validation, extractWeakDimensions
+│   └── studio-install.test.ts        sanitizeInstallName, buildInstallFilePath, validateInstallContent
+├── testcase/
+│   └── testcase-logic.test.ts        parseNdjsonLine, importJsonTestCases, judgeType semantics
+└── trending/
+    └── trending-logic.test.ts        sortByDim, getMedal, getDeltaIndicator, getDimScore
 
-| File | What it covers | Tests |
-|------|---------------|-------|
-| `evo-install-and-eval.test.ts` | `evo:installAndEval` handler logic — ANALYSIS block stripping/parsing, YAML frontmatter parsing, filename sanitization, fallback defaults, combined install flow | 23 |
-| `evo-transfer-test.test.ts` | `evo:runTransferTest` handler logic — provider ID filtering, request validation, pass-rate computation, empty-response counting, full flow | 20 |
-| `evo-adapters.test.ts` | `ElectronDataStore`, `ElectronSkillStorage`, `ElectronProgressReporter` — all DB query paths, status/orderBy/limit variants, recursive CTE, file write + insert, test case copying, progress forwarding | 22 |
-| `evo-page-pure.test.ts` | `EvoPage.tsx` pure functions — `bigramSimilarity`, `diffLines`, `avgScores`, `overallAvg`, `makeDefaultSession`, `friendlyError` | 50 |
-
-### `src/` — Existing engine tests
-
-| File | Engine | Tests |
-|------|--------|-------|
-| `src/main/services/sdk/evoskill-engine.test.ts` | `EvoSkillEngine` — frontier iteration, MAX_FRONTIER cap, bestId selection, eval skip, progress reporting | 7 |
-| `src/main/services/sdk/coevoskill-engine.test.ts` | `CoEvoSkillEngine` — escalation levels, passedAll, maxRounds, verifier→generator feedback | 6 |
-| `src/main/services/sdk/skillmoo-engine.test.ts` | `SkillMOOEngine` — Pareto dominance, x/y coordinate computation, empty chain | 7 |
-| `src/main/services/sdk/skillx-engine.test.ts` | `SkillXEngine` — retry mechanism, entry parsing, malformed JSON, sampleLimit | 7 |
-| `src/main/services/sdk/skillclaw-engine.test.ts` | `SkillClawEngine` — early return on good perf, failure pattern extraction, JSON fallback, 4-step progress | 7 |
-| `src/main/ipc/evo.handler.test.ts` | Handler parameter validation — skillId required, clamp ranges for all 5 parameterized handlers | 13 |
-| `src/main/ipc/logic.test.ts` | YAML frontmatter parsing, score averaging, ID prefix generation | 8 |
+src/ (co-located tests)
+├── main/db/index.test.ts             initDatabase, getDb singleton, uninitialized guard
+├── main/ipc/evo.handler.test.ts      handler parameter validation, clamp ranges
+├── main/services/sdk/
+│   ├── base-engine.test.ts
+│   ├── coevoskill-engine.test.ts     escalation levels, passedAll, maxRounds
+│   ├── evoskill-engine.test.ts       frontier iteration, MAX_FRONTIER cap, bestId selection
+│   ├── skillclaw-engine.test.ts      early return, failure pattern extraction, 4-step progress
+│   ├── skillmoo-engine.test.ts       Pareto dominance, x/y coordinates, empty chain
+│   └── skillx-engine.test.ts         retry mechanism, entry parsing, malformed JSON
+├── main/services/telemetry.test.ts   dev mode no-op, consent state
+├── renderer/src/api.test.ts          window.api contract (mocked IPC surface)
+└── renderer/src/pages/
+    ├── FileTree.test.ts              buildTree, sort order, ext detection
+    └── HomePage.test.ts              skill list logic
+```
 
 ---
 
@@ -53,43 +86,8 @@ All tests are pure unit tests — no Electron, no real DB, no filesystem, no net
 
 **Engines** (`src/main/services/sdk/`) use constructor injection (`IDataStore`, `IProgressReporter`, `ISkillStorage`, `AIProvider`). Tests pass `vi.fn()` mocks directly.
 
-**Adapters** (`tests/evo-adapters.test.ts`) mock `better-sqlite3` `Database` and `fs` at the module level. The `ElectronProgressReporter` test mocks `BrowserWindow`.
+**Adapters** (`tests/evo/evo-adapters.test.ts`) mock `better-sqlite3` `Database` and `fs` at the module level.
 
-**Handler logic** (`tests/evo-install-and-eval.test.ts`, `tests/evo-transfer-test.test.ts`) extracts the pure computation from IPC handlers as standalone functions — no `ipcMain`, no `app`, no `getDb()`.
+**Handler logic** (`tests/evo/evo-install-and-eval.test.ts`, `tests/evo/evo-transfer-test.test.ts`) extracts pure computation from IPC handlers as standalone functions — no `ipcMain`, no `app`, no `getDb()`.
 
-**Renderer pure functions** (`tests/evo-page-pure.test.ts`) are copy-equivalent reimplementations of the functions defined inside `EvoPage.tsx`. Since they are module-level functions (not exported), they are tested by reproducing the same logic in the test file.
-
----
-
-## Key Behaviors Verified
-
-### `evo:installAndEval`
-- `<!--ANALYSIS ... -->` block is stripped before writing to disk
-- `ROOT_CAUSE`, `GENERALITY_TEST`, `REGRESSION_RISK` are extracted from the block
-- YAML frontmatter is parsed for `name`, `version`, `format`, `tags`
-- Missing frontmatter fields fall back to safe defaults (`markdown`, `1.0.0`, `[]`)
-- Evolved skill name falls back to `{originalName} (evolved)` when frontmatter has no `name`
-- File name is sanitized (special chars stripped, spaces → dashes, lowercased)
-
-### `evo:runTransferTest`
-- Only provider IDs present in `config.providers` are used
-- Empty `models` array throws before any AI calls
-- All-unconfigured models throws `No valid configured provider IDs`
-- Pass rate = `passCount / totalCases`, 0 when no test cases
-- Empty AI response counts as fail
-
-### Adapters
-- `queryEvalHistory` uses status-filtered SQL when `status` option provided
-- `queryEvalHistory` injects `orderBy` directly into SQL (e.g. `total_score ASC`)
-- `querySkillChain` uses a recursive CTE with `parent_skill_id`
-- `saveEvolvedSkill` returns a `skill-{timestamp}-{random}` ID and inserts with correct engine/parentSkillId
-- `copyTestCases` inserts one row per source test case with new `tc-` prefixed IDs
-- `ElectronProgressReporter` is a no-op when `win` is null
-
-### EvoPage pure functions
-- `bigramSimilarity` — Dice coefficient over character bigrams; identical strings → 1, disjoint → 0, symmetric
-- `diffLines` — LCS backtrack; `same + removes = a.lines`, `same + adds = b.lines` invariant holds
-- `avgScores` — per-dimension average across all eval results; empty history → `{}`
-- `overallAvg` — mean of all dimension averages; empty → 0
-- `makeDefaultSession` — each call returns a new object with independent `targets` array
-- `friendlyError` — maps 10 error patterns to Chinese UI messages; strips `Error:` prefix for unknowns
+**Renderer pure functions** (`tests/evo/evo-page-pure.test.ts`) are copy-equivalent reimplementations of functions defined inside `EvoPage.tsx`.

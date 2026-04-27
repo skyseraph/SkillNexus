@@ -8,16 +8,6 @@ function stripAnalysisBlock(content: string): string {
   return content.replace(/<!--ANALYSIS[\s\S]*?-->\s*/m, '')
 }
 
-function parseAnalysisBlock(content: string): { rootCause: string; generalityTest: string; regressionRisk: string } | null {
-  const match = content.match(/<!--ANALYSIS\s*([\s\S]*?)-->/)
-  if (!match) return null
-  const body = match[1]
-  const rootCause = body.match(/ROOT_CAUSE:\s*(.+)/)?.[1]?.trim() ?? ''
-  const generalityTest = body.match(/GENERALITY_TEST:\s*(.+)/)?.[1]?.trim() ?? ''
-  const regressionRisk = body.match(/REGRESSION_RISK:\s*(.+)/)?.[1]?.trim() ?? ''
-  return { rootCause, generalityTest, regressionRisk }
-}
-
 function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; markdownContent: string; yamlRaw: string } {
   const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/)
   if (!match) return { frontmatter: {}, markdownContent: content, yamlRaw: '' }
@@ -40,62 +30,6 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, unknow
 function sanitizeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '-').toLowerCase() || 'evolved-skill'
 }
-
-// ── stripAnalysisBlock ────────────────────────────────────────────────────────
-
-describe('stripAnalysisBlock', () => {
-  it('removes ANALYSIS comment block from content', () => {
-    const content = `<!--ANALYSIS\nROOT_CAUSE: bad prompt\n-->\n# Skill\nDo stuff.`
-    expect(stripAnalysisBlock(content)).toBe('# Skill\nDo stuff.')
-  })
-
-  it('leaves content unchanged when no ANALYSIS block', () => {
-    const content = '# Skill\nDo stuff.'
-    expect(stripAnalysisBlock(content)).toBe(content)
-  })
-
-  it('handles multiline ANALYSIS block', () => {
-    const content = `<!--ANALYSIS\nROOT_CAUSE: x\nGENERALITY_TEST: y\nREGRESSION_RISK: z\n-->\n# Skill`
-    expect(stripAnalysisBlock(content)).toBe('# Skill')
-  })
-
-  it('only removes first ANALYSIS block', () => {
-    const content = `<!--ANALYSIS\nROOT_CAUSE: a\n-->\n# Skill\n<!--ANALYSIS\nROOT_CAUSE: b\n-->`
-    const result = stripAnalysisBlock(content)
-    expect(result).toContain('# Skill')
-    expect(result).toContain('<!--ANALYSIS')  // second block remains
-  })
-})
-
-// ── parseAnalysisBlock ────────────────────────────────────────────────────────
-
-describe('parseAnalysisBlock', () => {
-  it('extracts all three fields', () => {
-    const content = `<!--ANALYSIS\nROOT_CAUSE: vague instructions\nGENERALITY_TEST: passes 3/5\nREGRESSION_RISK: low\n-->`
-    const result = parseAnalysisBlock(content)
-    expect(result).not.toBeNull()
-    expect(result!.rootCause).toBe('vague instructions')
-    expect(result!.generalityTest).toBe('passes 3/5')
-    expect(result!.regressionRisk).toBe('low')
-  })
-
-  it('returns null when no ANALYSIS block', () => {
-    expect(parseAnalysisBlock('# Skill\nNo analysis here.')).toBeNull()
-  })
-
-  it('returns empty strings for missing fields', () => {
-    const content = `<!--ANALYSIS\nROOT_CAUSE: only this\n-->`
-    const result = parseAnalysisBlock(content)
-    expect(result!.generalityTest).toBe('')
-    expect(result!.regressionRisk).toBe('')
-  })
-
-  it('trims whitespace from field values', () => {
-    const content = `<!--ANALYSIS\nROOT_CAUSE:   leading spaces   \n-->`
-    const result = parseAnalysisBlock(content)
-    expect(result!.rootCause).toBe('leading spaces')
-  })
-})
 
 // ── parseFrontmatter ──────────────────────────────────────────────────────────
 
