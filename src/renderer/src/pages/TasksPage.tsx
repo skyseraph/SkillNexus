@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useT } from '../i18n'
 import type { JobEntry, EvolutionEngine, EvalResult } from '../../../shared/types'
 import { exportEvalReport, exportEvoReport } from '../utils/report-export'
 
@@ -52,8 +53,8 @@ function DiffView({ original, evolved }: { original: string; evolved: string }) 
 const ENGINE_LABELS: Partial<Record<EvolutionEngine, string>> = {
   'evoskill': 'EvoSkill', 'coevoskill': 'CoEvoSkill', 'skillmoo': 'SkillMOO',
   'skillx': 'SkillX', 'skillclaw': 'SkillClaw',
-  'skvm-evidence': 'SkVM证据', 'skvm-strategy': 'SkVM策略', 'skvm-capability': 'SkVM能力',
-  'manual': '手动'
+  'skvm-evidence': 'SkVM-Evidence', 'skvm-strategy': 'SkVM-Strategy', 'skvm-capability': 'SkVM-Capability',
+  'manual': 'Manual'
 }
 
 const ENGINE_ICONS: Partial<Record<EvolutionEngine, string>> = {
@@ -73,15 +74,15 @@ const DIM_COLORS: Record<string, string> = {
   maintainability:       '#f97316'
 }
 
-const DIM_LABELS: Record<string, string> = {
-  correctness:           'G1 正确性',
-  instruction_following: 'G2 指令遵循',
-  safety:                'G3 安全性',
-  completeness:          'G4 完整性',
-  robustness:            'G5 鲁棒性',
-  executability:         'S1 可执行性',
-  cost_awareness:        'S2 成本意识',
-  maintainability:       'S3 可维护性'
+const DIM_LABELS_STATIC: Record<string, string> = {
+  correctness:           'G1 Correctness',
+  instruction_following: 'G2 Instruction Following',
+  safety:                'G3 Safety',
+  completeness:          'G4 Completeness',
+  robustness:            'G5 Robustness',
+  executability:         'S1 Executability',
+  cost_awareness:        'S2 Cost Awareness',
+  maintainability:       'S3 Maintainability'
 }
 
 const DIM_ORDER = ['correctness','instruction_following','safety','completeness','robustness','executability','cost_awareness','maintainability']
@@ -136,7 +137,7 @@ function RadarChart({ scores, minScores, maxScores, size = 200 }: {
         return (
           <text key={d} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
             fontSize="10" fill="var(--text-muted)" fontWeight="600">
-            {DIM_LABELS[d] ?? d}
+            {DIM_LABELS_STATIC[d] ?? d}
           </text>
         )
       })}
@@ -212,7 +213,8 @@ function EvalRow({ job, selected, active, onSelect, onClick, onDelete, onNavigat
 }
 
 function EvoRow({ job, selected, active, onSelect, onClick, onDelete, onNavigate }: RowProps) {
-  const engineLabel = job.engine ? (ENGINE_LABELS[job.engine] ?? job.engine) : '进化'
+  const t = useT()
+  const engineLabel = job.engine ? (ENGINE_LABELS[job.engine] ?? job.engine) : t('tasks.evo')
   const engineIcon = job.engine ? (ENGINE_ICONS[job.engine] ?? '🔬') : '🔬'
   const failed = job.status === 'error'
   return (
@@ -290,7 +292,7 @@ function EvalCaseModal({ result, onClose }: { result: EvalResult; onClose: () =>
                   return (
                     <div key={d}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ width: 110, fontSize: 12, fontWeight: 600, color, flexShrink: 0 }}>{DIM_LABELS[d] ?? d}</span>
+                        <span style={{ width: 110, fontSize: 12, fontWeight: 600, color, flexShrink: 0 }}>{DIM_LABELS_STATIC[d] ?? d}</span>
                         <div style={{ flex: 1, height: 6, background: 'var(--surface2)', borderRadius: 3, overflow: 'hidden' }}>
                           <div style={{ height: '100%', width: `${(s.score / 10) * 100}%`, background: color, borderRadius: 3 }} />
                         </div>
@@ -330,6 +332,7 @@ function EvalCaseModal({ result, onClose }: { result: EvalResult; onClose: () =>
 function EvalDetailPanel({ job, onClose, onNavigate }: {
   job: JobEntry; onClose: () => void; onNavigate: (page: string, id?: string) => void
 }) {
+  const t = useT()
   const [results, setResults] = useState<EvalResult[]>([])
   const [loading, setLoading] = useState(true)
   const [modalResult, setModalResult] = useState<EvalResult | null>(null)
@@ -397,7 +400,7 @@ function EvalDetailPanel({ job, onClose, onNavigate }: {
                   const color = DIM_COLORS[d] ?? '#888'
                   return (
                     <div key={d} className="detail-score-row">
-                      <span className="detail-score-dim" style={{ color }}>{DIM_LABELS[d] ?? d}</span>
+                      <span className="detail-score-dim" style={{ color }}>{DIM_LABELS_STATIC[d] ?? d}</span>
                       <div className="detail-score-bar-track">
                         <div className="detail-score-bar-fill" style={{ width: `${(score / 10) * 100}%`, background: color }} />
                       </div>
@@ -411,7 +414,7 @@ function EvalDetailPanel({ job, onClose, onNavigate }: {
 
           {/* Per-case list — click to open modal */}
           <div className="detail-section">
-            <div className="detail-section-label">用例明细（{results.length} 条）</div>
+            <div className="detail-section-label">{t('tasks.case_details', { count: String(results.length) })}</div>
             <div className="job-cases-list">
               {results.map(r => (
                 <div key={r.id} className="job-case-row" onClick={() => setModalResult(r)} style={{ cursor: 'pointer' }}>
@@ -419,7 +422,7 @@ function EvalDetailPanel({ job, onClose, onNavigate }: {
                     <span className={`status-dot ${r.status}`} />
                     <span className="job-case-name">{r.testCaseName ?? r.id.slice(-8)}</span>
                     <span className="job-case-score" style={{ color: r.totalScore >= 7 ? 'var(--success)' : r.totalScore >= 4 ? 'var(--warning)' : 'var(--danger)' }}>
-                      {r.status === 'error' ? '错误' : r.totalScore.toFixed(1)}
+                      {r.status === 'error' ? t('common.error') : r.totalScore.toFixed(1)}
                     </span>
                     <span className="job-case-chevron">▸</span>
                   </div>
@@ -440,6 +443,7 @@ function EvalDetailPanel({ job, onClose, onNavigate }: {
 function EvoDetailPanel({ job, onClose, onNavigate }: {
   job: JobEntry; onClose: () => void; onNavigate: (page: string, id?: string) => void
 }) {
+  const t = useT()
   const [content, setContent] = useState<string | null>(null)
   const [parentContent, setParentContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -464,7 +468,7 @@ function EvoDetailPanel({ job, onClose, onNavigate }: {
     Promise.all(loads).finally(() => setLoading(false))
   }, [job.skillId, job.parentSkillId])
 
-  const engineLabel = job.engine ? (ENGINE_LABELS[job.engine] ?? job.engine) : '进化'
+  const engineLabel = job.engine ? (ENGINE_LABELS[job.engine] ?? job.engine) : t('tasks.evo')
   const engineIcon = job.engine ? (ENGINE_ICONS[job.engine] ?? '🔬') : '🔬'
   const dims = latestEval ? Object.keys(latestEval.scores) : []
 
@@ -614,7 +618,7 @@ function EvoDetailPanel({ job, onClose, onNavigate }: {
                       return (
                         <div key={d}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <span style={{ width: 110, fontSize: 12, fontWeight: 600, color, flexShrink: 0 }}>{DIM_LABELS[d] ?? d}</span>
+                            <span style={{ width: 110, fontSize: 12, fontWeight: 600, color, flexShrink: 0 }}>{DIM_LABELS_STATIC[d] ?? d}</span>
                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
                               {parent != null && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -697,19 +701,20 @@ function DiffModal({ jobA, jobB, contentA, contentB, onClose }: {
 
 // ── delete confirm ────────────────────────────────────────────────────────────
 function DeleteConfirm({ job, onConfirm, onCancel }: { job: JobEntry; onConfirm: () => void; onCancel: () => void }) {
+  const t = useT()
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div className="modal-box modal-box-sm" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <span className="modal-title">确认删除</span>
+          <span className="modal-title">{t('common.confirm_delete')}</span>
           <button className="modal-close" onClick={onCancel}>✕</button>
         </div>
         <div style={{ padding: '16px 20px', fontSize: 13, color: 'var(--text)' }}>
-          删除 <strong>{job.skillName}</strong>？此操作不可撤销。
+          {t('tasks.delete_confirm', { name: job.skillName })}
         </div>
         <div className="modal-footer">
-          <button className="btn btn-ghost btn-sm" onClick={onCancel}>取消</button>
-          <button className="btn btn-sm" style={{ background: 'var(--danger)', color: '#fff', border: 'none' }} onClick={onConfirm}>确认删除</button>
+          <button className="btn btn-ghost btn-sm" onClick={onCancel}>{t('common.cancel')}</button>
+          <button className="btn btn-sm" style={{ background: 'var(--danger)', color: '#fff', border: 'none' }} onClick={onConfirm}>{t('common.confirm_delete')}</button>
         </div>
       </div>
     </div>
@@ -718,6 +723,7 @@ function DeleteConfirm({ job, onConfirm, onCancel }: { job: JobEntry; onConfirm:
 
 // ── main page ─────────────────────────────────────────────────────────────────
 export default function TasksPage({ onNavigate, initialJobId, toast }: TasksPageProps) {
+  const t = useT()
   const [jobs, setJobs] = useState<JobEntry[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [evalSubFilter, setEvalSubFilter] = useState<EvalSubFilter>('all')
@@ -732,7 +738,7 @@ export default function TasksPage({ onNavigate, initialJobId, toast }: TasksPage
   const load = useCallback(async (f: Filter) => {
     setLoading(true); setSelected(new Set())
     try { setJobs(await window.api.jobs.list(f)) }
-    catch { toast?.('加载失败，请重试', 'error') }
+    catch { toast?.(t('tasks.load_failed'), 'error') }
     finally { setLoading(false) }
   }, [toast])
 
@@ -789,9 +795,9 @@ export default function TasksPage({ onNavigate, initialJobId, toast }: TasksPage
       setJobs(prev => prev.filter(j => j.id !== job.id))
       setSelected(prev => { const n = new Set(prev); n.delete(job.id); return n })
       if (activeJobId === job.id) setActiveJobId(null)
-      toast?.('已删除', 'success')
+      toast?.(t('tasks.deleted'), 'success')
     } catch {
-      toast?.('删除失败，请重试', 'error')
+      toast?.(t('tasks.delete_failed'), 'error')
     }
     setDeleteTarget(null)
   }
@@ -806,12 +812,12 @@ export default function TasksPage({ onNavigate, initialJobId, toast }: TasksPage
         window.api.skills.getContent(b.skillId)
       ])
       if (results[0].status === 'rejected' || results[1].status === 'rejected') {
-        toast?.('获取 Skill 内容失败', 'error')
+        toast?.(t('tasks.get_content_failed'), 'error')
         return
       }
       setDiffModal({ jobA: a, jobB: b, contentA: results[0].value, contentB: results[1].value })
     } catch {
-      toast?.('对比失败，请重试', 'error')
+      toast?.(t('tasks.compare_failed'), 'error')
     }
   }
 
@@ -1066,7 +1072,7 @@ export default function TasksPage({ onNavigate, initialJobId, toast }: TasksPage
           {(['all', 'eval', 'evo'] as Filter[]).map(f => (
             <button key={f} className={`tasks-tab ${filter === f ? 'active' : ''}`}
               onClick={() => { setFilter(f); setEvalSubFilter('all'); setSearch(''); setSkillFilter('') }}>
-              {f === 'all' ? '全部' : f === 'eval' ? '评测' : '进化'}
+              {f === 'all' ? t('tasks.filter_all') : f === 'eval' ? t('tasks.filter_eval') : t('tasks.filter_evo')}
               {!loading && <span className="tasks-count">({
                 f === 'all' ? jobs.length :
                 f === 'eval' ? jobs.filter(j => j.type === 'eval').length :
@@ -1084,7 +1090,7 @@ export default function TasksPage({ onNavigate, initialJobId, toast }: TasksPage
               return (
                 <button key={sf} className={`tasks-subtab ${evalSubFilter === sf ? 'active' : ''}`}
                   onClick={() => { setEvalSubFilter(sf); setSearch(''); setSkillFilter('') }}>
-                  {sf === 'all' ? '全部' : sf === 'single' ? '单次' : '三条件'}
+                  {sf === 'all' ? t('tasks.filter_all') : sf === 'single' ? t('tasks.filter_single') : t('tasks.filter_three_cond')}
                   {!loading && <span className="tasks-count">({count})</span>}
                 </button>
               )
@@ -1098,13 +1104,13 @@ export default function TasksPage({ onNavigate, initialJobId, toast }: TasksPage
             {skillNames.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         )}
-        <input className="tasks-search" placeholder="搜索 Skill..." value={search}
+        <input className="tasks-search" placeholder={t('tasks.search_placeholder')} value={search}
           onChange={e => setSearch(e.target.value)} />
         {selected.size === 2 && (
-          <button className="tasks-compare-btn" onClick={handleCompare}>对比选中 (2)</button>
+          <button className="tasks-compare-btn" onClick={handleCompare}>{t('tasks.compare_selected')}</button>
         )}
         <button className="btn btn-ghost tasks-refresh" onClick={() => load(filter)} disabled={loading}>
-          {loading ? '加载中...' : '刷新'}
+          {loading ? t('common.loading') : t('common.refresh')}
         </button>
       </div>
 

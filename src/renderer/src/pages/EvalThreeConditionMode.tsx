@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useT } from '../i18n'
 import type { Skill, TestCase, EvalResult, ThreeConditionResult } from '../../../shared/types'
 
 const DIM_COLORS: Record<string, string> = {
@@ -10,16 +11,6 @@ const DIM_COLORS: Record<string, string> = {
   executability:         '#06b6d4',
   cost_awareness:        '#10b981',
   maintainability:       '#f97316'
-}
-const DIM_LABELS: Record<string, string> = {
-  correctness:           'G1 正确性',
-  instruction_following: 'G2 指令遵循',
-  safety:                'G3 安全性',
-  completeness:          'G4 完整性',
-  robustness:            'G5 鲁棒性',
-  executability:         'S1 可执行性',
-  cost_awareness:        'S2 成本意识',
-  maintainability:       'S3 可维护性'
 }
 
 function avgDims(history: EvalResult[]): Record<string, number> {
@@ -34,6 +25,17 @@ function avgDims(history: EvalResult[]): Record<string, number> {
 }
 
 export default function ThreeConditionMode({ skills, apiKeySet, onNavigate }: { skills: Skill[]; apiKeySet: boolean | null; onNavigate?: (page: string, skillId?: string) => void }) {
+  const t = useT()
+  const DIM_LABELS: Record<string, string> = {
+    correctness:           t('eval.dim.correctness'),
+    instruction_following: t('eval.dim.instruction_following'),
+    safety:                t('eval.dim.safety'),
+    completeness:          t('eval.dim.completeness'),
+    robustness:            t('eval.dim.robustness'),
+    executability:         t('eval.dim.executability'),
+    cost_awareness:        t('eval.dim.cost_awareness'),
+    maintainability:       t('eval.dim.maintainability'),
+  }
   const [skillId, setSkillId] = useState('')
   const [testCases, setTestCases] = useState<TestCase[]>([])
   const [selectedTcIds, setSelectedTcIds] = useState<Set<string>>(new Set())
@@ -155,8 +157,8 @@ export default function ThreeConditionMode({ skills, apiKeySet, onNavigate }: { 
         <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleRun}
           disabled={!skillId || selectedTcIds.size === 0 || running || apiKeySet === false}>
           {running
-            ? phase === 'generating' ? <><span className="gen-spinner" />{` AI 生成 Skill C...`}</> : <><span className="gen-spinner" />{` 评测中 ${progress}%...`}</>
-            : `▶ 开始三条件评测 (${selectedTcIds.size} 用例)`}
+            ? phase === 'generating' ? <><span className="gen-spinner" />{` ${t('eval.three.generating_c')}`}</> : <><span className="gen-spinner" />{` ${t('eval.three.evaluating_pct', { pct: String(progress) })}`}</>
+            : `▶ ${t('eval.three.start_btn', { count: String(selectedTcIds.size) })}`}
         </button>
         {error && <div className="guard-banner" style={{ marginTop: 10 }}>⚠️ {error}</div>}
       </div>
@@ -165,19 +167,19 @@ export default function ThreeConditionMode({ skills, apiKeySet, onNavigate }: { 
         <div className="eval-card progress-card">
           <div className="progress-track"><div className="progress-fill" style={{ width: `${progress}%` }} /></div>
           <p className="progress-msg">
-            {phase === 'generating' ? 'AI 正在生成 Skill C...' : '并行评测 A/B/C 三个条件中，请稍候...'}
+            {phase === 'generating' ? t('eval.three.generating_c') : t('eval.three.evaluating_parallel')}
           </p>
         </div>
       )}
 
       {result && phase === 'done' && (
         <div className="eval-card">
-          <span className="card-title">三条件对比结果</span>
+          <span className="card-title">{t('eval.three.result_title')}</span>
           <div className="three-cond-row">
             {[
-              { label: 'A — 无 Skill 基线', avg: avgA, delta: null, color: 'var(--text-muted)' },
+              { label: t('eval.three.cond_a'), avg: avgA, delta: null, color: 'var(--text-muted)' },
               { label: `B — ${skillName}`, avg: avgB, delta: deltaB, color: 'var(--accent)' },
-              { label: 'C — AI 生成 Skill', avg: avgC, delta: deltaC, color: 'var(--success)' }
+              { label: t('eval.three.cond_c'), avg: avgC, delta: deltaC, color: 'var(--success)' }
             ].map(({ label, avg, delta, color }) => (
               <div key={label} className="three-cond-card" style={{ borderColor: color + '55' }}>
                 <div className="three-cond-label">{label}</div>
@@ -238,11 +240,11 @@ export default function ThreeConditionMode({ skills, apiKeySet, onNavigate }: { 
             <div className="tc-detail-section" style={{ marginTop: 16 }}>
               <div className="tc-detail-header" onClick={() => setDetailsOpen(o => !o)}>
                 <span className="tc-detail-chevron">{detailsOpen ? '▼' : '▶'}</span>
-                <span className="tc-detail-title">按用例查看详情</span>
+                <span className="tc-detail-title">{t('eval.three.per_case_title')}</span>
                 <span className="tc-detail-count">{detailsB.length} 条</span>
               </div>
               {detailsOpen && (() => {
-                const tcNames = [...new Set([...detailsA, ...detailsB, ...detailsC].map(r => r.testCaseName ?? '(未命名)'))]
+                const tcNames = [...new Set([...detailsA, ...detailsB, ...detailsC].map(r => r.testCaseName ?? t('eval.unnamed')))]
                 return (
                   <div className="tc-detail-table">
                     <div className="tc-detail-thead">
@@ -252,9 +254,9 @@ export default function ThreeConditionMode({ skills, apiKeySet, onNavigate }: { 
                       <span className="tc-detail-col-score">C AI生成</span>
                     </div>
                     {tcNames.map(tcName => {
-                      const rA = detailsA.find(r => (r.testCaseName ?? '(未命名)') === tcName)
-                      const rB = detailsB.find(r => (r.testCaseName ?? '(未命名)') === tcName)
-                      const rC = detailsC.find(r => (r.testCaseName ?? '(未命名)') === tcName)
+                      const rA = detailsA.find(r => (r.testCaseName ?? t('eval.unnamed')) === tcName)
+                      const rB = detailsB.find(r => (r.testCaseName ?? t('eval.unnamed')) === tcName)
+                      const rC = detailsC.find(r => (r.testCaseName ?? t('eval.unnamed')) === tcName)
                       const isExpanded = expandedTc === tcName
                       const dims = [...new Set([...Object.keys(rB?.scores ?? {}), ...Object.keys(rC?.scores ?? {})])]
                       return (

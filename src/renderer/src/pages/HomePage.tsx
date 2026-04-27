@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import type { Skill, SkillFileEntry, ToolTarget, ScannedSkill, ScanResult, EvoChainEntry, JobEntry } from '../../../shared/types'
 import { useTrack } from '../hooks/useTrack'
+import { useT } from '../i18n/useT'
 
 type ViewMode = 'grid' | 'list'
 type SortMode = 'newest' | 'oldest' | 'name'
@@ -55,18 +56,25 @@ function langFromExt(ext: string): string {
 
 // ── Trust Badge ───────────────────────────────────────────────────────────────
 
-const TRUST_META: Record<number, { label: string; color: string }> = {
-  1: { label: 'T1 未验证',   color: '#888' },
-  2: { label: 'T2 质量达标', color: '#f59e0b' },
-  3: { label: 'T3 已评测',   color: '#00d4aa' },
-  4: { label: 'T4 已批准',   color: '#6c63ff' }
+const TRUST_META: Record<number, { color: string }> = {
+  1: { color: '#888' },
+  2: { color: '#f59e0b' },
+  3: { color: '#00d4aa' },
+  4: { color: '#6c63ff' }
 }
 
 function TrustBadge({ level }: { level: 1 | 2 | 3 | 4 }) {
+  const t = useT()
+  const labels: Record<number, string> = {
+    1: t('studio.trust.t1'),
+    2: t('studio.trust.t2'),
+    3: t('studio.trust.t3'),
+    4: t('studio.trust.t4'),
+  }
   const m = TRUST_META[level] ?? TRUST_META[1]
   return (
     <span className="trust-badge" style={{ color: m.color, borderColor: `${m.color}55`, background: `${m.color}11` }}>
-      {m.label}
+      {labels[level] ?? labels[1]}
     </span>
   )
 }
@@ -202,6 +210,7 @@ function SkillDrawer({ skill, onClose, onUninstall, onTrustChange, toast, onNavi
   toast?: (msg: string, type?: 'success' | 'error' | 'info') => void
   onNavigate?: (page: string, skillId?: string, jobId?: string) => void
 }) {
+  const t = useT()
   const [files, setFiles] = useState<SkillFileEntry[]>([])
   const [filesLoading, setFilesLoading] = useState(true)
   const [selectedFile, setSelectedFile] = useState<SkillFileEntry | null>(null)
@@ -270,13 +279,13 @@ function SkillDrawer({ skill, onClose, onUninstall, onTrustChange, toast, onNavi
             {(skill.trustLevel ?? 1) < 4 && (
               <button
                 className="btn btn-sm btn-ghost"
-                title={(skill.trustLevel ?? 1) < 2 ? '需要先通过 5D 评分（T2）和 8D 评测（T3）才能批准' : ''}
+                title={(skill.trustLevel ?? 1) < 2 ? t('home.approve_disabled_hint') : ''}
                 disabled={(skill.trustLevel ?? 1) < 2}
                 style={(skill.trustLevel ?? 1) < 2 ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
                 onClick={async () => {
                   await window.api.skills.setTrustLevel(skill.id, 4)
                   onTrustChange?.(skill.id, 4)
-                  toast?.('已批准为 T4', 'success')
+                  toast?.(t('home.approved_t4'), 'success')
                 }}>✓ 批准</button>
             )}
             <button className="btn btn-sm btn-ghost" style={{ color: '#ef4444' }}
@@ -334,18 +343,18 @@ function SkillDrawer({ skill, onClose, onUninstall, onTrustChange, toast, onNavi
 
               <div className="detail-section">
                 <div className="meta-label" style={{ marginBottom: 8 }}>
-                  评测历史
-                  {evalJobs.length > 0 && <span className="evo-chain-count">{evalJobs.length} 条</span>}
+                  {t('home.eval_history')}
+                  {evalJobs.length > 0 && <span className="evo-chain-count">{evalJobs.length} {t('common.count')}</span>}
                 </div>
                 {evalJobsLoading ? (
                   <div className="tree-loading">Loading...</div>
                 ) : evalJobs.length === 0 ? (
                   <div className="evo-chain-empty">
-                    <span>暂无评测记录</span>
+                    <span>{t('home.no_eval_records')}</span>
                     <span className="evo-chain-empty-hint">
                       {onNavigate
-                        ? <button className="link-btn" style={{ fontSize: 11 }} onClick={() => { onClose(); onNavigate('eval', skill.id) }}>在 Eval 页面运行评测 →</button>
-                        : '在 Eval 页面运行评测后，此处将展示历史记录'}
+                        ? <button className="link-btn" style={{ fontSize: 11 }} onClick={() => { onClose(); onNavigate('eval', skill.id) }}>{t('home.run_eval_hint')}</button>
+                        : t('home.run_eval_hint_static')}
                     </span>
                   </div>
                 ) : (
@@ -385,18 +394,18 @@ function SkillDrawer({ skill, onClose, onUninstall, onTrustChange, toast, onNavi
               {evoChain.length >= 1 && (
                 <div className="detail-section">
                   <div className="evo-chain-header" onClick={() => setEvoChainOpen(o => !o)}>
-                    <span className="meta-label">进化血缘</span>
-                    {evoChain.length > 1 && <span className="evo-chain-count">{evoChain.length} 代</span>}
+                    <span className="meta-label">{t('home.evo_lineage')}</span>
+                    {evoChain.length > 1 && <span className="evo-chain-count">{evoChain.length} {t('home.evo_gen')}</span>}
                     <span className="evo-chain-toggle">{evoChainOpen ? '▾' : '▸'}</span>
                   </div>
                   {evoChainOpen && (
                     evoChain.length === 1 ? (
                       <div className="evo-chain-empty">
-                        <span>根版本，尚未进化</span>
+                        <span>{t('home.root_version')}</span>
                         <span className="evo-chain-empty-hint">
                           {onNavigate
-                            ? <button className="link-btn" style={{ fontSize: 11 }} onClick={() => { onClose(); onNavigate('evo', skill.id) }}>在 Evo 页面运行进化引擎 →</button>
-                            : '在 Evo 页面运行进化引擎后，此处将展示完整血缘链'}
+                            ? <button className="link-btn" style={{ fontSize: 11 }} onClick={() => { onClose(); onNavigate('evo', skill.id) }}>{t('home.run_evo_link')}</button>
+                            : t('home.evo_chain_empty_hint')}
                         </span>
                       </div>
                     ) : (
@@ -448,6 +457,7 @@ function UninstallModal({ skillName, info, onConfirm, onCancel }: {
   onConfirm: () => void
   onCancel: () => void
 }) {
+  const t = useT()
   const hasData = info.evalCount > 0 || info.tcCount > 0 || info.evolvedCount > 0
   return (
     <>
@@ -465,7 +475,7 @@ function UninstallModal({ skillName, info, onConfirm, onCancel }: {
                 {info.evalCount > 0 && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', background: 'rgba(239,68,68,0.08)', borderRadius: 6, fontSize: 13 }}>
                     <span style={{ color: '#ef4444' }}>📊</span>
-                    <span>评测历史 <strong>{info.evalCount}</strong> 条</span>
+                    <span>{t('home.eval_history_count', { n: info.evalCount })}</span>
                   </div>
                 )}
                 {info.tcCount > 0 && (
@@ -483,12 +493,12 @@ function UninstallModal({ skillName, info, onConfirm, onCancel }: {
               </div>
             </>
           ) : (
-            <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>该 Skill 没有关联的评测历史或测试用例。</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('home.no_eval_data')}</p>
           )}
         </div>
         <div className="modal-footer">
-          <button className="btn btn-ghost" onClick={onCancel}>取消</button>
-          <button className="btn btn-danger" onClick={onConfirm}>确认卸载</button>
+          <button className="btn btn-ghost" onClick={onCancel}>{t('common.cancel')}</button>
+          <button className="btn btn-danger" onClick={onConfirm}>{t('home.confirm_uninstall')}</button>
         </div>
       </div>
     </>
@@ -750,6 +760,7 @@ function MySkillsTab({ skills, loading, onInstallFile, onInstallDir, onCardClick
   toast?: (msg: string, type?: 'success' | 'error' | 'info') => void
   onRefresh?: () => void
 }) {
+  const t = useT()
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'single' | 'agent'>('all')
   const [formatFilter, setFormatFilter] = useState<'all' | 'claude-code' | 'openclaw'>('all')
@@ -880,20 +891,20 @@ function MySkillsTab({ skills, loading, onInstallFile, onInstallDir, onCardClick
             {skills.length === 0 ? (
               <>
                 <div className="empty-icon">✨</div>
-                <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)' }}>还没有 Skill</p>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: -4 }}>从 Studio 创建第一个，或导入已有文件</p>
+                <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)' }}>{t('home.empty')}</p>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: -4 }}>{t('home.empty_hint')}</p>
                 <button
                   className="btn btn-primary"
                   style={{ marginTop: 4, padding: '10px 28px', fontSize: 14 }}
                   onClick={() => onNavigate?.('studio')}
                 >
-                  🎨 去 Skill Studio 创建
+                  🎨 {t('home.go_studio')}
                 </button>
-                <div className="empty-divider">或</div>
+                <div className="empty-divider">{t('common.or')}</div>
                 <div className="empty-actions">
-                  <button className="btn btn-ghost" onClick={onInstallFile}>📝 导入 .md 文件</button>
-                  <button className="btn btn-ghost" onClick={onInstallDir}>🤖 导入 Agent 目录</button>
-                  <button className="btn btn-ghost" onClick={() => setShowScan(true)}>🔎 扫描本地工具</button>
+                  <button className="btn btn-ghost" onClick={onInstallFile}>📝 {t('home.import_md')}</button>
+                  <button className="btn btn-ghost" onClick={onInstallDir}>🤖 {t('home.import_agent')}</button>
+                  <button className="btn btn-ghost" onClick={() => setShowScan(true)}>🔎 {t('home.scan_tools')}</button>
                 </div>
               </>
             ) : (
@@ -920,19 +931,20 @@ function MySkillsTab({ skills, loading, onInstallFile, onInstallDir, onCardClick
 // ── Marketplace Tab ───────────────────────────────────────────────────────────
 
 function MarketplaceTab() {
+  const t = useT()
   return (
     <div className="tab-content marketplace-coming-soon">
       <div className="coming-soon-card">
         <div className="coming-soon-icon">🛒</div>
         <h2 className="coming-soon-title">Marketplace</h2>
-        <p className="coming-soon-subtitle">敬请期待</p>
+        <p className="coming-soon-subtitle">{t('home.coming_soon')}</p>
         <p className="coming-soon-desc">
-          我们正在构建更完善的 Skill 市场，支持质量评分、版本管理和社区分享。
+          {t('home.marketplace_desc')}
         </p>
         <div className="coming-soon-features">
-          <div className="csf-item">审核机制，保障 Skill 质量</div>
-          <div className="csf-item">社区评测数据聚合</div>
-          <div className="csf-item">版本管理与自动更新</div>
+          <div className="csf-item">{t('home.marketplace_f1')}</div>
+          <div className="csf-item">{t('home.marketplace_f2')}</div>
+          <div className="csf-item">{t('home.marketplace_f3')}</div>
         </div>
       </div>
     </div>
@@ -943,6 +955,7 @@ function MarketplaceTab() {
 
 export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, type?: 'success' | 'error' | 'info') => void; onNavigate?: (page: string, skillId?: string) => void }) {
   const track = useTrack()
+  const t = useT()
   const [skills, setSkills] = useState<Skill[]>([])
   const [loading, setLoading] = useState(true)
   const [installing, setInstalling] = useState(false)
@@ -1026,7 +1039,7 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
     <div className="home-root">
       <div className="home-page-header">
         <h1>SkillNexus</h1>
-        <p className="home-subtitle">让Skill可生成、可量化、可管理、可成长</p>
+        <p className="home-subtitle">{t('home.tagline')}</p>
       </div>
       <div className="page-tabs">
         <button className={`page-tab ${activeTab === 'mine' ? 'active' : ''}`} onClick={() => setActiveTab('mine')}>

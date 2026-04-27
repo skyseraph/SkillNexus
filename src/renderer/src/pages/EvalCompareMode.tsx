@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useT } from '../i18n'
 import type { Skill, TestCase, EvalResult } from '../../../shared/types'
 
 const DIM_COLORS: Record<string, string> = {
@@ -10,16 +11,6 @@ const DIM_COLORS: Record<string, string> = {
   executability:         '#06b6d4',
   cost_awareness:        '#10b981',
   maintainability:       '#f97316'
-}
-const DIM_LABELS: Record<string, string> = {
-  correctness:           'G1 正确性',
-  instruction_following: 'G2 指令遵循',
-  safety:                'G3 安全性',
-  completeness:          'G4 完整性',
-  robustness:            'G5 鲁棒性',
-  executability:         'S1 可执行性',
-  cost_awareness:        'S2 成本意识',
-  maintainability:       'S3 可维护性'
 }
 
 function avgDims(history: EvalResult[]): Record<string, number> {
@@ -34,6 +25,17 @@ function avgDims(history: EvalResult[]): Record<string, number> {
 }
 
 export default function CompareMode({ skills, apiKeySet, onNavigate }: { skills: Skill[]; apiKeySet: boolean | null; onNavigate?: (page: string, skillId?: string) => void }) {
+  const t = useT()
+  const DIM_LABELS: Record<string, string> = {
+    correctness:           t('eval.dim.correctness'),
+    instruction_following: t('eval.dim.instruction_following'),
+    safety:                t('eval.dim.safety'),
+    completeness:          t('eval.dim.completeness'),
+    robustness:            t('eval.dim.robustness'),
+    executability:         t('eval.dim.executability'),
+    cost_awareness:        t('eval.dim.cost_awareness'),
+    maintainability:       t('eval.dim.maintainability'),
+  }
   const [skillAId, setSkillAId] = useState('')
   const [skillBId, setSkillBId] = useState('')
   const [testCases, setTestCases] = useState<TestCase[]>([])

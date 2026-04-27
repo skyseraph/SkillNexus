@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import type { SkillRankEntry } from '../../../shared/types'
+import { useT } from '../i18n/useT'
 
 const DIM_COLORS: Record<string, string> = {
   correctness:           '#6c63ff',
@@ -11,18 +12,6 @@ const DIM_COLORS: Record<string, string> = {
   cost_awareness:        '#10b981',
   maintainability:       '#f97316',
   overall:               '#6c63ff'
-}
-
-const DIM_LABELS: Record<string, string> = {
-  overall:               '⭐ 综合',
-  correctness:           'G1 正确性',
-  instruction_following: 'G2 指令遵循',
-  safety:                'G3 安全性',
-  completeness:          'G4 完整性',
-  robustness:            'G5 鲁棒性',
-  executability:         'S1 可执行性',
-  cost_awareness:        'S2 成本意识',
-  maintainability:       'S3 可维护性'
 }
 
 const DIMS = ['overall', 'correctness', 'instruction_following', 'safety', 'completeness', 'robustness', 'executability', 'cost_awareness', 'maintainability']
@@ -71,6 +60,18 @@ function ScoreBar({ score, color, max = 10 }: { score: number; color: string; ma
 // ── Main TrendingPage ─────────────────────────────────────────────────────────
 
 export default function TrendingPage({ onNavigate }: { onNavigate?: (page: string, skillId?: string) => void }) {
+  const t = useT()
+  const DIM_LABELS: Record<string, string> = {
+    overall:               t('trending.dim.overall'),
+    correctness:           t('eval.dim.correctness'),
+    instruction_following: t('eval.dim.instruction_following'),
+    safety:                t('eval.dim.safety'),
+    completeness:          t('eval.dim.completeness'),
+    robustness:            t('eval.dim.robustness'),
+    executability:         t('eval.dim.executability'),
+    cost_awareness:        t('eval.dim.cost_awareness'),
+    maintainability:       t('eval.dim.maintainability'),
+  }
   const [ranked, setRanked] = useState<RankedSkill[]>([])
   const [loading, setLoading] = useState(true)
   const [activeDim, setActiveDim] = useState('overall')
@@ -117,10 +118,10 @@ export default function TrendingPage({ onNavigate }: { onNavigate?: (page: strin
       <div className="trending-header">
         <div>
           <h1>Trending</h1>
-          <p className="subtitle">按评测维度排名的 Skill 榜单</p>
+          <p className="subtitle">{t('trending.subtitle')}</p>
         </div>
         <button className="btn btn-ghost btn-sm refresh-btn" onClick={load} disabled={loading}>
-          {loading ? '加载中...' : '↻ 刷新'}
+          {loading ? t('common.loading') : t('common.refresh')}
         </button>
       </div>
 
@@ -129,24 +130,24 @@ export default function TrendingPage({ onNavigate }: { onNavigate?: (page: strin
         <div className="trending-stats">
           <div className="trending-stat">
             <span className="trending-stat-val">{ranked.length}</span>
-            <span className="trending-stat-label">已评测 Skill</span>
+            <span className="trending-stat-label">{t('trending.evaluated')}</span>
           </div>
           <div className="trending-stat">
             <span className="trending-stat-val">{totalEvals}</span>
-            <span className="trending-stat-label">评测次数</span>
+            <span className="trending-stat-label">{t('trending.eval_count')}</span>
           </div>
           {withEvals.length > 0 && (
             <div className="trending-stat">
               <span className="trending-stat-val" style={{ color: DIM_COLORS.overall }}>
                 {(withEvals.reduce((s, r) => s + r.scores.overall, 0) / withEvals.length).toFixed(1)}
               </span>
-              <span className="trending-stat-label">平均综合分</span>
+              <span className="trending-stat-label">{t('trending.avg_score')}</span>
             </div>
           )}
           {withEvals[0] && (
             <div className="trending-stat">
               <span className="trending-stat-val" style={{ color: DIM_COLORS.overall, fontSize: 13 }}>{withEvals[0].skillName}</span>
-              <span className="trending-stat-label">当前榜首</span>
+              <span className="trending-stat-label">{t('trending.top_skill')}</span>
             </div>
           )}
         </div>
@@ -167,11 +168,11 @@ export default function TrendingPage({ onNavigate }: { onNavigate?: (page: strin
       </div>
 
       {loading ? (
-        <div className="loading-state">加载排名中...</div>
+        <div className="loading-state">{t('trending.loading')}</div>
       ) : withEvals.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon">📊</div>
-          <p>还没有评测数据。<button className="link-btn" onClick={() => onNavigate?.('eval')}>去运行评测 →</button></p>
+          <p>{t('trending.empty')}<button className="link-btn" onClick={() => onNavigate?.('eval')}>{t('trending.go_eval')}</button></p>
         </div>
       ) : (
         <div className="leaderboard">
@@ -197,7 +198,7 @@ export default function TrendingPage({ onNavigate }: { onNavigate?: (page: strin
                   <div className="rank-info">
                     <div className="rank-name">{skill.skillName}{skill.skillType === 'agent' && <span className="rank-agent-badge">Agent</span>}</div>
                     <div className="rank-meta">
-                      <span className="eval-count">{skill.evalCount} 次评测</span>
+                      <span className="eval-count">{skill.evalCount} {t('trending.eval_count_suffix')}</span>
                     </div>
                   </div>
 
@@ -243,7 +244,7 @@ export default function TrendingPage({ onNavigate }: { onNavigate?: (page: strin
           {/* Skills with no evals */}
           {noEvals.length > 0 && (
             <div className="no-evals-section">
-              <div className="no-evals-label">未评测 ({noEvals.length})</div>
+              <div className="no-evals-label">{t('trending.unevaluated')} ({noEvals.length})</div>
               {noEvals.map((skill) => (
                 <div key={skill.skillId} className="rank-card unranked">
                   <div className="rank-main">
@@ -255,8 +256,8 @@ export default function TrendingPage({ onNavigate }: { onNavigate?: (page: strin
                     </div>
                     <span className="no-eval-hint">
                       {onNavigate
-                        ? <button className="link-btn" onClick={() => onNavigate('eval', skill.skillId)}>去评测 →</button>
-                        : '运行评测后显示排名'}
+                        ? <button className="link-btn" onClick={() => onNavigate('eval', skill.skillId)}>{t('common.go_eval_arrow')}</button>
+                        : t('trending.run_hint')}
                     </span>
                   </div>
                 </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import type { MutableRefObject } from 'react'
+import { useT } from '../i18n'
 import type { Skill, EvalResult, EvalHistoryPage, EvoRunResult, EvoSession, EvoPhase, EvoParadigm, EvoAnalysis, EvoConfig, EvoChainEntry, EvolutionEngine, ParetoPoint, EvoSkillResult, CoEvoResult, TransferReport, SkillXResult, SkillClawResult } from '../../../shared/types'
 import { useTrack } from '../hooks/useTrack'
 
@@ -288,15 +289,21 @@ function EvoSkillProgress({ iteration, total, result }: { iteration: number; tot
 // ── CoEvoStatus component ──────────────────────────────────────────────────────
 
 function CoEvoStatus({ result }: { result: CoEvoResult | null }) {
-  const escalationLabel = (l: number) => ['—', '基础用例', '边界用例', '对抗用例'][l] ?? '—'
+  const t = useT()
+  const escalationLabel = (l: number) => [
+    '—',
+    t('evo.coevo.basic_case'),
+    t('evo.coevo.boundary_case'),
+    t('evo.coevo.adversarial_case')
+  ][l] ?? '—'
   return (
     <div className="evo-card">
-      <div className="card-title">CoEvoSkill 协同进化</div>
+      <div className="card-title">{t('evo.coevo.title')}</div>
       {result ? (
         <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div>Escalation 等级: <strong>{escalationLabel(result.escalationLevel)}</strong></div>
-          <div>已运行轮次: <strong>{result.rounds}</strong></div>
-          <div>{result.passedAll ? '✅ 全部用例通过' : '⚠️ 部分用例未通过'}</div>
+          <div>Escalation: <strong>{escalationLabel(result.escalationLevel)}</strong></div>
+          <div>{t('evo.coevo.rounds')}: <strong>{result.rounds}</strong></div>
+          <div>{result.passedAll ? t('evo.coevo.all_passed') : t('evo.coevo.some_failed')}</div>
         </div>
       ) : (
         <div className="text-muted">协同进化中，请稍候... <span className="streaming-dot">●</span></div>
@@ -305,29 +312,10 @@ function CoEvoStatus({ result }: { result: CoEvoResult | null }) {
   )
 }
 
-const PARADIGMS: { id: EvoParadigm; label: string; hint: string }[] = [
-  { id: 'evidence',   label: '证据驱动',  hint: '基于评测历史，诊断根因，外科手术修改（需有 eval 历史）' },
-  { id: 'strategy',   label: '策略矩阵',  hint: '指定改进目标组合，LLM 仲裁冲突（无需历史，适合新 Skill）' },
-  { id: 'capability', label: '能力感知',  hint: '识别过高能力门槛，降级难以遵循的指令（适合复杂 Agent Skill）' }
-]
-
-const ENGINES: { id: EvolutionEngine; label: string; hint: string; prereq?: string }[] = [
-  { id: 'skvm-evidence',   label: 'SkVM 证据',   hint: '基于评测历史诊断根因，外科手术式修改。适合有 eval 记录的 Skill。', prereq: '需要 eval 历史记录' },
-  { id: 'skvm-strategy',   label: 'SkVM 策略',   hint: '指定改进目标组合，LLM 仲裁冲突。无需历史，适合新 Skill。' },
-  { id: 'skvm-capability', label: 'SkVM 能力',   hint: '识别过高能力门槛，降级难以遵循的指令。适合复杂 Agent Skill。' },
-  { id: 'evoskill',        label: 'EvoSkill',    hint: '维护前沿集合，多代迭代保留最优变体，自动淘汰低分版本。', prereq: '需要测试用例' },
-  { id: 'skillmoo',        label: 'SkillMOO',    hint: '多目标 Pareto 前沿优化，同时优化准确率和 token 效率。', prereq: '需要 eval 历史记录' },
-  { id: 'coevoskill',      label: 'CoEvoSkill',  hint: 'Generator + Verifier 双引擎协同，Test Escalation 三级递进。', prereq: '需要测试用例' },
-  { id: 'skillx',          label: 'SkillX',      hint: '从高分样本提取三层知识条目（planning/functional/atomic），融合生成进化版。', prereq: '需要 ≥3 条高分 eval 记录' },
-  { id: 'skillclaw',       label: 'SkillClaw',   hint: '聚合最近 N 条 eval 历史，识别共同失败模式，集体进化。', prereq: '需要 eval 历史记录' },
-]
-
 const ENGINE_GROUPS: { label: string; ids: EvolutionEngine[] }[] = [
-  { label: 'SkVM 经典', ids: ['skvm-evidence', 'skvm-strategy', 'skvm-capability'] },
-  { label: 'v2 算法',   ids: ['evoskill', 'skillmoo', 'coevoskill', 'skillx', 'skillclaw'] },
+  { label: 'SkVM', ids: ['skvm-evidence', 'skvm-strategy', 'skvm-capability'] },
+  { label: 'v2',   ids: ['evoskill', 'skillmoo', 'coevoskill', 'skillx', 'skillclaw'] },
 ]
-
-const STRATEGY_TARGETS = ['修复弱维度', '提升清晰度', '补充示例', '扩展边界', '精简冗余', '增强鲁棒性']
 
 const DIM_COLORS: Record<string, string> = {
   correctness: '#6c63ff', clarity: '#00d4aa', completeness: '#f59e0b',
@@ -397,6 +385,30 @@ interface EvoPageProps {
 
 export default function EvoPage({ session, initialSkillId, onNavigate, skillsRefreshKey }: EvoPageProps) {
   const track = useTrack()
+  const t = useT()
+  const paradigms = [
+    { id: 'evidence'   as EvoParadigm, label: t('evo.paradigm.evidence'),   hint: t('evo.paradigm.evidence_hint') },
+    { id: 'strategy'   as EvoParadigm, label: t('evo.paradigm.strategy'),   hint: t('evo.paradigm.strategy_hint') },
+    { id: 'capability' as EvoParadigm, label: t('evo.paradigm.capability'), hint: t('evo.paradigm.capability_hint') },
+  ]
+  const engines = [
+    { id: 'skvm-evidence'   as EvolutionEngine, label: 'SkVM Evidence',   hint: t('evo.engine.skvm_evidence_hint'),   prereq: t('evo.prereq.eval_history') },
+    { id: 'skvm-strategy'   as EvolutionEngine, label: 'SkVM Strategy',   hint: t('evo.engine.skvm_strategy_hint') },
+    { id: 'skvm-capability' as EvolutionEngine, label: 'SkVM Capability', hint: t('evo.engine.skvm_capability_hint') },
+    { id: 'evoskill'        as EvolutionEngine, label: 'EvoSkill',        hint: t('evo.engine.evoskill_hint'),        prereq: t('evo.prereq.test_cases') },
+    { id: 'skillmoo'        as EvolutionEngine, label: 'SkillMOO',        hint: t('evo.engine.skillmoo_hint'),        prereq: t('evo.prereq.eval_history') },
+    { id: 'coevoskill'      as EvolutionEngine, label: 'CoEvoSkill',      hint: t('evo.engine.coevoskill_hint'),      prereq: t('evo.prereq.test_cases') },
+    { id: 'skillx'          as EvolutionEngine, label: 'SkillX',          hint: t('evo.engine.skillx_hint'),          prereq: t('evo.prereq.skillx') },
+    { id: 'skillclaw'       as EvolutionEngine, label: 'SkillClaw',       hint: t('evo.engine.skillclaw_hint'),       prereq: t('evo.prereq.eval_history') },
+  ]
+  const engineGroups = [
+    { label: t('evo.group.skvm'), ids: ['skvm-evidence', 'skvm-strategy', 'skvm-capability'] as EvolutionEngine[] },
+    { label: t('evo.group.v2'),   ids: ['evoskill', 'skillmoo', 'coevoskill', 'skillx', 'skillclaw'] as EvolutionEngine[] },
+  ]
+  const strategyTargets = [
+    t('evo.target.fix_weak'), t('evo.target.clarity'), t('evo.target.examples'),
+    t('evo.target.edge_cases'), t('evo.target.trim'), t('evo.target.robustness'),
+  ]
   const initial = session.current ?? makeDefaultSession(initialSkillId ?? '')
 
   const [skills, setSkills] = useState<Skill[]>([])
@@ -575,13 +587,13 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
 
   const friendlyError = (e: unknown): string => {
     const msg = String(e)
-    if (msg.includes('API key') || msg.includes('api_key') || msg.includes('401')) return 'API Key 无效或未配置，请在设置中检查。'
-    if (msg.includes('rate limit') || msg.includes('429')) return '请求频率超限，请稍后重试。'
-    if (msg.includes('timeout') || msg.includes('ETIMEDOUT')) return '请求超时，请检查网络连接后重试。'
-    if (msg.includes('not found') || msg.includes('404')) return '找不到指定的 Skill，可能已被删除。'
-    if (msg.includes('No eval history') || msg.includes('eval records')) return '该 Skill 没有足够的评测历史，请先运行评测。'
-    if (msg.includes('cancelled') || msg.includes('aborted')) return '进化已取消。'
-    if (msg.includes('ECONNREFUSED') || msg.includes('network')) return '网络连接失败，请检查网络后重试。'
+    if (msg.includes('API key') || msg.includes('api_key') || msg.includes('401')) return t('evo.error.api_key')
+    if (msg.includes('rate limit') || msg.includes('429')) return t('evo.error.rate_limit')
+    if (msg.includes('timeout') || msg.includes('ETIMEDOUT')) return t('evo.error.timeout')
+    if (msg.includes('not found') || msg.includes('404')) return t('evo.error.not_found')
+    if (msg.includes('No eval history') || msg.includes('eval records')) return t('evo.error.no_eval_history')
+    if (msg.includes('cancelled') || msg.includes('aborted')) return t('evo.error.cancelled')
+    if (msg.includes('ECONNREFUSED') || msg.includes('network')) return t('evo.error.network')
     return msg.replace(/^Error:\s*/i, '')
   }
 
@@ -750,8 +762,8 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
               <div className="engine-group">
                 <div className="engine-group-label">SkVM 经典</div>
                 <div className="engine-chip-row">
-                  {ENGINE_GROUPS[0].ids.map(id => {
-                    const e = ENGINES.find(x => x.id === id)!
+                  {engineGroups[0].ids.map(id => {
+                    const e = engines.find(x => x.id === id)!
                     return (
                       <label key={id} className={`engine-chip ${engine === id ? 'active' : ''}`} title={e.prereq ?? ''}>
                         <input type="radio" name="engine" value={id} checked={engine === id} onChange={() => setEngine(id)} />
@@ -775,8 +787,8 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                   <div className="engine-group">
                     <div className="engine-group-label">v2 算法</div>
                     <div className="engine-chip-row">
-                      {ENGINE_GROUPS[1].ids.map(id => {
-                        const e = ENGINES.find(x => x.id === id)!
+                      {engineGroups[1].ids.map(id => {
+                        const e = engines.find(x => x.id === id)!
                         return (
                           <label key={id} className={`engine-chip ${engine === id ? 'active' : ''}`} title={e.prereq ?? ''}>
                             <input type="radio" name="engine" value={id} checked={engine === id} onChange={() => setEngine(id)} />
@@ -812,7 +824,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
               )}
               {/* Selected engine description */}
               {(() => {
-                const sel = ENGINES.find(e => e.id === engine)
+                const sel = engines.find(e => e.id === engine)
                 if (sel) return (
                   <div className="engine-desc">
                     <span className="engine-desc-name">{sel.label}</span>
@@ -838,7 +850,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                 <>
                   <div className="card-title" style={{ marginTop: 16 }}>② 进化配置</div>
                   <div className="paradigm-row">
-                    {PARADIGMS.map((p) => (
+                    {paradigms.map((p) => (
                       <label key={p.id} className={`paradigm-card ${paradigm === p.id ? 'active' : ''}`}>
                         <input type="radio" name="paradigm" value={p.id} checked={paradigm === p.id} onChange={() => setParadigm(p.id)} />
                         <span className="paradigm-label">{p.label}</span>
@@ -849,15 +861,15 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                   {paradigm === 'strategy' && (
                     <div className="targets-section">
                       <div className="targets-header">
-                        <span className="targets-title">改进目标</span>
-                        <button className="btn btn-ghost btn-xs" onClick={() => setTargets(STRATEGY_TARGETS)}>全选</button>
-                        <button className="btn btn-ghost btn-xs" onClick={() => setTargets([])}>清空</button>
+                        <span className="targets-title">{t('evo.targets.title')}</span>
+                        <button className="btn btn-ghost btn-xs" onClick={() => setTargets(strategyTargets)}>{t('common.select_all')}</button>
+                        <button className="btn btn-ghost btn-xs" onClick={() => setTargets([])}>{t('common.clear')}</button>
                       </div>
                       <div className="targets-grid">
-                        {STRATEGY_TARGETS.map((t) => (
-                          <label key={t} className={`target-chip ${targets.includes(t) ? 'active' : ''}`}>
-                            <input type="checkbox" checked={targets.includes(t)} onChange={(e) => setTargets(e.target.checked ? [...targets, t] : targets.filter((x) => x !== t))} />
-                            {t}
+                        {strategyTargets.map((tgt) => (
+                          <label key={tgt} className={`target-chip ${targets.includes(tgt) ? 'active' : ''}`}>
+                            <input type="checkbox" checked={targets.includes(tgt)} onChange={(e) => setTargets(e.target.checked ? [...targets, tgt] : targets.filter((x) => x !== tgt))} />
+                            {tgt}
                           </label>
                         ))}
                       </div>
@@ -917,7 +929,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                   )}
                   <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={handleV2Evolve}
                     disabled={!selectedId || apiKeySet === false || v2Running}>
-                    {v2Running ? <><span className="evo-spinner" />{'进化中...'}</> : `启动 ${ENGINES.find(e => e.id === engine)?.label ?? (engine.startsWith('plugin:') ? plugins.find(p => p.id === engine.slice(7))?.name ?? engine : engine)}`}
+                    {v2Running ? <><span className="evo-spinner" />{t('evo.running')}</> : `${t('evo.start')} ${engines.find(e => e.id === engine)?.label ?? (engine.startsWith('plugin:') ? plugins.find(p => p.id === engine.slice(7))?.name ?? engine : engine)}`}
                   </button>
                   {!selectedId && !v2Running && <div className="no-skill-hint">← 请先在左侧选择一个 Skill</div>}
                   {apiKeySet === false && !v2Running && <div className="gen-warn" style={{ marginTop: 8 }}>⚠️ 未配置 API Key，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 添加。</div>}
@@ -1044,11 +1056,11 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
           {/* SkillClaw result */}
           {v2Running && engine === 'skillclaw' && (
             <div className="evo-card">
-              <div className="card-title">SkillClaw — 聚合分析...</div>
+              <div className="card-title">{t('evo.skillclaw.title')}</div>
               <div className="skillclaw-progress">
                 {[1, 2, 3, 4].map(s => (
                   <div key={s} className={`skillclaw-step ${skillClawProgress.step >= s ? 'done' : skillClawProgress.step === s - 1 ? 'active' : ''}`}>
-                    {s === 1 ? '加载历史' : s === 2 ? '识别模式' : s === 3 ? '生成改进' : '安装'}
+                    {s === 1 ? t('evo.skillclaw.step1') : s === 2 ? t('evo.skillclaw.step2') : s === 3 ? t('evo.skillclaw.step3') : t('evo.skillclaw.step4')}
                   </div>
                 ))}
               </div>

@@ -3,13 +3,15 @@ import type { AppConfigPublic, AppConfig, ToolTarget, LLMProvider, LLMProviderPr
 import { LLM_PROVIDER_PRESETS } from '../../../shared/types'
 import type { Theme } from '../App'
 import { useTrack } from '../hooks/useTrack'
+import { useT } from '../i18n/useT'
 import qrcodeImg from '../assets/qrcode.jpg'
 
 function QRPlaceholder({ label, placeholder, imgSrc }: { label: string; placeholder: string; imgSrc?: string }) {
+  const t = useT()
   const [expanded, setExpanded] = useState(false)
   return (
     <>
-      <div className="qr-thumb" onClick={() => setExpanded(true)} title={`点击放大 ${label} 二维码`}>
+      <div className="qr-thumb" onClick={() => setExpanded(true)} title={t('settings.qr_expand', { label })}>
         <div className="qr-placeholder-box">
           {imgSrc
             ? <img src={imgSrc} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 5 }} />
@@ -21,14 +23,14 @@ function QRPlaceholder({ label, placeholder, imgSrc }: { label: string; placehol
       {expanded && (
         <div className="modal-overlay" onClick={() => setExpanded(false)}>
           <div className="qr-modal" onClick={e => e.stopPropagation()}>
-            <div className="qr-modal-title">{label} 二维码</div>
+            <div className="qr-modal-title">{t('settings.qr_title', { label })}</div>
             <div className="qr-modal-box">
               {imgSrc
                 ? <img src={imgSrc} alt={label} style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 6 }} />
-                : <><span className="qr-modal-icon">▦</span><span className="qr-modal-hint">请将实际二维码图片替换此占位符</span></>
+                : <><span className="qr-modal-icon">▦</span><span className="qr-modal-hint">{t('settings.qr_placeholder_hint')}</span></>
               }
             </div>
-            <button className="qr-modal-close" onClick={() => setExpanded(false)}>关闭</button>
+            <button className="qr-modal-close" onClick={() => setExpanded(false)}>{t('common.cancel')}</button>
           </div>
         </div>
       )}
@@ -68,6 +70,7 @@ function slugify(s: string) {
 
 export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toast }: Props) {
   const track = useTrack()
+  const t = useT()
   const [config, setConfig] = useState<AppConfigPublic | null>(null)
   const [toolTargets, setToolTargets] = useState<ToolTarget[]>([])
   const [toolPathOverrides, setToolPathOverrides] = useState<Record<string, string>>({})
@@ -275,7 +278,7 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
     <div className="settings-page">
       <div className="page-header">
         <h1>Settings</h1>
-        <p className="settings-subtitle">LLM 配置 · 工具路径 · 主题偏好</p>
+        <p className="settings-subtitle">{t('settings.subtitle')}</p>
       </div>
 
       {/* ── LLM Providers ── */}
@@ -455,16 +458,16 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
           </div>
         </div>
         <div className="appearance-row" style={{ marginTop: 12 }}>
-          <span className="appearance-label">语言 / Lang</span>
+          <span className="appearance-label">{t('settings.lang_label')}</span>
           <div className="theme-toggle">
             {(['zh', 'en'] as const).map(l => (
               <button key={l} className={`theme-btn ${(config?.language ?? 'zh') === l ? 'active' : ''}`}
                 onClick={async () => {
                   await window.api.config.set({ language: l } as Parameters<typeof window.api.config.set>[0])
                   await reload()
-                  toast?.(l === 'zh' ? '已切换为中文' : 'Switched to English', 'success')
+                  toast?.(l === 'zh' ? t('settings.lang_toast_zh') : t('settings.lang_toast_en'), 'success')
                 }}>
-                {l === 'zh' ? '🇨🇳 中文' : '🇺🇸 English'}
+                {l === 'zh' ? t('settings.lang_zh') : t('settings.lang_en')}
               </button>
             ))}
           </div>
@@ -532,11 +535,11 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
       {/* ── Privacy & Analytics ── */}
       <section className="settings-section">
         <h2>Privacy &amp; Analytics</h2>
-        <p className="section-desc">匿名使用数据，帮助改进 SkillNexus。从不收集 Skill 内容、提示词或 API 密钥。</p>
+        <p className="section-desc">{t('settings.analytics_desc')}</p>
         <div className="analytics-row">
           <div className="analytics-info">
             <span className="analytics-name">Usage Analytics</span>
-            <span className="analytics-desc">功能使用频次、引擎选择等匿名统计，数据由 PostHog 处理</span>
+            <span className="analytics-desc">{t('settings.analytics_detail')}</span>
           </div>
           <label className="toggle-switch">
             <input
@@ -561,7 +564,7 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
           <div className="about-app-info">
             <span className="about-app-name">SkillNexus</span>
             <span className="about-app-version">v0.1.0</span>
-            <span className="about-app-desc">LLM Skill 评测 · 进化 · 知识管理平台</span>
+            <span className="about-app-desc">{t('settings.about_desc')}</span>
           </div>
         </div>
         <div className="about-divider" />
@@ -597,8 +600,8 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
           </div>
           <div className="about-qrcodes">
             {[
-              { label: '微信', placeholder: 'WeChat', imgSrc: undefined },
-              { label: '公众号', placeholder: 'Official', imgSrc: qrcodeImg },
+              { label: t('settings.qr_wechat'), placeholder: 'WeChat', imgSrc: undefined },
+              { label: t('settings.qr_official'), placeholder: 'Official', imgSrc: qrcodeImg },
             ].map(({ label, placeholder, imgSrc }) => (
               <QRPlaceholder key={label} label={label} placeholder={placeholder} imgSrc={imgSrc} />
             ))}

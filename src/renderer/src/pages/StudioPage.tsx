@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Skill, SkillScore5D, TestCase, GithubSkillResult, EvalResult, EvalHistoryPage } from '../../../shared/types'
 import { SKILLNET_SKILLS, type DiscoverySkill } from '../data/studio-discovery'
+import { useT } from '../i18n/useT'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -30,19 +31,13 @@ interface ExPair { id: number; input: string; output: string }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const DEFAULT_METHODS: GenerationMethod[] = [
-  { id: 'builtin', label: '内置 AI', icon: '⚡', type: 'builtin', sourceName: 'SkillNexus', sourceUrl: 'https://github.com/skyseraph/SkillNexus' },
-  { id: 'skill-creator', label: 'Skill Creator', icon: '🧩', type: 'builtin', sourceName: 'Karpathy Guidelines', sourceUrl: 'https://github.com/forrestchang/andrej-karpathy-skills' },
-  { id: 'promptperfect', label: 'PromptPerfect', icon: '✨', type: 'builtin', sourceName: 'PromptPerfect', sourceUrl: 'https://promptperfect.jina.ai' }
-]
-
 const SCORE_5D_COLORS: Record<string, string> = {
   safety: '#ef4444', completeness: '#6c63ff', executability: '#00d4aa',
   maintainability: '#f59e0b', costAwareness: '#8b5cf6', orchestration: '#f97316'
 }
 const SCORE_5D_SHORT: Record<string, string> = {
-  safety: '安全', completeness: '完整', executability: '可执行',
-  maintainability: '可维护', costAwareness: '成本', orchestration: '编排'
+  safety: 'safety', completeness: 'completeness', executability: 'executability',
+  maintainability: 'maintainability', costAwareness: 'costAwareness', orchestration: 'orchestration'
 }
 const SCORE_5D_KEYS = ['safety', 'completeness', 'executability', 'maintainability', 'costAwareness'] as const
 
@@ -60,6 +55,7 @@ function DiscoveryPanel({
   onLoad: (content: string) => void
   mySkills: Skill[]
 }) {
+  const t = useT()
   const [source, setSource] = useState<DiscoverySource>('skillnet')
   const [search, setSearch] = useState('')
   const [preview, setPreview] = useState<string | null>(null)
@@ -98,7 +94,7 @@ function DiscoveryPanel({
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       setGhError(msg.includes('rate limit')
-        ? '已达 GitHub 搜索频率限制（10次/分钟）。可在 Settings 中添加 GitHub Token 提升限额。'
+        ? t('studio.disc.rate_limit')
         : msg)
       setGhResults([])
     } finally {
@@ -112,14 +108,14 @@ function DiscoveryPanel({
         {(['skillnet', 'github', 'mine'] as DiscoverySource[]).map(src => (
           <button key={src} className={`studio-v2-src-tab ${source === src ? 'active' : ''}`}
             onClick={() => { setSource(src); setSearch(''); setGhError(null) }}>
-            {src === 'skillnet' ? '精选' : src === 'github' ? 'GitHub' : '我的库'}
+            {src === 'skillnet' ? t('studio.disc.skillnet') : src === 'github' ? 'GitHub' : t('studio.disc.mine')}
           </button>
         ))}
       </div>
 
       <div className="studio-v2-disc-search">
         <input
-          placeholder={source === 'github' ? '搜索 GitHub .md 文件...' : '搜索...'}
+          placeholder={source === 'github' ? t('studio.disc.search_github_ph') : t('common.search_placeholder')}
           value={search}
           onChange={e => setSearch(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && source === 'github') handleGithubSearch() }}
@@ -131,7 +127,7 @@ function DiscoveryPanel({
             disabled={ghLoading || !search.trim()}
             style={{ marginTop: 4, width: '100%' }}
           >
-            {ghLoading ? '搜索中...' : '搜索 GitHub'}
+            {ghLoading ? t('studio.disc.searching') : t('studio.disc.search_btn')}
           </button>
         )}
       </div>
@@ -196,13 +192,13 @@ function DiscoveryPanel({
                         const content = await window.api.studio.fetchGithubContent(r.rawUrl)
                         onLoad(content)
                       } catch (e) {
-                        setGhError(e instanceof Error ? e.message : '载入失败')
+                        setGhError(e instanceof Error ? e.message : t('studio.disc.load_error'))
                       } finally {
                         setGhLoadingId(null)
                       }
                     }}
                   >
-                    {ghLoadingId === r.id ? '载入中...' : '载入'}
+                    {ghLoadingId === r.id ? t('studio.disc.loading_id') : t('common.load')}
                   </button>
                 </div>
               </div>
@@ -228,7 +224,7 @@ function DiscoveryPanel({
         ))}
 
         {source === 'mine' && mySkills.filter(filterMine).length === 0 && (
-          <div className="studio-v2-empty">暂无已安装 Skill</div>
+          <div className="studio-v2-empty">{t('studio.extract.no_records')}</div>
         )}
       </div>
 
@@ -284,7 +280,7 @@ function MethodBar({
           onClick={() => window.api.shell.openExternal(active.sourceUrl!)}
           title={`查看 ${active.sourceName || active.label} 出处`}
         >
-          🔗 {active.sourceName || '出处'}
+          🔗 {active.sourceName || t('studio.disc.source_label')}
         </button>
       )}
     </div>
@@ -313,6 +309,7 @@ function SkillCreatorPanel({ streaming, apiKeySet, onGenerate }: {
   apiKeySet: boolean | null
   onGenerate: (fields: { name: string; description: string; steps: string; tags: string }) => void
 }) {
+  const t = useT()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [steps, setSteps] = useState('')
@@ -363,7 +360,7 @@ function SkillCreatorPanel({ streaming, apiKeySet, onGenerate }: {
         onClick={() => onGenerate({ name, description, steps, tags })}
         disabled={!canSubmit}
       >
-        {streaming ? '生成中...' : '🧩 生成 Skill'}
+        {streaming ? t('common.generating') : t('studio.generate_skill')}
       </button>
     </div>
   )
@@ -377,12 +374,13 @@ function PromptPerfectPanel({ editorContent, streaming, apiKeySet, onOptimize }:
   apiKeySet: boolean | null
   onOptimize: (target: string, goal: string) => void
 }) {
+  const t = useT()
   const [goal, setGoal] = useState('clarity')
   const GOALS = [
-    { id: 'clarity', label: '清晰度', desc: '让指令更清晰、无歧义' },
-    { id: 'specificity', label: '具体性', desc: '增加具体约束和输出格式要求' },
-    { id: 'robustness', label: '鲁棒性', desc: '处理边缘情况和异常输入' },
-    { id: 'conciseness', label: '简洁性', desc: '去除冗余，保留核心指令' },
+    { id: 'clarity',     label: t('studio.pp.clarity'),     desc: t('studio.pp.clarity_desc') },
+    { id: 'specificity', label: t('studio.pp.specificity'), desc: t('studio.pp.specificity_desc') },
+    { id: 'robustness',  label: t('studio.pp.robustness'),  desc: t('studio.pp.robustness_desc') },
+    { id: 'conciseness', label: t('studio.pp.conciseness'), desc: t('studio.pp.conciseness_desc') },
   ]
   const hasContent = editorContent.trim().length > 0
   const canOptimize = hasContent && !streaming && apiKeySet !== false
@@ -415,7 +413,7 @@ function PromptPerfectPanel({ editorContent, streaming, apiKeySet, onOptimize }:
         onClick={() => onOptimize(editorContent, goal)}
         disabled={!canOptimize}
       >
-        {streaming ? '优化中...' : `✨ 优化（${GOALS.find(g2 => g2.id === goal)?.label}）`}
+        {streaming ? t('studio.pp.optimizing') : `✨ ${t('studio.pp.optimize_btn', { label: GOALS.find(g2 => g2.id === goal)?.label ?? '' })}`}
       </button>
     </div>
   )
@@ -432,7 +430,7 @@ function CustomMethodModal({ onAdd, onClose }: {
   const [err, setErr] = useState('')
 
   const handleAdd = () => {
-    if (!label.trim()) { setErr('请输入名称'); return }
+    if (!label.trim()) { setErr(t('studio.custom_method.name_required')); return }
     if (!url.startsWith('https://') && !url.startsWith('http://')) {
       setErr('URL 必须以 https:// 或 http:// 开头'); return
     }
@@ -469,6 +467,7 @@ function InputAreaDescribe({ prompt, setPrompt, streaming, apiKeySet, onGenerate
   streaming: boolean; apiKeySet: boolean | null
   onGenerate: () => void; isExternal: boolean
 }) {
+  const t = useT()
   return (
     <div className="studio-v2-input-area">
       <textarea
@@ -482,7 +481,7 @@ function InputAreaDescribe({ prompt, setPrompt, streaming, apiKeySet, onGenerate
         onClick={onGenerate}
         disabled={streaming || !prompt.trim() || apiKeySet === false}
       >
-        {streaming ? '生成中...' : isExternal ? '生成（跳转外部）' : '生成 Skill'}
+        {streaming ? t('common.generating') : isExternal ? t('studio.generate_external') : t('studio.generate_skill')}
       </button>
     </div>
   )
@@ -494,6 +493,7 @@ function InputAreaExamples({ pairs, setPairs, desc, setDesc, streaming, apiKeySe
   streaming: boolean; apiKeySet: boolean | null
   onGenerate: () => void; isExternal: boolean
 }) {
+  const t = useT()
   const nextId = useRef(pairs.length + 1)
   const addPair = () => setPairs([...pairs, { id: nextId.current++, input: '', output: '' }])
   const removePair = (id: number) => setPairs(pairs.filter(p => p.id !== id))
@@ -530,7 +530,7 @@ function InputAreaExamples({ pairs, setPairs, desc, setDesc, streaming, apiKeySe
         onClick={onGenerate}
         disabled={streaming || valid.length === 0 || apiKeySet === false}
       >
-        {streaming ? '生成中...' : isExternal ? '生成（跳转外部）' : `从 ${valid.length} 个示例生成`}
+        {streaming ? t('common.generating') : isExternal ? t('studio.generate_external') : t('studio.generate_from_examples', { n: valid.length })}
       </button>
     </div>
   )
@@ -566,6 +566,7 @@ function InputAreaExtract({ streaming, apiKeySet, skills, onExtract }: {
   skills: Skill[]
   onExtract: (conversation: string, sourceSkillId?: string, sourceSkillContent?: string) => void
 }) {
+  const t = useT()
   const [limit, setLimit] = useState(10)
   const [selectedSkillId, setSelectedSkillId] = useState('')
   const [activeLabels, setActiveLabels] = useState<Set<string>>(new Set())
@@ -624,12 +625,12 @@ function InputAreaExtract({ streaming, apiKeySet, skills, onExtract }: {
   return (
     <div className="studio-v2-input-area">
       <div className="studio-v2-extract-header">
-        <p className="studio-v2-hint-text">从最近的 Eval 记录中自动提炼可复用 Skill</p>
+        <p className="studio-v2-hint-text">{t('studio.extract.hint')}</p>
         <div className="studio-v2-extract-limit">
           {[5, 10, 20].map(n => (
             <button key={n} className={`studio-v2-limit-chip ${limit === n ? 'active' : ''}`}
               onClick={() => handleLimitChange(n)}>
-              最近 {n} 条
+              {t('studio.extract.recent_n', { n })}
             </button>
           ))}
         </div>
@@ -641,7 +642,7 @@ function InputAreaExtract({ streaming, apiKeySet, skills, onExtract }: {
           value={selectedSkillId}
           onChange={e => handleSkillChange(e.target.value)}
         >
-          <option value="">全部 Skill</option>
+          <option value="">{t('studio.extract.all_skills')}</option>
           {skills.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
         <div className="studio-v2-extract-label-filters">
@@ -653,7 +654,7 @@ function InputAreaExtract({ streaming, apiKeySet, skills, onExtract }: {
               onClick={() => handleLabelToggle(l)}
             >
               {LABEL_OPTIONS.find(o => o.value === l)?.display}{' '}
-              {l === 'success' ? '成功' : l === 'failure' ? '失败' : '边界'}
+              {l === 'success' ? t('studio.label.success_text') : l === 'failure' ? t('studio.label.failure_text') : t('studio.label.edge_text')}
             </button>
           ))}
         </div>
@@ -661,7 +662,7 @@ function InputAreaExtract({ streaming, apiKeySet, skills, onExtract }: {
 
       {loading && <div className="studio-v2-empty">加载中...</div>}
       {loaded && !loading && records.length === 0 && (
-        <div className="studio-v2-empty">暂无匹配记录，请先运行评测</div>
+        <div className="studio-v2-empty">{t('studio.extract.no_records')}</div>
       )}
       {loaded && !loading && records.length > 0 && (
         <div className="studio-v2-extract-preview">
@@ -693,7 +694,7 @@ function InputAreaExtract({ streaming, apiKeySet, skills, onExtract }: {
         onClick={handleExtract}
         disabled={streaming || records.length === 0 || apiKeySet === false}
       >
-        {streaming ? '提炼中...' : `💬 自动提炼（${records.length} 条记录）`}
+        {streaming ? t('studio.extract.distilling') : t('studio.extract.btn', { n: records.length })}
       </button>
     </div>
   )
@@ -701,18 +702,28 @@ function InputAreaExtract({ streaming, apiKeySet, skills, onExtract }: {
 
 // ── Score5DMini ───────────────────────────────────────────────────────────────
 
-const SCORE_5D_TIPS: Record<string, string> = {
-  safety:          '加强输入校验、明确拒绝边界、限制工具调用范围',
-  completeness:    '补充 edge case 说明、扩展 examples、明确任务 scope',
-  executability:   '拆分步骤、用 numbered list、减少歧义词让 LLM 更易遵循',
-  maintainability: '加 frontmatter、分段组织、用清晰的 section 标题',
-  costAwareness:   '限制输出长度、合并工具调用、加 "be concise" 约束',
-  orchestration:   '明确子 Agent 职责边界、减少不必要的协调层级',
-}
+const SCORE_5D_TIPS: Record<string, string> = {}
 
 function Score5DMini({ scores, loading }: { scores: SkillScore5D | null; loading: boolean }) {
+  const t = useT()
+  const score5dShort: Record<string, string> = {
+    safety:          t('studio.score5d.safety'),
+    completeness:    t('studio.score5d.completeness'),
+    executability:   t('studio.score5d.executability'),
+    maintainability: t('studio.score5d.maintainability'),
+    costAwareness:   t('studio.score5d.costAwareness'),
+    orchestration:   t('studio.score5d.orchestration'),
+  }
+  const score5dTips: Record<string, string> = {
+    safety:          t('studio.score5d.tip.safety'),
+    completeness:    t('studio.score5d.tip.completeness'),
+    executability:   t('studio.score5d.tip.executability'),
+    maintainability: t('studio.score5d.tip.maintainability'),
+    costAwareness:   t('studio.score5d.tip.costAwareness'),
+    orchestration:   t('studio.score5d.tip.orchestration'),
+  }
   const [hintOpen, setHintOpen] = useState(false)
-  if (loading) return <span className="studio-v2-score-mini-loading">评分中...</span>
+  if (loading) return <span className="studio-v2-score-mini-loading">{t('common.loading')}</span>
   if (!scores) return null
   const isAgent = (scores.orchestration ?? 0) > 0
   const displayKeys = isAgent
@@ -731,9 +742,9 @@ function Score5DMini({ scores, loading }: { scores: SkillScore5D | null; loading
               key={k}
               className={`studio-v2-score-pill${isWeak ? ' weak' : ''}`}
               style={{ color: SCORE_5D_COLORS[k], borderColor: `${SCORE_5D_COLORS[k]}${isWeak ? '99' : '44'}` }}
-              title={isWeak ? `${SCORE_5D_SHORT[k]} 偏低 — ${SCORE_5D_TIPS[k]}` : undefined}
+              title={isWeak ? `${score5dShort[k]} — ${score5dTips[k]}` : undefined}
             >
-              {SCORE_5D_SHORT[k]} {val.toFixed(1)}
+              {score5dShort[k]} {val.toFixed(1)}
               {isWeak && <span className="studio-v2-score-pill-warn">!</span>}
             </span>
           )
@@ -751,8 +762,8 @@ function Score5DMini({ scores, loading }: { scores: SkillScore5D | null; loading
         <div className="studio-v2-score-hints">
           {weakDims.map(k => (
             <div key={k} className="studio-v2-score-hint-row">
-              <span className="studio-v2-score-hint-dim" style={{ color: SCORE_5D_COLORS[k] }}>{SCORE_5D_SHORT[k]}</span>
-              <span className="studio-v2-score-hint-text">{SCORE_5D_TIPS[k]}</span>
+              <span className="studio-v2-score-hint-dim" style={{ color: SCORE_5D_COLORS[k] }}>{score5dShort[k]}</span>
+              <span className="studio-v2-score-hint-text">{score5dTips[k]}</span>
             </div>
           ))}
         </div>
@@ -783,6 +794,7 @@ function InstallBar({ content, scores, scoring, similar, parentSkillId, onInstal
   parentSkillId?: string
   onInstalled: (s: Skill) => void
 }) {
+  const t = useT()
   const [name, setName] = useState('')
   const [installing, setInstalling] = useState(false)
 
@@ -808,12 +820,12 @@ function InstallBar({ content, scores, scoring, similar, parentSkillId, onInstal
       <Score5DMini scores={scores} loading={scoring} />
       <div className="studio-v2-install-row">
         <input
-          placeholder="Skill 名称..."
+          placeholder={t('studio.skill_name_placeholder')}
           value={name}
           onChange={e => setName(e.target.value)}
         />
         <button className="studio-v2-btn primary" onClick={handleInstall} disabled={installing || !name.trim()}>
-          {installing ? '安装中...' : '安装 Skill'}
+          {installing ? t('common.installing') : t('studio.install_skill')}
         </button>
       </div>
     </div>
@@ -823,6 +835,7 @@ function InstallBar({ content, scores, scoring, similar, parentSkillId, onInstal
 // ── QuickRunPane (pre-install) ────────────────────────────────────────────────
 
 function QuickRunPane({ editorContent, apiKeySet }: { editorContent: string; apiKeySet: boolean | null }) {
+  const t = useT()
   const [input, setInput] = useState('')
   const [output, setOutput] = useState('')
   const [running, setRunning] = useState(false)
@@ -866,14 +879,14 @@ function QuickRunPane({ editorContent, apiKeySet }: { editorContent: string; api
         <div className="studio-v2-qt-row">
           <textarea
             rows={2}
-            placeholder="输入测试内容，直接体验 Skill 效果..."
+            placeholder={t('studio.quickrun.placeholder')}
             value={input}
             onChange={e => setInput(e.target.value)}
             disabled={running || apiKeySet === false}
           />
           <button className="studio-v2-btn primary" onClick={handleRun}
             disabled={running || !input.trim() || apiKeySet === false}>
-            {running ? '运行中...' : '▶ 运行'}
+            {running ? t('studio.running') : t('studio.run')}
           </button>
         </div>
       )}
@@ -895,6 +908,7 @@ function AgentDesignPanel({ streaming, apiKeySet, onGenerate }: {
   apiKeySet: boolean | null
   onGenerate: (fields: AgentFields) => void
 }) {
+  const t = useT()
   const [name, setName] = useState('')
   const [goal, setGoal] = useState('')
   const [tools, setTools] = useState<string[]>([])
@@ -933,7 +947,7 @@ function AgentDesignPanel({ streaming, apiKeySet, onGenerate }: {
       </div>
       <button className="studio-v2-btn primary" disabled={!canGenerate}
         onClick={() => onGenerate({ name, goal, tools, steps })}>
-        {streaming ? '生成中...' : '🤖 生成 Agent'}
+        {streaming ? t('common.generating') : t('studio.generate_agent')}
       </button>
     </div>
   )
@@ -942,6 +956,7 @@ function AgentDesignPanel({ streaming, apiKeySet, onGenerate }: {
 // ── QuickTestPane ─────────────────────────────────────────────────────────────
 
 function QuickTestPane({ installedSkill }: { installedSkill: Skill | null }) {
+  const t = useT()
   const [input, setInput] = useState('')
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<{ output: string; totalScore: number } | null>(null)
@@ -961,7 +976,7 @@ function QuickTestPane({ installedSkill }: { installedSkill: Skill | null }) {
         name: `快速测试 ${new Date().toLocaleTimeString()}`,
         input: input.trim(),
         judgeType: 'llm',
-        judgeParam: '判断输出是否符合任务要求，是否完整、准确'
+        judgeParam: t('studio.quicktest.judge_param')
       }
       const created = await window.api.testcases.create(tc)
       setTempTcId(created.id)
@@ -1054,12 +1069,12 @@ function QuickTestPane({ installedSkill }: { installedSkill: Skill | null }) {
       <div className="studio-v2-qt-row">
         <textarea
           rows={3}
-          placeholder="输入测试内容..."
+          placeholder={t('studio.quicktest.placeholder')}
           value={input}
           onChange={e => setInput(e.target.value)}
         />
         <button className="studio-v2-btn primary" onClick={handleRun} disabled={running || !input.trim()}>
-          {running ? '运行中...' : '▶ 运行'}
+          {running ? t('studio.running') : t('studio.run')}
         </button>
       </div>
       {result && (
@@ -1075,11 +1090,11 @@ function QuickTestPane({ installedSkill }: { installedSkill: Skill | null }) {
           </div>
           {!saved && (
             <div className="studio-v2-qt-actions">
-              <button className="studio-v2-btn ghost sm" onClick={handleDiscard}>丢弃</button>
-              <button className="studio-v2-btn sm" onClick={handleSave}>保存用例</button>
+              <button className="studio-v2-btn ghost sm" onClick={handleDiscard}>{t('common.discard')}</button>
+              <button className="studio-v2-btn sm" onClick={handleSave}>{t('studio.save_case')}</button>
             </div>
           )}
-          {saved && <div className="studio-v2-success-note">✅ 用例已保存</div>}
+          {saved && <div className="studio-v2-success-note">{t('studio.case_saved')}</div>}
         </div>
       )}
     </div>
@@ -1090,6 +1105,7 @@ function QuickTestPane({ installedSkill }: { installedSkill: Skill | null }) {
 // ── OneClickEvalPane ──────────────────────────────────────────────────────────
 
 function OneClickEvalPane({ installedSkill }: { installedSkill: Skill }) {
+  const t = useT()
   const [testCases, setTestCases] = useState<TestCase[]>([])
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -1131,8 +1147,8 @@ function OneClickEvalPane({ installedSkill }: { installedSkill: Skill }) {
   if (testCases.length === 0) {
     return (
       <div className="studio-v2-oneclick-empty">
-        <span>暂无测试用例</span>
-        <span className="studio-v2-oneclick-hint">请先在 Eval 页面添加用例</span>
+        <span>{t('studio.no_test_cases')}</span>
+        <span className="studio-v2-oneclick-hint">{t('studio.add_cases_hint')}</span>
       </div>
     )
   }
@@ -1141,11 +1157,11 @@ function OneClickEvalPane({ installedSkill }: { installedSkill: Skill }) {
     <div className="studio-v2-oneclick">
       <div className="studio-v2-oneclick-cases">
         {testCases.map(tc => (
-          <span key={tc.id} className="studio-v2-oneclick-tc">{tc.name || '未命名'}</span>
+          <span key={tc.id} className="studio-v2-oneclick-tc">{tc.name || t('studio.oneclick.unnamed')}</span>
         ))}
       </div>
       <button className="studio-v2-btn primary" onClick={handleRun} disabled={running}>
-        {running ? '评测中...' : '▶ 开始测评'}
+        {running ? t('studio.evaluating') : t('studio.start_eval')}
       </button>
       {running && (
         <div className="studio-v2-progress-bar-wrap">
@@ -1199,19 +1215,24 @@ function ValidationPanel({ expanded, onToggle, installedSkill }: {
 
 // ── StudioPage ────────────────────────────────────────────────────────────────
 
-const CREATION_TABS = [
-  { id: 'describe' as StudioMode, label: '描述生成', icon: '✍️' },
-  { id: 'examples' as StudioMode, label: '示例生成', icon: '🔁' },
-  { id: 'extract'  as StudioMode, label: '对话提炼', icon: '💬' },
-  { id: 'edit'     as StudioMode, label: '直接编辑', icon: '✏️' },
-  { id: 'agent'    as StudioMode, label: 'Agent 设计', icon: '🤖' }
-]
 
 export default function StudioPage({ initialSkillId, onNavigate }: { initialSkillId?: string; onNavigate?: (page: string, skillId?: string) => void } = {}) {
+  const t = useT()
+  const CREATION_TABS = [
+    { id: 'describe' as StudioMode, label: t('studio.tab.describe'), icon: '✍️' },
+    { id: 'examples' as StudioMode, label: t('studio.tab.examples'), icon: '🔁' },
+    { id: 'extract'  as StudioMode, label: t('studio.tab.extract'),  icon: '💬' },
+    { id: 'edit'     as StudioMode, label: t('studio.tab.edit'),     icon: '✏️' },
+    { id: 'agent'    as StudioMode, label: t('studio.tab.agent'),    icon: '🤖' }
+  ]
   // Global state
   const [apiKeySet, setApiKeySet] = useState<boolean | null>(null)
   const [mode, setMode] = useState<StudioMode>('describe')
-  const [methods, setMethods] = useState<GenerationMethod[]>(DEFAULT_METHODS)
+  const [methods, setMethods] = useState<GenerationMethod[]>(() => [
+    { id: 'builtin', label: t('studio.method.builtin'), icon: '⚡', type: 'builtin', sourceName: 'SkillNexus', sourceUrl: 'https://github.com/skyseraph/SkillNexus' },
+    { id: 'skill-creator', label: 'Skill Creator', icon: '🧩', type: 'builtin', sourceName: 'Karpathy Guidelines', sourceUrl: 'https://github.com/forrestchang/andrej-karpathy-skills' },
+    { id: 'promptperfect', label: 'PromptPerfect', icon: '✨', type: 'builtin', sourceName: 'PromptPerfect', sourceUrl: 'https://promptperfect.jina.ai' }
+  ])
   const [activeMethodId, setActiveMethodId] = useState('builtin')
   const [editorContent, setEditorContent] = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -1420,7 +1441,7 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
               color: installedSkill.trustLevel >= 4 ? '#6c63ff' : installedSkill.trustLevel >= 3 ? '#00d4aa' : installedSkill.trustLevel >= 2 ? '#f59e0b' : '#888',
               borderColor: installedSkill.trustLevel >= 4 ? '#6c63ff66' : installedSkill.trustLevel >= 3 ? '#00d4aa66' : installedSkill.trustLevel >= 2 ? '#f59e0b66' : '#88888866'
             }}>
-              {installedSkill.trustLevel >= 4 ? 'T4 已批准' : installedSkill.trustLevel >= 3 ? 'T3 已评测' : installedSkill.trustLevel >= 2 ? 'T2 质量达标' : 'T1 未验证'}
+              {installedSkill.trustLevel >= 4 ? t('studio.trust.t4') : installedSkill.trustLevel >= 3 ? t('studio.trust.t3') : installedSkill.trustLevel >= 2 ? t('studio.trust.t2') : t('studio.trust.t1')}
             </span>
           )}
         </div>
@@ -1456,9 +1477,9 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
             <button
               className="studio-v2-disc-toggle"
               onClick={() => setDiscExpanded(v => !v)}
-              title={discExpanded ? '收起发现面板' : '展开发现面板'}
+              title={discExpanded ? t('studio.disc.collapse_title') : t('studio.disc.expand_title')}
             >
-              {discExpanded ? '▶ 发现' : '◀ 发现'}
+              {discExpanded ? t('studio.disc.collapse') : t('studio.disc.expand')}
             </button>
           </div>
 
@@ -1520,9 +1541,9 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
           {/* Skill Editor */}
           <div className="studio-v2-editor-wrap">
             <div className="studio-v2-editor-label">
-              Skill 编辑器
+              {t('studio.editor_label')}
               {streaming && <span className="studio-v2-streaming-dot"> ●</span>}
-              {noSkill && <span className="studio-v2-no-skill-note">（未发现可提炼内容）</span>}
+              {noSkill && <span className="studio-v2-no-skill-note">{t('studio.no_skill_note')}</span>}
             </div>
             <textarea
               className="studio-v2-editor"
@@ -1543,11 +1564,11 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
             <>
               {installedSkill ? (
                 <div className="studio-v2-success-banner">
-                  <span>✅ &quot;{installedSkill.name}&quot; 已安装</span>
+                  <span>{t('studio.installed_skill', { name: installedSkill.name })}</span>
                   <div className="studio-v2-flow-guide">
                     <button className="studio-v2-flow-step" onClick={() => onNavigate?.('eval', installedSkill.id)}>
                       <span className="studio-v2-flow-num">①</span>
-                      <span>添加用例</span>
+                      <span>{t('studio.add_cases')}</span>
                     </button>
                     <span className="studio-v2-flow-arrow">→</span>
                     <button className="studio-v2-flow-step" onClick={() => onNavigate?.('eval', installedSkill.id)}>

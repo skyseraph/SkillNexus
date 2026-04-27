@@ -3,6 +3,7 @@ import type { Skill, EvalResult, EvalScore, TestCase } from '../../../shared/typ
 import CompareMode from './EvalCompareMode'
 import ThreeConditionMode from './EvalThreeConditionMode'
 import { useTrack } from '../hooks/useTrack'
+import { useT } from '../i18n/useT'
 
 const DIM_COLORS: Record<string, string> = {
   correctness:           '#6c63ff',
@@ -18,36 +19,39 @@ const DIM_ORDER = [
   'correctness', 'instruction_following', 'safety', 'completeness',
   'robustness', 'executability', 'cost_awareness', 'maintainability'
 ]
-const DIM_LABELS: Record<string, string> = {
-  correctness:           'G1 正确性',
-  instruction_following: 'G2 指令遵循',
-  safety:                'G3 安全性',
-  completeness:          'G4 完整性',
-  robustness:            'G5 鲁棒性',
-  executability:         'S1 可执行性',
-  cost_awareness:        'S2 成本意识',
-  maintainability:       'S3 可维护性'
+
+function makeDimLabels(t: (k: string) => string): Record<string, string> {
+  return {
+    correctness:           t('eval.dim.correctness'),
+    instruction_following: t('eval.dim.instruction_following'),
+    safety:                t('eval.dim.safety'),
+    completeness:          t('eval.dim.completeness'),
+    robustness:            t('eval.dim.robustness'),
+    executability:         t('eval.dim.executability'),
+    cost_awareness:        t('eval.dim.cost_awareness'),
+    maintainability:       t('eval.dim.maintainability'),
+  }
 }
 
 // ── Framework Panel ───────────────────────────────────────────────────────────
 
-const FRAMEWORK_DIMS = [
-  { key: 'correctness',           source: 'AgentSkills G1', color: '#6c63ff', desc: '输出是否正确完成任务目标' },
-  { key: 'instruction_following', source: 'AgentSkills G2', color: '#00d4aa', desc: '是否遵循 Skill 中的具体指令和约束' },
-  { key: 'safety',                source: 'AgentSkills G3', color: '#ef4444', desc: '输出是否安全、无偏见、无害' },
-  { key: 'completeness',          source: 'AgentSkills G4', color: '#f59e0b', desc: '响应是否完整覆盖任务所有要求' },
-  { key: 'robustness',            source: 'AgentSkills G5', color: '#8b5cf6', desc: '是否能处理边界情况和异常输入' },
-  { key: 'executability',         source: 'S1',             color: '#06b6d4', desc: 'Skill 指令是否清晰可执行、无歧义' },
-  { key: 'cost_awareness',        source: 'S2',             color: '#10b981', desc: '是否避免冗余、token 效率合理' },
-  { key: 'maintainability',       source: 'S3',             color: '#f97316', desc: 'Skill 结构是否清晰、易于维护和更新' },
-]
-
 function FrameworkPanel() {
+  const t = useT()
   const [open, setOpen] = useState(false)
+  const FRAMEWORK_DIMS = [
+    { key: 'correctness',           source: 'AgentSkills G1', color: '#6c63ff' },
+    { key: 'instruction_following', source: 'AgentSkills G2', color: '#00d4aa' },
+    { key: 'safety',                source: 'AgentSkills G3', color: '#ef4444' },
+    { key: 'completeness',          source: 'AgentSkills G4', color: '#f59e0b' },
+    { key: 'robustness',            source: 'AgentSkills G5', color: '#8b5cf6' },
+    { key: 'executability',         source: 'S1',             color: '#06b6d4' },
+    { key: 'cost_awareness',        source: 'S2',             color: '#10b981' },
+    { key: 'maintainability',       source: 'S3',             color: '#f97316' },
+  ]
   return (
     <div className="fw-panel">
       <button className="fw-toggle" onClick={() => setOpen(v => !v)}>
-        <span>📐 评测框架（8 维度 · G1-G5 任务质量 + S1-S3 Skill 质量）</span>
+        <span>{t('eval.framework_label')}</span>
         <span>{open ? '▾' : '▸'}</span>
       </button>
       {open && (
@@ -60,7 +64,7 @@ function FrameworkPanel() {
                   <span className="fw-dim-name" style={{ color: d.color }}>{d.key.replace(/_/g, ' ')}</span>
                   <span className="fw-source">{d.source}</span>
                 </div>
-                <p className="fw-desc">{d.desc}</p>
+                <p className="fw-desc">{t(`eval.dim_desc.${d.key}`)}</p>
               </div>
             ))}
           </div>
@@ -78,6 +82,8 @@ function RadarChart({ scores, minScores, maxScores, size = 200 }: {
   maxScores?: Record<string, number>
   size?: number
 }) {
+  const t = useT()
+  const DIM_LABELS = makeDimLabels(t)
   const dims = DIM_ORDER.filter((d) => d in scores)
   if (dims.length < 3) return null
   const pad = 36  // space for labels
@@ -293,6 +299,8 @@ const S_DIMS = ['executability', 'cost_awareness', 'maintainability']
 function MultiDimTrendChart({ history, width = 540, height = 200 }: {
   history: EvalResult[]; width?: number; height?: number
 }) {
+  const t = useT()
+  const DIM_LABELS = makeDimLabels(t)
   const [hoveredDim, setHoveredDim] = useState<string | null>(null)
   const [showS, setShowS] = useState(false)
   const data = history.slice(-20)
@@ -328,7 +336,7 @@ function MultiDimTrendChart({ history, width = 540, height = 200 }: {
     <div className="multidim-wrap">
       <div className="multidim-controls">
         <button className={`mdl-toggle ${showS ? 'active' : ''}`} onClick={() => setShowS(v => !v)}>
-          {showS ? '▾ 隐藏 S1-S3' : '▸ 显示 S1-S3 (Skill 质量)'}
+          {showS ? t('eval.hide_s_dims') : t('eval.show_s_dims')}
         </button>
       </div>
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}
@@ -416,6 +424,8 @@ function deltaColor(delta: number): string {
 }
 
 function HeatmapChart({ history }: { history: EvalResult[] }) {
+  const t = useT()
+  const DIM_LABELS = makeDimLabels(t)
   const [deltaMode, setDeltaMode] = useState(false)
   const rows = [...history].reverse().slice(0, 20)
   if (rows.length === 0) return <div className="chart-empty">暂无评测数据</div>
@@ -432,7 +442,7 @@ function HeatmapChart({ history }: { history: EvalResult[] }) {
     <div className="heatmap-wrap">
       <div className="hm-toolbar">
         <button className={`hm-delta-btn ${deltaMode ? 'active' : ''}`} onClick={() => setDeltaMode(v => !v)}>
-          {deltaMode ? '✕ 退出 Δ 模式' : 'Δ 差值模式'}
+          {deltaMode ? t('eval.exit_delta') : t('eval.delta_mode')}
         </button>
         {deltaMode && <span className="hm-delta-hint">绿 = 高于均值　红 = 低于均值</span>}
       </div>
@@ -453,7 +463,7 @@ function HeatmapChart({ history }: { history: EvalResult[] }) {
           return (
             <div key={r.id}>
               {showSep && <div className="hm-tc-sep" />}
-              <div className="hm-row" title={r.testCaseName ? `用例: ${r.testCaseName}` : undefined}>
+              <div className="hm-row" title={r.testCaseName ? t('eval.test_case_label', { name: r.testCaseName }) : undefined}>
                 <div className="hm-row-label">
                   {new Date(r.createdAt).toLocaleString('zh', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </div>
@@ -475,7 +485,7 @@ function HeatmapChart({ history }: { history: EvalResult[] }) {
         })}
         {/* Avg row */}
         <div className="hm-row hm-avg-row">
-          <div className="hm-row-label hm-avg-label">均值</div>
+          <div className="hm-row-label hm-avg-label">{t('eval.avg')}</div>
           {dims.map(d => (
             <div key={d} className="hm-cell hm-avg-cell" style={{ background: scoreColor(dimAvg[d]) }}>
               <span className="hm-val hm-avg-val">{dimAvg[d].toFixed(1)}</span>
@@ -512,6 +522,8 @@ function jitter(i: number, range: number): number {
 function BoxPlotChart({ history, width = 520, height = 160 }: {
   history: EvalResult[]; width?: number; height?: number
 }) {
+  const t = useT()
+  const DIM_LABELS = makeDimLabels(t)
   const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string } | null>(null)
   if (history.length < 3) return <div className="chart-empty">至少需要 3 次评测数据</div>
   const pad = { l: 80, r: 20, t: 10, b: 24 }
@@ -633,6 +645,8 @@ function maxDimScores(history: EvalResult[]): Record<string, number> {
 // ── Bar Chart (per-dimension for a single eval result) ────────────────────────
 
 function DimBarChart({ scores }: { scores: Record<string, EvalScore> }) {
+  const t = useT()
+  const DIM_LABELS = makeDimLabels(t)
   return (
     <div className="dim-bar-chart">
       {DIM_ORDER.filter((d) => d in scores).map((d) => (
@@ -651,7 +665,6 @@ function DimBarChart({ scores }: { scores: Record<string, EvalScore> }) {
 // ── TestCase Tab ──────────────────────────────────────────────────────────────
 
 const JUDGE_COLORS: Record<string, string> = { llm: '#6c63ff', grep: '#00d4aa', command: '#f59e0b' }
-const JUDGE_LABELS: Record<string, string> = { llm: 'LLM 评判', grep: 'Grep 匹配', command: '命令执行' }
 
 function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
   skillId: string
@@ -659,6 +672,10 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
   onRunEval: (tcIds: string[]) => void
   onNavigate?: (page: string, skillId?: string) => void
 }) {
+  const t = useT()
+  const JUDGE_LABELS: Record<string, string> = {
+    llm: t('eval.judge.llm'), grep: t('eval.judge.grep'), command: t('eval.judge.command')
+  }
   const [testCases, setTestCases] = useState<TestCase[]>([])
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
@@ -730,8 +747,8 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
     try {
       const text = await file.text()
       let items: unknown[]
-      try { items = JSON.parse(text) } catch { throw new Error('JSON 解析失败，请检查文件格式') }
-      if (!Array.isArray(items)) throw new Error('JSON 根节点必须是数组 []')
+      try { items = JSON.parse(text) } catch { throw new Error(t('eval.import_error_format')) }
+      if (!Array.isArray(items)) throw new Error(t('eval.import_error_array'))
       const result = await window.api.testcases.importJson(skillId, items)
       setTestCases((prev) => [...prev, ...result.imported])
       setSelectedIds((prev) => { const next = new Set(prev); result.imported.forEach((t) => next.add(t.id)); return next })
@@ -752,7 +769,7 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
       {/* AI Generate */}
       <div className="eval-card">
         <div className="card-row">
-          <span className="card-title">🤖 AI 生成测试用例</span>
+          <span className="card-title">{t('eval.gen_cases')}</span>
           <span className="gen-hint">覆盖 8 个评测维度</span>
         </div>
         <div className="gen-controls">
@@ -794,8 +811,8 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
           </div>
         </div>
 
-        {loading ? <div className="tc-empty">加载中...</div>
-          : filtered.length === 0 ? <div className="tc-empty">{testCases.length === 0 ? '还没有测试用例' : '无匹配'}</div>
+        {loading ? <div className="tc-empty">{t('common.loading')}</div>
+          : filtered.length === 0 ? <div className="tc-empty">{testCases.length === 0 ? t('studio.no_test_cases') : t('common.no_match')}</div>
           : (
             <div className="tc-list">
               {filtered.map((tc) => (
@@ -819,7 +836,7 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
                       }}
                       onBlur={() => setConfirmingDeleteId(null)}
                     >
-                      {confirmingDeleteId === tc.id ? '确认删除' : '删除'}
+                      {confirmingDeleteId === tc.id ? t('eval.confirm_delete') : t('common.delete')}
                     </button>
                   </div>
                   {expandedTcId === tc.id && (
@@ -847,7 +864,7 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
           <div className="tc-add-row">
             <button className="btn btn-ghost btn-sm" onClick={() => { setAddOpen(true); setImportResult(null) }}>+ 手动添加</button>
             <button className="btn btn-ghost btn-sm" onClick={() => importInputRef.current?.click()} disabled={importing}>
-              {importing ? '导入中...' : '↑ 导入 JSON'}
+              {importing ? t('eval.importing') : t('eval.import_json')}
             </button>
             <input ref={importInputRef} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={handleImportFile} />
           </div>
@@ -868,15 +885,15 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
           : (
             <div className="add-form">
               <div className="add-form-header"><span>手动添加</span><button className="btn-icon-sm" onClick={() => setAddOpen(false)}>✕</button></div>
-              <input placeholder="用例名称..." value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} style={{ width: '100%', marginBottom: 8 }} />
-              <textarea rows={3} placeholder="输入（Input）..." value={form.input} onChange={(e) => setForm((f) => ({ ...f, input: e.target.value }))} style={{ width: '100%', resize: 'vertical', marginBottom: 8 }} />
+              <input placeholder={t('eval.case_name_placeholder')} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} style={{ width: '100%', marginBottom: 8 }} />
+              <textarea rows={3} placeholder={t('eval.input_placeholder')} value={form.input} onChange={(e) => setForm((f) => ({ ...f, input: e.target.value }))} style={{ width: '100%', resize: 'vertical', marginBottom: 8 }} />
               <div className="add-form-row">
                 <select value={form.judgeType} onChange={(e) => setForm((f) => ({ ...f, judgeType: e.target.value as TestCase['judgeType'] }))}>
                   <option value="llm">LLM 评判</option>
                   <option value="grep">Grep 匹配</option>
                   <option value="command">命令执行</option>
                 </select>
-                <input placeholder="Judge param（可选）..." value={form.judgeParam} onChange={(e) => setForm((f) => ({ ...f, judgeParam: e.target.value }))} style={{ flex: 1 }} />
+                <input placeholder={t('eval.judge_placeholder')} value={form.judgeParam} onChange={(e) => setForm((f) => ({ ...f, judgeParam: e.target.value }))} style={{ flex: 1 }} />
               </div>
               {form.judgeType === 'command' && (
                 <div className="warn-banner" style={{ marginTop: 6, padding: '6px 10px', background: '#7c3a001a', border: '1px solid #f59e0b55', borderRadius: 6, fontSize: 12, color: '#f59e0b', display: 'flex', gap: 6, alignItems: 'flex-start' }}>
@@ -885,8 +902,8 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
                 </div>
               )}
               <div className="add-form-actions">
-                <button className="btn btn-ghost btn-sm" onClick={() => setAddOpen(false)}>取消</button>
-                <button className="btn btn-primary btn-sm" onClick={handleAdd} disabled={adding || !form.name.trim() || !form.input.trim()}>{adding ? '添加中...' : '添加'}</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setAddOpen(false)}>{t('common.cancel')}</button>
+                <button className="btn btn-primary btn-sm" onClick={handleAdd} disabled={adding || !form.name.trim() || !form.input.trim()}>{adding ? t('common.loading') : t('eval.add_case')}</button>
               </div>
             </div>
           )}
@@ -927,6 +944,8 @@ function Sparkline({ scores, width = 120, height = 32 }: { scores: number[]; wid
 }
 
 function ByCasePanel({ caseMap }: { caseMap: Map<string, EvalResult[]> }) {
+  const t = useT()
+  const DIM_LABELS = makeDimLabels(t)
   const [sortBy, setSortBy] = useState<'avg' | 'count'>('avg')
   const [expandedCase, setExpandedCase] = useState<string | null>(null)
 
@@ -949,7 +968,7 @@ function ByCasePanel({ caseMap }: { caseMap: Map<string, EvalResult[]> }) {
       <div className="bycase-table">
         {entries.map(([name, rows]) => {
           const avgTotal = rows.reduce((s, r) => s + r.totalScore, 0) / rows.length
-          const isUnnamed = name === '(未命名)'
+          const isUnnamed = name === t('eval.unnamed')
           const scoreColor = avgTotal >= 7 ? 'var(--success)' : avgTotal >= 4 ? 'var(--warning)' : 'var(--danger)'
           const expanded = expandedCase === name
 
@@ -987,12 +1006,12 @@ function ByCasePanel({ caseMap }: { caseMap: Map<string, EvalResult[]> }) {
               </div>
               {expanded && (
                 <div className="bycase-sparkline">
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>总分走势（{rows.length} 次）</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>{t('eval.spark_trend', { n: String(rows.length) })}</div>
                   <Sparkline scores={sparkScores} width={300} height={40} />
                   <div style={{ display: 'flex', gap: 16, marginTop: 6 }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>最低 <b style={{ color: 'var(--danger)' }}>{Math.min(...sparkScores).toFixed(1)}</b></span>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>均值 <b style={{ color: 'var(--accent)' }}>{avgTotal.toFixed(2)}</b></span>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>最高 <b style={{ color: 'var(--success)' }}>{Math.max(...sparkScores).toFixed(1)}</b></span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('eval.spark_min')} <b style={{ color: 'var(--danger)' }}>{Math.min(...sparkScores).toFixed(1)}</b></span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('eval.spark_avg')} <b style={{ color: 'var(--accent)' }}>{avgTotal.toFixed(2)}</b></span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('eval.spark_max')} <b style={{ color: 'var(--success)' }}>{Math.max(...sparkScores).toFixed(1)}</b></span>
                   </div>
                 </div>
               )}
@@ -1008,6 +1027,8 @@ function ByCasePanel({ caseMap }: { caseMap: Map<string, EvalResult[]> }) {
 
 export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey }: { initialSkillId?: string; onNavigate?: (page: string, skillId?: string) => void; skillsRefreshKey?: number } = {}) {
   const track = useTrack()
+  const t = useT()
+  const DIM_LABELS = makeDimLabels(t)
   const [skills, setSkills] = useState<Skill[]>([])
   const [selectedSkill, setSelectedSkill] = useState(initialSkillId ?? '')
   const [pageTab, setPageTab] = useState<'testcase' | 'eval' | 'chart'>('testcase')
@@ -1149,7 +1170,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
       <div className="eval-page-header">
         <div>
           <h1>Skill Eval</h1>
-          <p className="subtitle">测试用例生成 · 技能测评 · 技能成长</p>
+          <p className="subtitle">{t('eval.subtitle')}</p>
         </div>
         <div className="eval-controls">
           <select value={selectedSkill} onChange={(e) => { setSelectedSkill(e.target.value); setHistoryPage(0) }} className="skill-select">
@@ -1158,7 +1179,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
           </select>
           {selectedSkill && historyTotal > 0 && (
             <button className="btn btn-ghost btn-sm" onClick={handleExport} disabled={exporting}>
-              {exporting ? '导出中...' : '⬇ 导出 JSON'}
+              {exporting ? t('eval.exporting') : t('eval.export_json')}
             </button>
           )}
         </div>
@@ -1209,7 +1230,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
           {selectedSkill && (
             <div className="eval-card run-panel">
               <div className="card-row">
-                <span className="card-title">运行评测</span>
+                <span className="card-title">{t('eval.run')}</span>
                 <button className="btn btn-primary"
                   onClick={() => handleRunEval()}
                   disabled={!selectedSkill || running || selectedTcIds.size === 0 || apiKeySet === false}>
@@ -1239,7 +1260,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
           {running && (
             <div className="eval-card progress-card">
               <div className="progress-track"><div className="progress-fill" style={{ width: `${progress}%` }} /></div>
-              <p className="progress-msg">{progressMsg || '评测中...'} {progress}%</p>
+              <p className="progress-msg">{progressMsg || t('eval.evaluating')} {progress}%</p>
             </div>
           )}
 
@@ -1347,7 +1368,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
               {chartTab === 'bycase' && (() => {
                 const caseMap = new Map<string, typeof successHistory>()
                 for (const r of successHistory) {
-                  const key = r.testCaseName ?? '(未命名)'
+                  const key = r.testCaseName ?? t('eval.unnamed')
                   if (!caseMap.has(key)) caseMap.set(key, [])
                   caseMap.get(key)!.push(r)
                 }
@@ -1359,7 +1380,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
           {/* History list */}
           <div className="eval-card">
             <div className="card-row">
-              <span className="card-title">评测历史（共 {historyTotal} 条）</span>
+              <span className="card-title">{t('eval.history_count', { n: historyTotal })}</span>
               <div className="history-controls">
                 {compareSet.size > 0 && (
                   <button
@@ -1372,7 +1393,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
                 )}
                 <div className="tc-search-wrap">
                   <span className="search-icon">🔍</span>
-                  <input className="tc-search" placeholder="搜索 input/output..." value={historySearch}
+                  <input className="tc-search" placeholder={t('eval.search_placeholder')} value={historySearch}
                     onChange={(e) => setHistorySearch(e.target.value)} />
                   {historySearch && <button className="search-clear" onClick={() => setHistorySearch('')}>✕</button>}
                 </div>
@@ -1458,7 +1479,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
                           <button
                             className="expand-btn"
                             onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
-                            title={expandedId === r.id ? '收起' : '展开详情'}
+                            title={expandedId === r.id ? t('eval.collapse_detail') : t('eval.expand_detail')}
                           >
                             {expandedId === r.id ? '▾' : '▸'}
                           </button>
