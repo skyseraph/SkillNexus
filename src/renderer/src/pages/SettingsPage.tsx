@@ -5,6 +5,7 @@ import type { Theme } from '../App'
 import { useTrack } from '../hooks/useTrack'
 import { useT } from '../i18n/useT'
 import qrcodeImg from '../assets/qrcode.jpg'
+import mmqrcodeImg from '../assets/mmqrcode.png'
 
 function QRPlaceholder({ label, placeholder, imgSrc }: { label: string; placeholder: string; imgSrc?: string }) {
   const t = useT()
@@ -600,7 +601,7 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
           </div>
           <div className="about-qrcodes">
             {[
-              { label: t('settings.qr_wechat'), placeholder: 'WeChat', imgSrc: undefined },
+              { label: t('settings.qr_wechat'), placeholder: 'WeChat', imgSrc: mmqrcodeImg },
               { label: t('settings.qr_official'), placeholder: 'Official', imgSrc: qrcodeImg },
             ].map(({ label, placeholder, imgSrc }) => (
               <QRPlaceholder key={label} label={label} placeholder={placeholder} imgSrc={imgSrc} />
