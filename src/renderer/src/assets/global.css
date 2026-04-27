@@ -12,6 +12,15 @@
   --danger: #f87171;
   --radius: 8px;
   --transition: 0.15s ease;
+  --teal: #00d4aa;
+  --gradient: linear-gradient(135deg, #6c63ff 0%, #00d4aa 100%);
+  --gradient-subtle: linear-gradient(135deg, rgba(108,99,255,0.10) 0%, rgba(0,212,170,0.04) 100%);
+  --glow-accent: 0 0 24px rgba(108, 99, 255, 0.65);
+  --glow-teal:   0 0 24px rgba(0, 212, 170, 0.55);
+  --glow-sm:     0 0 14px rgba(108, 99, 255, 0.40);
+  --surface-glass: rgba(26, 29, 46, 0.78);
+  --border-bright: rgba(108, 99, 255, 0.30);
+  --transition-bounce: 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 [data-theme="light"] {
@@ -26,6 +35,11 @@
   --success: #16a34a;
   --warning: #d97706;
   --danger: #dc2626;
+  --glow-accent: 0 0 12px rgba(108, 99, 255, 0.18);
+  --glow-teal:   0 0 12px rgba(0, 212, 170, 0.18);
+  --glow-sm:     0 0 7px rgba(108, 99, 255, 0.13);
+  --surface-glass: rgba(255, 255, 255, 0.85);
+  --border-bright: rgba(108, 99, 255, 0.18);
 }
 
 * {
@@ -40,6 +54,14 @@ body {
   color: var(--text);
   height: 100vh;
   overflow: hidden;
+  background-image:
+    radial-gradient(ellipse at 20% 0%, rgba(108,99,255,0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(0,212,170,0.05) 0%, transparent 50%);
+}
+
+::selection {
+  background: rgba(108, 99, 255, 0.35);
+  color: #fff;
 }
 
 #root {
@@ -64,11 +86,13 @@ input, textarea, select {
   padding: 8px 12px;
   font-size: 14px;
   outline: none;
-  transition: border-color var(--transition);
+  transition: border-color var(--transition), box-shadow var(--transition);
 }
 
 input:focus, textarea:focus, select:focus {
   border-color: var(--accent);
+  box-shadow: var(--glow-sm), inset 0 0 0 1px rgba(108,99,255,0.12);
+  background: rgba(26, 29, 46, 0.95);
 }
 
 .btn {
@@ -76,16 +100,27 @@ input:focus, textarea:focus, select:focus {
   border-radius: var(--radius);
   font-size: 14px;
   font-weight: 500;
-  transition: background var(--transition), opacity var(--transition);
+  transition: background var(--transition), opacity var(--transition),
+              box-shadow var(--transition), transform var(--transition),
+              filter var(--transition);
 }
 
 .btn-primary {
-  background: var(--accent);
+  background: var(--gradient);
   color: #fff;
+  box-shadow: 0 2px 12px rgba(108, 99, 255, 0.50), 0 0 0 1px rgba(108,99,255,0.18);
 }
 
 .btn-primary:hover {
-  background: var(--accent-hover);
+  filter: brightness(1.08);
+  box-shadow: var(--glow-accent);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  filter: brightness(0.95);
+  box-shadow: var(--glow-sm);
 }
 
 .btn-ghost {
@@ -96,7 +131,8 @@ input:focus, textarea:focus, select:focus {
 
 .btn-ghost:hover {
   color: var(--text);
-  border-color: var(--text-muted);
+  border-color: var(--border-bright);
+  background: rgba(108, 99, 255, 0.05);
 }
 
 .btn-ghost.danger {
@@ -112,6 +148,13 @@ input:focus, textarea:focus, select:focus {
 .btn-danger {
   background: var(--danger);
   color: #fff;
+  box-shadow: 0 2px 10px rgba(248, 113, 113, 0.35);
+}
+
+.btn-danger:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 0 18px rgba(248, 113, 113, 0.55);
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
@@ -121,7 +164,8 @@ input:focus, textarea:focus, select:focus {
 }
 
 .btn-secondary:hover {
-  border-color: var(--text-muted);
+  border-color: var(--border-bright);
+  background: rgba(108, 99, 255, 0.06);
 }
 
 .btn-icon {
@@ -136,12 +180,15 @@ input:focus, textarea:focus, select:focus {
   color: var(--text-muted);
   border: 1px solid var(--border);
   font-size: 15px;
-  transition: background var(--transition), color var(--transition);
+  transition: background var(--transition), color var(--transition),
+              border-color var(--transition), box-shadow var(--transition);
 }
 
 .btn-icon:hover {
   background: var(--surface2);
   color: var(--text);
+  border-color: var(--border-bright);
+  box-shadow: var(--glow-sm);
 }
 
 .btn-icon-sm {
@@ -161,14 +208,19 @@ input:focus, textarea:focus, select:focus {
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(45, 49, 84, 0.2);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: linear-gradient(to bottom, rgba(108,99,255,0.45), rgba(0,212,170,0.22));
   border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, rgba(108,99,255,0.72), rgba(0,212,170,0.45));
 }

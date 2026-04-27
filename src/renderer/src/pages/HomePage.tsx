@@ -57,7 +57,7 @@ function langFromExt(ext: string): string {
 
 const TRUST_META: Record<number, { label: string; color: string }> = {
   1: { label: 'T1 未验证',   color: '#888' },
-  2: { label: 'T2 格式验证', color: '#f59e0b' },
+  2: { label: 'T2 质量达标', color: '#f59e0b' },
   3: { label: 'T3 已评测',   color: '#00d4aa' },
   4: { label: 'T4 已批准',   color: '#6c63ff' }
 }

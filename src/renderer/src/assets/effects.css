@@ -1,0 +1,78 @@
+/* SkillNexus effects — ambient tech layer, purely additive */
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 16px rgba(108,99,255,0.55), 0 0 32px rgba(0,212,170,0.20); }
+  50%       { box-shadow: 0 0 24px rgba(108,99,255,0.85), 0 0 48px rgba(0,212,170,0.35); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+/* Dot-grid background on main content area */
+.content {
+  background-image: radial-gradient(
+    circle,
+    rgba(108, 99, 255, 0.18) 1px,
+    transparent 1px
+  );
+  background-size: 20px 20px;
+}
+
+[data-theme="light"] .content {
+  background-image: radial-gradient(
+    circle,
+    rgba(108, 99, 255, 0.10) 1px,
+    transparent 1px
+  );
+  background-size: 20px 20px;
+}
+
+/* Subtle scanline overlay — dark mode only */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.016) 2px,
+    rgba(0, 0, 0, 0.016) 4px
+  );
+}
+
+[data-theme="light"] body::after {
+  display: none;
+}
+
+/* Glass surface utility */
+.glass {
+  background: var(--surface-glass);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--border-bright);
+}
+
+/* Gradient text utility */
+.gradient-text {
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Shimmer skeleton */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--surface2) 25%,
+    rgba(108, 99, 255, 0.07) 50%,
+    var(--surface2) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite;
+}
