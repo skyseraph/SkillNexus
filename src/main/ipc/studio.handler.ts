@@ -103,6 +103,24 @@ Rules:
 - Prefer merging into an existing pattern over creating duplicates
 - Output ONLY the Skill content or NO_SKILL. No commentary.`
 
+function buildExtractPrompt(sourceSkillContent?: string): string {
+  if (!sourceSkillContent) return EXTRACT_SYSTEM_PROMPT
+  return `You are an expert Skill author improving an existing Skill based on real usage evidence.
+
+The source Skill is provided below. Analyze the conversation evidence and produce an IMPROVED version that addresses observed failure patterns and generalizes successful patterns.
+
+${SKILL_FORMAT_HINT}
+
+Source Skill:
+${sourceSkillContent}
+
+Rules:
+- Output an improved version of the source Skill incorporating lessons from the evidence
+- Preserve what works; fix what fails; generalize edge cases into explicit instructions
+- If the evidence shows no actionable improvement → output exactly: NO_SKILL
+- Output ONLY the improved Skill content or NO_SKILL. No commentary.`
+}
+
 const SCORE_SYSTEM_PROMPT = `You are a Skill quality evaluator. Score the given Skill on 5 dimensions, each from 0 to 10.
 
 Dimensions:
@@ -353,7 +371,7 @@ export function registerStudioHandlers(): void {
     event.sender.send('studio:chunk', { chunk: '', done: true })
   })
 
-  ipcMain.handle('studio:install', async (_event, content: string, name: string) => {
+  ipcMain.handle('studio:install', async (_event, content: string, name: string, parentSkillId?: string) => {
     if (!content || !content.trim()) {
       throw new Error('Skill content cannot be empty')
     }
@@ -399,8 +417,8 @@ export function registerStudioHandlers(): void {
     }
 
     db.prepare(`
-      INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, trust_level, installed_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, trust_level, installed_at, updated_at, parent_skill_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       skillName,
@@ -414,7 +432,8 @@ export function registerStudioHandlers(): void {
       skillType,
       1,
       now,
-      now
+      now,
+      parentSkillId ?? null
     )
 
     return {
@@ -435,12 +454,12 @@ export function registerStudioHandlers(): void {
   })
 
   // Extract Skill from conversation text (AutoSkill-style)
-  ipcMain.handle('studio:extract', async (event, conversation: string) => {
+  ipcMain.handle('studio:extract', async (event, conversation: string, _sourceSkillId?: string, sourceSkillContent?: string) => {
     const userMessage = `Conversation to analyze:\n\n${conversation}\n\nExtract a reusable Skill or output NO_SKILL:`
     const provider = getAIProvider()
     let buffer = ''
     await provider.stream(
-      { model: getActiveModel(), systemPrompt: EXTRACT_SYSTEM_PROMPT, userMessage },
+      { model: getActiveModel(), systemPrompt: buildExtractPrompt(sourceSkillContent), userMessage },
       (chunk) => {
         buffer += chunk
         event.sender.send('studio:chunk', { chunk, done: false })
@@ -561,19 +580,44 @@ export function registerStudioHandlers(): void {
     return fetchText(rawUrl, getConfig().githubToken)
   })
 
-  ipcMain.handle('studio:recentEvalHistory', (_event, limit: number) => {
+  ipcMain.handle('studio:recentEvalHistory', (_event, limit: number, skillId?: string, labels?: string[]) => {
     const db = getDb()
-    const rows = db.prepare(`
-      SELECT eh.input_prompt, eh.output, eh.created_at, s.name as skill_name
+    const safeLimit = Math.min(limit || 20, 50)
+    const validLabels = ['success', 'failure', 'edge_case']
+    const filteredLabels = Array.isArray(labels) ? labels.filter(l => validLabels.includes(l)) : []
+
+    let sql = `
+      SELECT eh.id, eh.input_prompt, eh.output, eh.created_at, eh.label, eh.total_score,
+             s.name as skill_name, s.markdown_content as skill_content
       FROM eval_history eh
-      LEFT JOIN skills s ON s.id = eh.skill_id
-      ORDER BY eh.created_at DESC
-      LIMIT ?
-    `).all(Math.min(limit || 20, 50)) as { input_prompt: string; output: string; created_at: number; skill_name: string }[]
+      LEFT JOIN skills s ON s.id = eh.skill_id`
+    const params: unknown[] = []
+    const conditions: string[] = []
+
+    if (skillId) {
+      conditions.push('eh.skill_id = ?')
+      params.push(skillId)
+    }
+    if (filteredLabels.length > 0) {
+      conditions.push(`eh.label IN (${filteredLabels.map(() => '?').join(',')})`)
+      params.push(...filteredLabels)
+    }
+    if (conditions.length > 0) sql += ` WHERE ${conditions.join(' AND ')}`
+    sql += ` ORDER BY eh.created_at DESC LIMIT ?`
+    params.push(safeLimit)
+
+    const rows = db.prepare(sql).all(...params) as {
+      id: string; input_prompt: string; output: string; created_at: number;
+      label: string | null; total_score: number; skill_name: string; skill_content: string
+    }[]
     return rows.map(r => ({
+      id: r.id,
       skillName: r.skill_name || 'Unknown',
+      skillContent: r.skill_content || '',
       inputPrompt: r.input_prompt,
       output: r.output,
+      label: r.label,
+      totalScore: r.total_score,
       createdAt: r.created_at
     }))
   })

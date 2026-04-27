@@ -65,7 +65,8 @@ const MIGRATIONS = [
   `ALTER TABLE skills ADD COLUMN transfer_report TEXT`,
   `ALTER TABLE eval_history ADD COLUMN test_case_id TEXT`,
   `ALTER TABLE eval_history ADD COLUMN test_case_name TEXT`,
-  `ALTER TABLE eval_history ADD COLUMN job_id TEXT`
+  `ALTER TABLE eval_history ADD COLUMN job_id TEXT`,
+  `ALTER TABLE eval_history ADD COLUMN label TEXT`
 ]
 
 export function initDatabase(): Database.Database {

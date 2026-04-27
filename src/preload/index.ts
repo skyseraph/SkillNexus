@@ -46,6 +46,8 @@ const api = {
       ipcRenderer.invoke('eval:getByJobId', jobId),
     deleteByJobId: (jobId: string): Promise<void> =>
       ipcRenderer.invoke('eval:deleteByJobId', jobId),
+    setLabel: (historyId: string, label: string | null): Promise<void> =>
+      ipcRenderer.invoke('eval:setLabel', historyId, label),
     onProgress: (cb: (data: { jobId: string; progress: number; message: string }) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, data: { jobId: string; progress: number; message: string }) => cb(data)
       ipcRenderer.on('eval:progress', handler)
@@ -58,10 +60,10 @@ const api = {
     evolve: (skillId: string, config: EvoConfig): Promise<void> => ipcRenderer.invoke('studio:evolve', skillId, config),
     generateFromExamples: (examples: Array<{ input: string; output: string }>, description?: string): Promise<void> =>
       ipcRenderer.invoke('studio:generateFromExamples', examples, description),
-    install: (content: string, name: string): Promise<Skill> =>
-      ipcRenderer.invoke('studio:install', content, name),
-    extract: (conversation: string): Promise<void> =>
-      ipcRenderer.invoke('studio:extract', conversation),
+    install: (content: string, name: string, parentSkillId?: string): Promise<Skill> =>
+      ipcRenderer.invoke('studio:install', content, name, parentSkillId),
+    extract: (conversation: string, sourceSkillId?: string, sourceSkillContent?: string): Promise<void> =>
+      ipcRenderer.invoke('studio:extract', conversation, sourceSkillId, sourceSkillContent),
     scoreSkill: (content: string): Promise<SkillScore5D> =>
       ipcRenderer.invoke('studio:scoreSkill', content),
     similarSkills: (content: string): Promise<Skill[]> =>
@@ -70,8 +72,8 @@ const api = {
       ipcRenderer.invoke('studio:searchGithub', query),
     fetchGithubContent: (rawUrl: string): Promise<string> =>
       ipcRenderer.invoke('studio:fetchGithubContent', rawUrl),
-    recentEvalHistory: (limit: number): Promise<{ skillName: string; inputPrompt: string; output: string; createdAt: number }[]> =>
-      ipcRenderer.invoke('studio:recentEvalHistory', limit),
+    recentEvalHistory: (limit: number, skillId?: string, labels?: string[]): Promise<{ id: string; skillName: string; skillContent: string; inputPrompt: string; output: string; label: string | null; totalScore: number; createdAt: number }[]> =>
+      ipcRenderer.invoke('studio:recentEvalHistory', limit, skillId, labels),
     onChunk: (cb: (data: { chunk: string; done: boolean; noSkill?: boolean }) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, data: { chunk: string; done: boolean; noSkill?: boolean }) => cb(data)
       ipcRenderer.on('studio:chunk', handler)

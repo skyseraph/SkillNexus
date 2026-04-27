@@ -318,4 +318,11 @@ Output ONLY the Skill content.`,
     const db = getDb()
     db.prepare(`DELETE FROM eval_history WHERE COALESCE(job_id, id) = ?`).run(jobId)
   })
+
+  ipcMain.handle('eval:setLabel', (_event, historyId: string, label: string | null) => {
+    const allowed = ['success', 'failure', 'edge_case', null]
+    if (!allowed.includes(label)) throw new Error(`Invalid label: ${label}`)
+    const db = getDb()
+    db.prepare(`UPDATE eval_history SET label = ? WHERE id = ?`).run(label, historyId)
+  })
 }

@@ -536,19 +536,48 @@ function InputAreaExamples({ pairs, setPairs, desc, setDesc, streaming, apiKeySe
   )
 }
 
-function InputAreaExtract({ streaming, apiKeySet, onExtract }: {
+type EvalRecord = {
+  id: string
+  skillName: string
+  skillContent: string
+  inputPrompt: string
+  output: string
+  label: string | null
+  totalScore: number
+  createdAt: number
+}
+
+const LABEL_OPTIONS: { value: string | null; display: string }[] = [
+  { value: null,         display: '—' },
+  { value: 'success',   display: '✓' },
+  { value: 'failure',   display: '✗' },
+  { value: 'edge_case', display: '⚡' },
+]
+const LABEL_COLORS: Record<string, string> = {
+  success: '#22c55e', failure: '#ef4444', edge_case: '#f59e0b'
+}
+function nextLabel(current: string | null): string | null {
+  const idx = LABEL_OPTIONS.findIndex(o => o.value === current)
+  return LABEL_OPTIONS[(idx + 1) % LABEL_OPTIONS.length].value
+}
+
+function InputAreaExtract({ streaming, apiKeySet, skills, onExtract }: {
   streaming: boolean; apiKeySet: boolean | null
-  onExtract: (conversation: string) => void
+  skills: Skill[]
+  onExtract: (conversation: string, sourceSkillId?: string, sourceSkillContent?: string) => void
 }) {
   const [limit, setLimit] = useState(10)
-  const [records, setRecords] = useState<{ skillName: string; inputPrompt: string; output: string; createdAt: number }[]>([])
+  const [selectedSkillId, setSelectedSkillId] = useState('')
+  const [activeLabels, setActiveLabels] = useState<Set<string>>(new Set())
+  const [records, setRecords] = useState<EvalRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
 
-  const loadRecords = useCallback(async (n: number) => {
+  const loadRecords = useCallback(async (n: number, skillId: string, labels: Set<string>) => {
     setLoading(true)
     try {
-      const rows = await window.api.studio.recentEvalHistory(n)
+      const labelArr = labels.size > 0 ? [...labels] : undefined
+      const rows = await window.api.studio.recentEvalHistory(n, skillId || undefined, labelArr)
       setRecords(rows)
       setLoaded(true)
     } finally {
@@ -556,11 +585,31 @@ function InputAreaExtract({ streaming, apiKeySet, onExtract }: {
     }
   }, [])
 
-  useEffect(() => { loadRecords(10) }, [])
+  useEffect(() => { loadRecords(10, '', new Set()) }, [])
+
+  const handleSkillChange = (skillId: string) => {
+    setSelectedSkillId(skillId)
+    loadRecords(limit, skillId, activeLabels)
+  }
+
+  const handleLabelToggle = (label: string) => {
+    setActiveLabels(prev => {
+      const next = new Set(prev)
+      if (next.has(label)) next.delete(label); else next.add(label)
+      loadRecords(limit, selectedSkillId, next)
+      return next
+    })
+  }
 
   const handleLimitChange = (n: number) => {
     setLimit(n)
-    loadRecords(n)
+    loadRecords(n, selectedSkillId, activeLabels)
+  }
+
+  const handleRecordLabel = async (record: EvalRecord) => {
+    const newLabel = nextLabel(record.label)
+    await window.api.eval.setLabel(record.id, newLabel)
+    setRecords(prev => prev.map(r => r.id === record.id ? { ...r, label: newLabel } : r))
   }
 
   const handleExtract = () => {
@@ -568,7 +617,8 @@ function InputAreaExtract({ streaming, apiKeySet, onExtract }: {
     const conversation = records.map(r =>
       `[${r.skillName}]\nUser: ${r.inputPrompt}\nAssistant: ${r.output}`
     ).join('\n\n---\n\n')
-    onExtract(conversation)
+    const sourceSkillContent = selectedSkillId ? (records.find(r => r.skillContent)?.skillContent) : undefined
+    onExtract(conversation, selectedSkillId || undefined, sourceSkillContent)
   }
 
   return (
@@ -584,20 +634,57 @@ function InputAreaExtract({ streaming, apiKeySet, onExtract }: {
           ))}
         </div>
       </div>
+
+      <div className="studio-v2-extract-filters">
+        <select
+          className="studio-v2-extract-skill-select"
+          value={selectedSkillId}
+          onChange={e => handleSkillChange(e.target.value)}
+        >
+          <option value="">全部 Skill</option>
+          {skills.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        <div className="studio-v2-extract-label-filters">
+          {(['success', 'failure', 'edge_case'] as const).map(l => (
+            <button
+              key={l}
+              className={`studio-v2-label-filter-chip ${activeLabels.has(l) ? 'active' : ''}`}
+              style={activeLabels.has(l) ? { color: LABEL_COLORS[l], borderColor: LABEL_COLORS[l] } : {}}
+              onClick={() => handleLabelToggle(l)}
+            >
+              {LABEL_OPTIONS.find(o => o.value === l)?.display}{' '}
+              {l === 'success' ? '成功' : l === 'failure' ? '失败' : '边界'}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {loading && <div className="studio-v2-empty">加载中...</div>}
       {loaded && !loading && records.length === 0 && (
-        <div className="studio-v2-empty">暂无 Eval 记录，请先运行评测</div>
+        <div className="studio-v2-empty">暂无匹配记录，请先运行评测</div>
       )}
       {loaded && !loading && records.length > 0 && (
         <div className="studio-v2-extract-preview">
-          {records.slice(0, 3).map((r, i) => (
-            <div key={i} className="studio-v2-extract-record">
-              <span className="studio-v2-extract-skill">{r.skillName}</span>
-              <span className="studio-v2-extract-input">{r.inputPrompt.slice(0, 60)}{r.inputPrompt.length > 60 ? '…' : ''}</span>
-            </div>
-          ))}
-          {records.length > 3 && (
-            <div className="studio-v2-extract-more">+ {records.length - 3} 条更多记录</div>
+          {records.slice(0, 5).map((r) => {
+            const labelOpt = LABEL_OPTIONS.find(o => o.value === r.label) ?? LABEL_OPTIONS[0]
+            const labelColor = r.label ? LABEL_COLORS[r.label] : 'var(--text-muted)'
+            return (
+              <div key={r.id} className="studio-v2-extract-record">
+                <span className="studio-v2-extract-skill">{r.skillName}</span>
+                <span className="studio-v2-extract-input">{r.inputPrompt.slice(0, 55)}{r.inputPrompt.length > 55 ? '…' : ''}</span>
+                <button
+                  className="studio-v2-record-label-chip"
+                  style={{ color: labelColor, borderColor: `${labelColor}66` }}
+                  onClick={() => handleRecordLabel(r)}
+                  title="点击切换标签"
+                >
+                  {labelOpt.display}
+                </button>
+              </div>
+            )
+          })}
+          {records.length > 5 && (
+            <div className="studio-v2-extract-more">+ {records.length - 5} 条更多记录</div>
           )}
         </div>
       )}
@@ -688,11 +775,12 @@ function SimilarWarn({ skills }: { skills: Skill[] }) {
 
 // ── InstallBar ────────────────────────────────────────────────────────────────
 
-function InstallBar({ content, scores, scoring, similar, onInstalled }: {
+function InstallBar({ content, scores, scoring, similar, parentSkillId, onInstalled }: {
   content: string
   scores: SkillScore5D | null
   scoring: boolean
   similar: Skill[]
+  parentSkillId?: string
   onInstalled: (s: Skill) => void
 }) {
   const [name, setName] = useState('')
@@ -707,7 +795,7 @@ function InstallBar({ content, scores, scoring, similar, onInstalled }: {
     if (!name.trim()) return
     setInstalling(true)
     try {
-      const skill = await window.api.studio.install(content, name.trim())
+      const skill = await window.api.studio.install(content, name.trim(), parentSkillId)
       onInstalled(skill)
     } finally {
       setInstalling(false)
@@ -1137,6 +1225,7 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
   const [successMsg, setSuccessMsg] = useState('')
   const [noSkill, setNoSkill] = useState(false)
   const [mySkills, setMySkills] = useState<Skill[]>([])
+  const [extractSourceSkillId, setExtractSourceSkillId] = useState<string | undefined>()
 
   // Mode-specific input state
   const [prompt, setPrompt] = useState('')
@@ -1268,9 +1357,10 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
     startStream(() => window.api.studio.generateStream(optimizePrompt))
   }, [startStream])
 
-  const handleExtract = useCallback((conversation: string) => {
+  const handleExtract = useCallback((conversation: string, sourceSkillId?: string, sourceSkillContent?: string) => {
     if (!conversation.trim()) return
-    startStream(() => window.api.studio.extract(conversation))
+    setExtractSourceSkillId(sourceSkillId)
+    startStream(() => window.api.studio.extract(conversation, sourceSkillId, sourceSkillContent))
   }, [startStream])
 
   const handleGenerateAgent = useCallback((fields: AgentFields) => {
@@ -1416,6 +1506,7 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
           {mode === 'extract' && (
             <InputAreaExtract
               streaming={streaming} apiKeySet={apiKeySet}
+              skills={mySkills}
               onExtract={handleExtract}
             />
           )}
@@ -1476,6 +1567,7 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
                   scores={scores}
                   scoring={scoring}
                   similar={similarSkills}
+                  parentSkillId={mode === 'extract' ? extractSourceSkillId : undefined}
                   onInstalled={handleInstalled}
                 />
               )}
@@ -1720,10 +1812,16 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
         .studio-v2-extract-limit { display: flex; gap: 5px; }
         .studio-v2-limit-chip { font-size: 11px; padding: 3px 9px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; }
         .studio-v2-limit-chip.active { background: rgba(108,99,255,0.1); color: var(--accent); border-color: rgba(108,99,255,0.4); }
+        .studio-v2-extract-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .studio-v2-extract-skill-select { font-size: 12px; padding: 4px 8px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface2); color: var(--text); flex: 1; min-width: 120px; max-width: 200px; }
+        .studio-v2-extract-label-filters { display: flex; gap: 5px; }
+        .studio-v2-label-filter-chip { font-size: 11px; padding: 3px 8px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; }
+        .studio-v2-label-filter-chip.active { background: rgba(108,99,255,0.06); }
         .studio-v2-extract-preview { display: flex; flex-direction: column; gap: 4px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; }
-        .studio-v2-extract-record { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
+        .studio-v2-extract-record { display: flex; gap: 8px; align-items: center; font-size: 12px; }
         .studio-v2-extract-skill { font-weight: 600; color: var(--accent); flex-shrink: 0; font-size: 11px; }
-        .studio-v2-extract-input { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .studio-v2-extract-input { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+        .studio-v2-record-label-chip { font-size: 11px; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--border); background: transparent; cursor: pointer; flex-shrink: 0; color: var(--text-muted); }
         .studio-v2-extract-more { font-size: 11px; color: var(--text-muted); padding-top: 2px; }
 
         /* Agent Badge (Discovery Panel) */
