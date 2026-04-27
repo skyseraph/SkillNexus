@@ -14,7 +14,7 @@
 [![Electron](https://img.shields.io/badge/Electron-31-47848F.svg)](https://electronjs.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](#)
 
-[中文文档](README.zh.md) · [Author Blog](https://skyseraph.github.io)
+[中文文档](README.zh.md) · [Blog](https://skyseraph.github.io) · [Series](https://skyseraph.github.io/series/skill-nexus/)
 
 </div>
 
@@ -22,27 +22,19 @@
 
 ## What is SkillNexus?
 
-A **Skill** is a modular capability unit defined by the official Claude Code [Agent Skills open standard](https://agentskills.io). Each Skill is a directory containing a `SKILL.md` file — Markdown body + YAML frontmatter — with a three-layer progressive disclosure structure:
+**SkillNexus** is a full-lifecycle studio for AI Skills — from generation to evaluation to evolution. You're not just writing prompts; you're systematically cultivating and growing AI capabilities.
 
 ```
-SKILL.md
-  ├── frontmatter  (always loaded, ~100 tokens)
-  │     name / description / allowed-tools
-  ├── instruction body  (loaded on task match)
-  └── linked files      (accessed on demand)
+Home (Manage) 
+    → Studio (Generate) 
+    → TestCase (Create) → Eval (Assess) 
+    → Evo (Evolve) 
+    → Trending (Rank)
 ```
 
-Skills are installed to `~/.claude/skills/` (personal/global) or `.claude/skills/` (project-scoped). Claude Code **auto-discovers** them via the `description` field and activates the right Skill automatically — or you can invoke them manually with `/skill-name`. The same format works across Cursor, Windsurf, Gemini CLI, and other AI tools.
+A **Skill** is a modular capability unit following the [Agent Skills open standard](https://agentskills.io): a directory with a `SKILL.md` file (Markdown + YAML frontmatter). Skills install to `~/.claude/skills/` and are auto-discovered by Claude Code, Cursor, Windsurf, Gemini CLI, and other AI tools.
 
-**SkillNexus** provides the complete closed loop from generation to evolution — you're not just writing prompts, you're systematically cultivating and evolving AI capabilities.
-
-```
-Home (Manage) → Studio (Generate) → TestCase (Create) → Eval (Assess) → Evo (Evolve) → Trending (Rank)
-```
-
-<!-- Screenshot placeholder: Overview
-![SkillNexus Overview](docs/images/overview.gif)
--->
+![Home Page](docs/images/home.png)
 
 ---
 
@@ -56,6 +48,8 @@ Home (Manage) → Studio (Generate) → TestCase (Create) → Eval (Assess) → 
 - Export to AI tools via symlink or file copy
 - File tree browser with content preview
 - Evolution chain visualization (lineage via `parent_skill_id`)
+
+![Home Page](docs/images/task.png)
 
 ### 🎨 Studio — Skill Generation
 
@@ -72,6 +66,8 @@ Home (Manage) → Studio (Generate) → TestCase (Create) → Eval (Assess) → 
 - Similarity detection to prevent duplicates
 - Quick test: run Skill inline and save test cases
 - Side-by-side comparison of original vs. evolved
+
+![Studio Page](docs/images/studio.png)
 
 ### 🧪 TestCase — Test Suite Management
 
@@ -96,6 +92,12 @@ Two groups: Task Quality (G-series) and Skill Quality (S-series):
 
 **3 eval modes:** single · compare (A vs B) · three-condition (no-skill baseline vs current vs AI-generated)
 
+![Eval Page](docs/images/eval.png)
+
+![Eval Page](docs/images/eval-雷达图.png)
+
+![Eval Page](docs/images/eval-热力图.png)
+
 ### 🧬 Evo — Multi-Strategy Evolution Engine
 
 **Studio interactive (streaming):**
@@ -118,9 +120,15 @@ Two groups: Task Quality (G-series) and Skill Quality (S-series):
 
 **Plugin system:** drop a `.js` file into `{userData}/plugins/` to add a custom engine — no source changes needed.
 
+![Evo Page](docs/images/evo-进化引擎.png)
+
+![Evo Page](docs/images/evo-进化结果.png)
+
 ### 🏆 Trending — Leaderboard
 
 Rank all Skills by total score or individual dimensions, aggregated from eval history.
+
+![Studio Page](docs/images/studio.png)
 
 ### ⚙️ Settings — LLM Provider
 
@@ -150,8 +158,6 @@ Rank all Skills by total score or individual dimensions, aggregated from eval hi
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
-
-> The Evolution SDK is fully decoupled from Electron via interface injection. See [`doc/design/core-decoupling.md`](doc/design/core-decoupling.md).
 
 ---
 
