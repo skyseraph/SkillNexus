@@ -12,14 +12,15 @@ const store = new Store<AppConfig>({
 
 function getActiveProvider(): LLMProvider | undefined {
   const s = store.store
-  return s.providers.find(p => p.id === s.activeProviderId) ?? s.providers[0]
+  const providers = s.providers ?? []
+  return providers.find(p => p.id === s.activeProviderId) ?? providers[0]
 }
 
 export function registerConfigHandlers(): void {
   ipcMain.handle('config:get', (): AppConfigPublic => {
     const s = store.store
     return {
-      providers: s.providers.map(p => ({ ...p, apiKey: undefined as unknown as string, apiKeySet: !!p.apiKey })),
+      providers: (s.providers ?? []).map(p => ({ ...p, apiKey: undefined as unknown as string, apiKeySet: !!p.apiKey })),
       activeProviderId: s.activeProviderId,
       toolApiKeysSet: { tavily: !!(s.toolApiKeys?.tavily) },
       githubTokenSet: !!(s.githubToken),

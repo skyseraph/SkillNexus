@@ -22,8 +22,12 @@ const ALLOWED_PATH_PREFIXES = () => {
   return _allowedPrefixes
 }
 
-function assertPathAllowed(p: string): void {
+// Paths explicitly chosen by the user via the OS file dialog — bypass prefix check
+const _dialogPaths = new Set<string>()
+
+function assertPathAllowed(p: string, fromDialog = false): void {
   const r = resolve(p)
+  if (fromDialog || _dialogPaths.has(r)) return
   if (!ALLOWED_PATH_PREFIXES().some((prefix) => r.startsWith(prefix))) {
     throw new Error(`Access to path is not allowed: ${r}`)
   }
@@ -157,10 +161,10 @@ function walkDir(dirPath: string, rootDir: string): SkillFileEntry[] {
 
     if (st.isDirectory()) {
       if (IGNORE_DIRS.has(entry)) continue
-      results.push({ name: entry, path: fullPath, relativePath: rel, isDir: true, ext: '', size: 0 })
+      results.push({ name: entry, path: fullPath, relativePath: rel.replace(/\\/g, '/'), isDir: true, ext: '', size: 0 })
       results.push(...walkDir(fullPath, rootDir))
     } else {
-      results.push({ name: entry, path: fullPath, relativePath: rel, isDir: false, ext: extname(entry), size: st.size })
+      results.push({ name: entry, path: fullPath, relativePath: rel.replace(/\\/g, '/'), isDir: false, ext: extname(entry), size: st.size })
     }
   }
   return results
@@ -196,7 +200,10 @@ export function registerSkillsHandlers(): void {
       properties: mode === 'dir' ? ['openDirectory'] : ['openFile'],
       filters: mode === 'file' ? [{ name: 'Skill', extensions: ['md'] }] : []
     })
-    return result.canceled ? null : result.filePaths[0]
+    if (result.canceled || !result.filePaths[0]) return null
+    const chosen = resolve(result.filePaths[0])
+    _dialogPaths.add(chosen)
+    return chosen
   })
 
   // List all installed skills

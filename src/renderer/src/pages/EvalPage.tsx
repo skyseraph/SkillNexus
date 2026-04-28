@@ -1068,9 +1068,9 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
   useEffect(() => {
     window.api.skills.getAll().then(setSkills)
     window.api.config.get().then((c) => {
-      setApiKeySet(c.providers.length > 0)
+      setApiKeySet((c.providers ?? []).length > 0)
       setTavilyKeySet(c.toolApiKeysSet?.tavily ?? false)
-    })
+    }).catch(() => setApiKeySet(false))
   }, [skillsRefreshKey])
 
   const refreshHistory = useCallback((page = 0) => {

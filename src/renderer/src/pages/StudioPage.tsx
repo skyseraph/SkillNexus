@@ -1256,7 +1256,7 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
   const cleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
-    window.api.config.get().then(c => setApiKeySet(c.providers.length > 0))
+    window.api.config.get().then(c => setApiKeySet((c.providers ?? []).length > 0)).catch(() => setApiKeySet(false))
     window.api.skills.getAll().then(skills => {
       setMySkills(skills)
       if (initialSkillId) {
