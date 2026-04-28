@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useT } from '../i18n'
-import type { JobEntry, EvolutionEngine, EvalResult } from '../../../shared/types'
+import type { JobEntry, EvolutionEngine, EvalResult, TestCase } from '../../../shared/types'
 import { exportEvalReport, exportEvoReport } from '../utils/report-export'
 
 interface TasksPageProps {
@@ -257,22 +257,124 @@ function EvoRow({ job, selected, active, onSelect, onClick, onDelete, onNavigate
   )
 }
 
+// ── collapsible IO section ────────────────────────────────────────────────────
+function IOSection({ label, content, defaultOpen = false, badge }: {
+  label: string; content: string | null | undefined; defaultOpen?: boolean; badge?: string
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  const safe = content ?? ''
+  const charCount = safe.length
+  const lines = safe.split('\n').length
+  return (
+    <div className="io-section">
+      <button className="io-section-toggle" onClick={() => setOpen(v => !v)}>
+        <span className="io-section-chevron">{open ? '▾' : '▸'}</span>
+        <span className="io-section-label">{label}</span>
+        {badge && <span className="io-section-badge">{badge}</span>}
+        <span className="io-section-meta">{lines} 行 · {charCount} 字符</span>
+      </button>
+      {open && <pre className="io-section-pre">{safe}</pre>}
+    </div>
+  )
+}
+
+// ── agent trace view ──────────────────────────────────────────────────────────
+interface AgentTraceStep {
+  turn: number
+  toolName: string
+  toolInput: Record<string, unknown>
+  toolOutput: string
+  toolError?: string
+}
+
+function TraceView({ trace }: { trace: AgentTraceStep[] }) {
+  const [openSteps, setOpenSteps] = useState<Set<number>>(new Set([0]))
+  const toggle = (i: number) => setOpenSteps(prev => {
+    const next = new Set(prev)
+    next.has(i) ? next.delete(i) : next.add(i)
+    return next
+  })
+  if (trace.length === 0) return <div className="trace-empty">无工具调用</div>
+  return (
+    <div className="trace-list">
+      {trace.map((step, i) => {
+        const isOpen = openSteps.has(i)
+        const hasError = !!step.toolError
+        return (
+          <div key={i} className={`trace-step ${hasError ? 'trace-step-error' : ''}`}>
+            <button className="trace-step-header" onClick={() => toggle(i)}>
+              <span className="trace-step-chevron">{isOpen ? '▾' : '▸'}</span>
+              <span className="trace-step-num">Turn {step.turn}</span>
+              <span className={`trace-tool-name ${hasError ? 'error' : ''}`}>{step.toolName}</span>
+              {hasError && <span className="trace-error-badge">Error</span>}
+              <span className="io-section-meta" style={{ marginLeft: 'auto' }}>
+                {JSON.stringify(step.toolInput ?? {}).length} B in · {(step.toolOutput ?? '').length} B out
+              </span>
+            </button>
+            {isOpen && (
+              <div className="trace-step-body">
+                <div className="trace-sub-label">Input</div>
+                <pre className="trace-pre">{JSON.stringify(step.toolInput, null, 2)}</pre>
+                <div className="trace-sub-label" style={{ marginTop: 6 }}>
+                  {hasError ? 'Error' : 'Output'}
+                </div>
+                <pre className={`trace-pre ${hasError ? 'trace-pre-error' : ''}`}>
+                  {hasError ? (step.toolError ?? '') : (step.toolOutput ?? '')}
+                </pre>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── eval case detail modal ────────────────────────────────────────────────────
 function EvalCaseModal({ result, onClose }: { result: EvalResult; onClose: () => void }) {
   const dims = DIM_ORDER.filter(d => d in result.scores)
   const caseScores: Record<string, number> = {}
   dims.forEach(d => { caseScores[d] = result.scores[d]?.score ?? 0 })
 
+  // Detect Agent output: { answer, trace }
+  const agentOutput = (() => {
+    try {
+      const parsed = JSON.parse(result.output) as { answer?: string; trace?: AgentTraceStep[] }
+      if (parsed && typeof parsed.answer === 'string' && Array.isArray(parsed.trace)) return parsed
+    } catch { /* not agent output */ }
+    return null
+  })()
+
+  const isAgent = !!agentOutput
+  const displayOutput = isAgent ? agentOutput!.answer : result.output
+  const trace = isAgent ? agentOutput!.trace : null
+
+  // Fetch original test case
+  const [testCase, setTestCase] = useState<TestCase | null>(null)
+  useEffect(() => {
+    if (!result.testCaseId) return
+    const fn = window.api.testcases.getById
+    if (typeof fn !== 'function') return
+    fn(result.testCaseId).then(tc => setTestCase(tc)).catch(() => {})
+  }, [result.testCaseId])
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box modal-box-wide" onClick={e => e.stopPropagation()}>
+      <div className="modal-box modal-box-wide eval-case-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <span className="modal-title">{result.testCaseName ?? result.id.slice(-8)}</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {result.status === 'success' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <span className="modal-title">{result.testCaseName ?? result.id.slice(-8)}</span>
+            {isAgent && <span className="io-section-badge" style={{ flexShrink: 0 }}>Agent</span>}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            {result.status === 'success' && result.totalScore != null && (
               <span style={{ fontSize: 13, fontWeight: 700, color: result.totalScore >= 7 ? 'var(--success)' : result.totalScore >= 4 ? 'var(--warning)' : 'var(--danger)' }}>
                 {result.totalScore.toFixed(1)} / 10
               </span>
+            )}
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{result.model}</span>
+            {result.durationMs && (
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{(result.durationMs / 1000).toFixed(1)}s</span>
             )}
             <button className="modal-close" onClick={onClose}>✕</button>
           </div>
@@ -281,8 +383,8 @@ function EvalCaseModal({ result, onClose }: { result: EvalResult; onClose: () =>
         {result.status === 'error' ? (
           <pre className="evo-expand-content" style={{ color: 'var(--danger)' }}>{result.output}</pre>
         ) : (
-          <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* Radar + bars side by side */}
+          <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Radar + dimension bars */}
             <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
               <RadarChart scores={caseScores} size={220} />
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -294,15 +396,15 @@ function EvalCaseModal({ result, onClose }: { result: EvalResult; onClose: () =>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ width: 110, fontSize: 12, fontWeight: 600, color, flexShrink: 0 }}>{DIM_LABELS_STATIC[d] ?? d}</span>
                         <div style={{ flex: 1, height: 6, background: 'var(--surface2)', borderRadius: 3, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${(s.score / 10) * 100}%`, background: color, borderRadius: 3 }} />
+                          <div style={{ height: '100%', width: `${((s?.score ?? 0) / 10) * 100}%`, background: color, borderRadius: 3 }} />
                         </div>
-                        <span style={{ width: 28, fontSize: 12, fontWeight: 700, color, textAlign: 'right' }}>{s.score.toFixed(1)}</span>
+                        <span style={{ width: 28, fontSize: 12, fontWeight: 700, color, textAlign: 'right' }}>{(s?.score ?? 0).toFixed(1)}</span>
                       </div>
-                      {(s.details || s.violations?.length > 0) && (
+                      {(s?.details || (s?.violations?.length ?? 0) > 0) && (
                         <div className="detail-score-extra" style={{ paddingLeft: 118, marginTop: 2 }}>
-                          {s.details && <span className="detail-score-rationale">{s.details}</span>}
-                          {s.violations?.length > 0 && (
-                            <span className="detail-score-violations">扣分: {s.violations.join('; ')}</span>
+                          {s?.details && <span className="detail-score-rationale">{s.details}</span>}
+                          {(s?.violations?.length ?? 0) > 0 && (
+                            <span className="detail-score-violations">扣分: {s!.violations.join('; ')}</span>
                           )}
                         </div>
                       )}
@@ -312,15 +414,50 @@ function EvalCaseModal({ result, onClose }: { result: EvalResult; onClose: () =>
               </div>
             </div>
 
-            {/* Input / Output */}
-            <div className="detail-section">
-              <div className="detail-section-label">输入</div>
-              <pre className="detail-code">{result.inputPrompt}</pre>
+            {/* Original test case */}
+            {testCase && (
+              <div className="io-section">
+                <button className="io-section-toggle" onClick={() => {}}>
+                  <span className="io-section-chevron" style={{ visibility: 'hidden' }}>▸</span>
+                  <span className="io-section-label">原始用例</span>
+                  <span className="io-section-badge">{testCase.judgeType}</span>
+                  <span className="io-section-meta" style={{ marginLeft: 'auto' }}>{testCase.name}</span>
+                </button>
+                <div className="tc-detail-body">
+                  <div className="tc-detail-row">
+                    <span className="tc-detail-key">Input</span>
+                    <pre className="tc-detail-val">{testCase.input}</pre>
+                  </div>
+                  {testCase.judgeParam && (
+                    <div className="tc-detail-row">
+                      <span className="tc-detail-key">Judge Param</span>
+                      <pre className="tc-detail-val">{testCase.judgeParam}</pre>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* I/O */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <IOSection label="模型输入" content={result.inputPrompt} />
+              <IOSection label={isAgent ? '模型输出 (answer)' : '模型输出'} content={displayOutput} defaultOpen />
             </div>
-            <div className="detail-section">
-              <div className="detail-section-label">输出</div>
-              <pre className="detail-code">{result.output}</pre>
-            </div>
+
+            {/* Agent Trace */}
+            {trace && (
+              <div className="io-section">
+                <button className="io-section-toggle" onClick={() => {}}>
+                  <span className="io-section-chevron" style={{ visibility: 'hidden' }}>▸</span>
+                  <span className="io-section-label">工具调用 Trace</span>
+                  <span className="io-section-badge">{trace.length} 步</span>
+                  <span className="io-section-meta" style={{ marginLeft: 'auto' }}>展开各步骤查看详情</span>
+                </button>
+                <div style={{ padding: '8px 12px' }}>
+                  <TraceView trace={trace} />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -421,8 +558,8 @@ function EvalDetailPanel({ job, onClose, onNavigate }: {
                   <div className="job-case-header">
                     <span className={`status-dot ${r.status}`} />
                     <span className="job-case-name">{r.testCaseName ?? r.id.slice(-8)}</span>
-                    <span className="job-case-score" style={{ color: r.totalScore >= 7 ? 'var(--success)' : r.totalScore >= 4 ? 'var(--warning)' : 'var(--danger)' }}>
-                      {r.status === 'error' ? t('common.error') : r.totalScore.toFixed(1)}
+                    <span className="job-case-score" style={{ color: (r.totalScore ?? 0) >= 7 ? 'var(--success)' : (r.totalScore ?? 0) >= 4 ? 'var(--warning)' : 'var(--danger)' }}>
+                      {r.status === 'error' ? t('common.error') : (r.totalScore ?? 0).toFixed(1)}
                     </span>
                     <span className="job-case-chevron">▸</span>
                   </div>
@@ -612,8 +749,9 @@ function EvoDetailPanel({ job, onClose, onNavigate }: {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {dims.map(d => {
                       const evolved = latestEval!.scores[d]
+                      if (!evolved) return null
                       const parent = parentEval?.scores[d]
-                      const delta = parent != null ? evolved.score - parent.score : null
+                      const delta = parent != null ? (evolved.score ?? 0) - (parent.score ?? 0) : null
                       const color = DIM_COLORS[d] ?? '#888'
                       return (
                         <div key={d}>
@@ -623,16 +761,16 @@ function EvoDetailPanel({ job, onClose, onNavigate }: {
                               {parent != null && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                   <div style={{ flex: 1, height: 6, background: 'var(--surface2)', borderRadius: 3, overflow: 'hidden' }}>
-                                    <div style={{ height: '100%', width: `${(parent.score / 10) * 100}%`, background: 'var(--border)', borderRadius: 3 }} />
+                                    <div style={{ height: '100%', width: `${((parent.score ?? 0) / 10) * 100}%`, background: 'var(--border)', borderRadius: 3 }} />
                                   </div>
-                                  <span style={{ width: 28, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>{parent.score.toFixed(1)}</span>
+                                  <span style={{ width: 28, fontSize: 11, color: 'var(--text-muted)', textAlign: 'right' }}>{(parent.score ?? 0).toFixed(1)}</span>
                                 </div>
                               )}
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <div style={{ flex: 1, height: 6, background: 'var(--surface2)', borderRadius: 3, overflow: 'hidden' }}>
-                                  <div style={{ height: '100%', width: `${(evolved.score / 10) * 100}%`, background: color, borderRadius: 3 }} />
+                                  <div style={{ height: '100%', width: `${((evolved.score ?? 0) / 10) * 100}%`, background: color, borderRadius: 3 }} />
                                 </div>
-                                <span style={{ width: 28, fontSize: 12, fontWeight: 700, color, textAlign: 'right' }}>{evolved.score.toFixed(1)}</span>
+                                <span style={{ width: 28, fontSize: 12, fontWeight: 700, color, textAlign: 'right' }}>{(evolved.score ?? 0).toFixed(1)}</span>
                                 {delta != null && (
                                   <span className={`evo-score-delta ${delta > 0 ? 'pos' : delta < 0 ? 'neg' : 'neu'}`}>
                                     {delta > 0 ? '+' : ''}{delta.toFixed(1)}
@@ -641,11 +779,11 @@ function EvoDetailPanel({ job, onClose, onNavigate }: {
                               </div>
                             </div>
                           </div>
-                          {(evolved.details || evolved.violations?.length > 0) && (
+                          {(evolved.details || (evolved.violations?.length ?? 0) > 0) && (
                             <div className="detail-score-extra" style={{ paddingLeft: 120, marginTop: 3 }}>
                               {evolved.details && <span className="detail-score-rationale">{evolved.details}</span>}
-                              {evolved.violations?.length > 0 && (
-                                <span className="detail-score-violations">扣分: {evolved.violations.join('; ')}</span>
+                              {(evolved.violations?.length ?? 0) > 0 && (
+                                <span className="detail-score-violations">扣分: {evolved.violations!.join('; ')}</span>
                               )}
                             </div>
                           )}
@@ -1006,11 +1144,45 @@ export default function TasksPage({ onNavigate, initialJobId, toast }: TasksPage
         .diff-text { white-space: pre-wrap; word-break: break-all; flex: 1; }
 
         /* Eval expand modal */
+        .eval-case-modal { height: min(85vh, 760px); }
         .eval-expand-modal { height: min(85vh, 760px); }
         .eval-expand-body { display: flex; flex: 1; overflow: hidden; gap: 0; }
         .eval-expand-scores { width: 260px; flex-shrink: 0; padding: 16px 18px; border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
         .eval-expand-io { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
         .eval-expand-pre { font-family: 'Courier New', monospace; font-size: 11px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; color: var(--text); background: var(--bg); border-radius: 4px; padding: 10px; margin: 0; flex: 1; overflow-y: auto; min-height: 80px; }
+
+        /* IO collapsible sections */
+        .io-section { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+        .io-section-toggle { width: 100%; display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--surface2); border: none; cursor: pointer; text-align: left; transition: background var(--transition); }
+        .io-section-toggle:hover { background: rgba(108,99,255,0.08); }
+        .io-section-chevron { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+        .io-section-label { font-size: 12px; font-weight: 600; color: var(--text); }
+        .io-section-badge { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px; background: rgba(108,99,255,0.15); color: var(--accent); flex-shrink: 0; }
+        .io-section-meta { margin-left: auto; font-size: 10px; color: var(--text-muted); }
+        .io-section-pre { font-family: 'Courier New', monospace; font-size: 11px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; color: var(--text); background: var(--bg); padding: 10px 12px; margin: 0; max-height: 360px; overflow-y: auto; border-top: 1px solid var(--border); }
+
+        /* Original test case block */
+        .tc-detail-body { background: var(--bg); border-top: 1px solid var(--border); padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+        .tc-detail-row { display: flex; flex-direction: column; gap: 2px; }
+        .tc-detail-key { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+        .tc-detail-val { font-family: 'Courier New', monospace; font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; color: var(--text); background: var(--surface2); border-radius: 4px; padding: 5px 8px; margin: 0; max-height: 120px; overflow-y: auto; }
+
+        /* Agent Trace */
+        .trace-list { display: flex; flex-direction: column; gap: 4px; }
+        .trace-empty { font-size: 12px; color: var(--text-muted); padding: 8px 0; }
+        .trace-step { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+        .trace-step-error { border-color: rgba(239,68,68,0.4); }
+        .trace-step-header { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface2); border: none; cursor: pointer; text-align: left; transition: background var(--transition); }
+        .trace-step-header:hover { background: rgba(108,99,255,0.06); }
+        .trace-step-chevron { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+        .trace-step-num { font-size: 10px; color: var(--text-muted); flex-shrink: 0; min-width: 40px; }
+        .trace-tool-name { font-size: 12px; font-weight: 600; color: var(--accent); font-family: 'Courier New', monospace; }
+        .trace-tool-name.error { color: var(--danger); }
+        .trace-error-badge { font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 3px; background: rgba(239,68,68,0.15); color: var(--danger); flex-shrink: 0; }
+        .trace-step-body { background: var(--bg); border-top: 1px solid var(--border); padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+        .trace-sub-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+        .trace-pre { font-family: 'Courier New', monospace; font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; color: var(--text); background: var(--surface2); border-radius: 4px; padding: 5px 8px; margin: 0; max-height: 200px; overflow-y: auto; }
+        .trace-pre-error { color: var(--danger); background: rgba(239,68,68,0.06); }
 
         /* Evo expand meta bar */
         .evo-expand-meta { display: flex; align-items: center; gap: 20px; padding: 10px 20px; background: var(--surface2); border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }

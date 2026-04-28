@@ -54,6 +54,7 @@ type EditForm = {
   baseUrl: string
   model: string
   apiKey: string
+  apiKeyPlaceholder: string
   category: LLMProvider['category']
   websiteUrl: string
   isPreset: boolean
@@ -61,7 +62,7 @@ type EditForm = {
 }
 
 const EMPTY_FORM: EditForm = {
-  id: '', name: '', baseUrl: '', model: '', apiKey: '',
+  id: '', name: '', baseUrl: '', model: '', apiKey: '', apiKeyPlaceholder: 'sk-...',
   category: 'custom', websiteUrl: '', isPreset: false, presetId: ''
 }
 
@@ -130,8 +131,10 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
 
   const openEdit = (p: PublicProvider) => {
     setForm({ id: p.id, name: p.name, baseUrl: p.baseUrl, model: p.model, apiKey: '',
+      apiKeyPlaceholder: LLM_PROVIDER_PRESETS.find(x => x.id === p.presetId)?.keyPlaceholder ?? 'sk-...',
       category: p.category, websiteUrl: p.websiteUrl ?? '', isPreset: !!p.isPreset, presetId: p.presetId ?? '' })
     setEditingId(p.id)
+    setTestResults({})
     setFormError('')
     setShowPresets(false)
     setShowForm(true)
@@ -141,12 +144,15 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
     const id = slugify(preset.id) + '-' + Date.now().toString(36).slice(-4)
     setForm({
       id, name: preset.name, baseUrl: preset.baseUrl, model: preset.defaultModel,
-      apiKey: '', category: preset.category,
+      apiKey: '', apiKeyPlaceholder: preset.keyPlaceholder ?? 'sk-...',
+      category: preset.category,
       websiteUrl: preset.websiteUrl ?? '', isPreset: true, presetId: preset.id
     })
     setEditingId(null)
+    setTestResults({})
     setFormError('')
     setShowPresets(false)
+    setShowForm(true)
   }
 
   const handleSave = async () => {
@@ -287,7 +293,7 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
         <div className="section-head">
           <h2>LLM Providers</h2>
           <div className="section-actions">
-            <button className="btn btn-ghost btn-sm" onClick={() => { setShowPresets(v => !v); setShowForm(false) }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => { setShowPresets(v => !v); setShowForm(false); setFormError('') }}>
               + From Preset
             </button>
             <button className="btn btn-primary btn-sm" onClick={openNew}>+ Custom</button>
@@ -392,7 +398,7 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
                 <label>API Key {editingId && <span className="hint">(leave blank to keep existing)</span>}</label>
                 <input type="password" autoComplete="off"
                   value={form.apiKey} onChange={e => setForm(f => ({ ...f, apiKey: e.target.value }))}
-                  placeholder={editingId && config?.providers.find(p => p.id === editingId)?.apiKeySet ? '••••••••  (saved)' : 'sk-...'} />
+                  placeholder={editingId && config?.providers.find(p => p.id === editingId)?.apiKeySet ? '••••••••  (saved)' : form.apiKeyPlaceholder} />
               </div>
             </div>
             {formError && <p className="form-error">{formError}</p>}

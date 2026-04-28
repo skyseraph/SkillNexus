@@ -91,6 +91,8 @@ const api = {
     }
   },
   testcases: {
+    getById: (id: string): Promise<TestCase | null> =>
+      ipcRenderer.invoke('testcases:getById', id),
     getBySkill: (skillId: string): Promise<TestCase[]> =>
       ipcRenderer.invoke('testcases:getBySkill', skillId),
     create: (tc: Omit<TestCase, 'id' | 'createdAt'>): Promise<TestCase> =>

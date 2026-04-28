@@ -420,6 +420,7 @@ export interface IpcChannels {
   'eval:startThreeCondition': (skillId: string, testCaseIds: string[]) => Promise<ThreeConditionResult>
   'studio:generate': (prompt: string) => Promise<string>
   'studio:install': (content: string, name: string) => Promise<Skill>
+  'testcases:getById': (id: string) => Promise<TestCase | null>
   'testcases:getBySkill': (skillId: string) => Promise<TestCase[]>
   'testcases:create': (tc: Omit<TestCase, 'id' | 'createdAt'>) => Promise<TestCase>
   'testcases:delete': (id: string) => Promise<void>

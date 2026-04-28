@@ -29,6 +29,13 @@ Rules:
 - Output ONLY the NDJSON lines, no other text`
 
 export function registerTestCasesHandlers(): void {
+  ipcMain.handle('testcases:getById', (_event, id: string) => {
+    const db = getDb()
+    const r = db.prepare('SELECT * FROM test_cases WHERE id = ?').get(id) as Record<string, unknown> | undefined
+    if (!r) return null
+    return { id: r.id, skillId: r.skill_id, name: r.name, input: r.input, judgeType: r.judge_type, judgeParam: r.judge_param, createdAt: r.created_at }
+  })
+
   ipcMain.handle('testcases:getBySkill', (_event, skillId: string) => {
     const db = getDb()
     const rows = db
