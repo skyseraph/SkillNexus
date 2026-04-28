@@ -4,7 +4,7 @@
 
 # SkillNexus
 
-**The Full-Lifecycle AI Skill Studio**
+**Skill Studio：The Full-Lifecycle AI Skill Studio**
 
 *Make AI skills measurable, manageable, and evolvable*
 
@@ -20,9 +20,9 @@
 
 ---
 
-## What is SkillNexus?
+## What is SkillNexus[Skill Studio]?
 
-**SkillNexus** is a full-lifecycle studio for AI Skills — from generation to evaluation to evolution. You're not just writing prompts; you're systematically cultivating and growing AI capabilities.
+**SkillNexus** is a full-lifecycle studio for AI Skills — from generation to evaluation to evolution. You're not just writing prompts／skill; you're systematically cultivating and growing AI capabilities.
 
 ```
 Home (Manage) 
