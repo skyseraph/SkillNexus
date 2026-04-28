@@ -22,7 +22,7 @@
 
 ## 什么是 SkillNexus？
 
-**SkillNexus** 是 AI Skill 的全生命周期创造平台——从生成到评测到进化，系统地培育和成长 AI 能力，而不只是写提示词。
+**SkillNexus** 是 Skill 的全生命周期创造平台——从生成到评测到进化，系统地培育和成长 AI 能力。
 
 ```
 Home（管理）
