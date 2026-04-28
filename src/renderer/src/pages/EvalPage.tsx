@@ -986,7 +986,7 @@ function ByCasePanel({ caseMap }: { caseMap: Map<string, EvalResult[]> }) {
           const sparkScores = rows.map(r => r.totalScore)
 
           return (
-            <div key={name} style={{ borderRadius: 6, overflow: 'hidden', background: 'var(--surface2)' }}>
+            <div key={name} style={{ borderRadius: 6, background: 'var(--surface2)' }}>
               <div className="bycase-row" onClick={() => setExpandedCase(expanded ? null : name)}>
                 <span className={`bycase-name ${isUnnamed ? 'unnamed' : ''}`}>{name}</span>
                 <span className="bycase-count">{rows.length} 次</span>
@@ -1670,8 +1670,8 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
         .stat-chip { font-size: 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; }
 
         /* TC list */
-        .tc-list { display: flex; flex-direction: column; gap: 4px; max-height: 360px; overflow-y: auto; margin-bottom: 8px; }
-        .tc-card { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+        .tc-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+        .tc-card { border: 1px solid var(--border); border-radius: var(--radius); }
         .tc-card.selected { border-color: rgba(108,99,255,0.4); background: rgba(108,99,255,0.04); }
         .tc-card-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--surface2); transition: background var(--transition); }
         .tc-card-header:hover { background: rgba(108,99,255,0.06); }
@@ -1802,7 +1802,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
 
         /* History list */
         .history-list { display: flex; flex-direction: column; gap: 4px; }
-        .result-row { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+        .result-row { border: 1px solid var(--border); border-radius: var(--radius); }
         .result-row-open { border-color: var(--accent); }
         .result-row-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--surface2); transition: background var(--transition); }
         .result-row-header:hover { background: rgba(108,99,255,0.06); }
