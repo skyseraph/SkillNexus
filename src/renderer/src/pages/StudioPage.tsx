@@ -1044,7 +1044,7 @@ function QuickTestPane({ installedSkill }: { installedSkill: Skill | null }) {
           <div className="studio-v2-qt-files">
             {filePaths.map(p => (
               <button key={p} className="studio-v2-qt-file-btn" onClick={() => window.api.shell.openPath(p)} title={p}>
-                📂 打开 {p.split('/').pop()}
+                📂 打开 {p.replace(/\\/g, '/').split('/').pop()}
               </button>
             ))}
           </div>

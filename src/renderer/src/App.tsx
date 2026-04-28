@@ -63,7 +63,7 @@ export default function App() {
   }
 
   const checkApiKey = () => {
-    window.api.config.get().then((c) => setApiKeySet(c.providers.length > 0))
+    window.api.config.get().then((c) => setApiKeySet((c.providers ?? []).length > 0)).catch(() => setApiKeySet(false))
   }
 
   useEffect(() => { checkApiKey() }, [])

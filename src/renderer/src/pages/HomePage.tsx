@@ -169,7 +169,7 @@ function ExportTab({ skill, toast }: { skill: Skill; toast?: (msg: string, type?
   const [targets, setTargets] = useState<ToolTarget[]>([])
 
   useEffect(() => {
-    window.api.skills.getToolTargets().then(setTargets)
+    window.api.skills.getToolTargets().then(setTargets).catch(() => {})
   }, [])
 
   const doExport = async (toolId: string, mode: 'copy' | 'symlink') => {
@@ -624,7 +624,7 @@ function QuickExportBtn({ skill, toast }: { skill: Skill; toast?: (msg: string, 
 
   useEffect(() => {
     if (!open) return
-    window.api.skills.getToolTargets().then(setTargets)
+    window.api.skills.getToolTargets().then(setTargets).catch(() => {})
   }, [open])
 
   useEffect(() => {
@@ -972,7 +972,9 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
   }, [loading, toast])
 
   useEffect(() => {
-    window.api.skills.getAll().then(data => { setSkills(data); setLoading(false) })
+    window.api.skills.getAll()
+      .then(data => { setSkills(data); setLoading(false) })
+      .catch(() => setLoading(false))
   }, [])
 
   const handleInstallFile = async () => {
