@@ -561,14 +561,15 @@ function nextLabel(current: string | null): string | null {
   return LABEL_OPTIONS[(idx + 1) % LABEL_OPTIONS.length].value
 }
 
-function InputAreaExtract({ streaming, apiKeySet, skills, onExtract }: {
+function InputAreaExtract({ streaming, apiKeySet, skills, onExtract, defaultSkillId }: {
   streaming: boolean; apiKeySet: boolean | null
   skills: Skill[]
   onExtract: (conversation: string, sourceSkillId?: string, sourceSkillContent?: string) => void
+  defaultSkillId?: string
 }) {
   const t = useT()
   const [limit, setLimit] = useState(10)
-  const [selectedSkillId, setSelectedSkillId] = useState('')
+  const [selectedSkillId, setSelectedSkillId] = useState(defaultSkillId ?? '')
   const [activeLabels, setActiveLabels] = useState<Set<string>>(new Set())
   const [records, setRecords] = useState<EvalRecord[]>([])
   const [loading, setLoading] = useState(false)
@@ -586,7 +587,7 @@ function InputAreaExtract({ streaming, apiKeySet, skills, onExtract }: {
     }
   }, [])
 
-  useEffect(() => { loadRecords(10, '', new Set()) }, [])
+  useEffect(() => { loadRecords(10, defaultSkillId ?? '', new Set()) }, [])
 
   const handleSkillChange = (skillId: string) => {
     setSelectedSkillId(skillId)
@@ -963,6 +964,20 @@ function QuickTestPane({ installedSkill }: { installedSkill: Skill | null }) {
   const [saved, setSaved] = useState(false)
   const [tempTcId, setTempTcId] = useState<string | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
+  const tempTcIdRef = useRef<string | null>(null)
+
+  // Keep ref in sync so the cleanup effect can access the latest value
+  useEffect(() => { tempTcIdRef.current = tempTcId }, [tempTcId])
+
+  // Delete unsaved temp TestCase on unmount (S3)
+  useEffect(() => {
+    return () => {
+      cleanupRef.current?.()
+      if (tempTcIdRef.current) {
+        window.api.testcases.delete(tempTcIdRef.current).catch(() => {})
+      }
+    }
+  }, [])
 
   const handleRun = async () => {
     if (!installedSkill || !input.trim()) return
@@ -1005,7 +1020,7 @@ function QuickTestPane({ installedSkill }: { installedSkill: Skill | null }) {
     }
   }
 
-  const handleSave = () => setSaved(true)
+  const handleSave = () => { setSaved(true); setTempTcId(null) }
 
   const handleDiscard = async () => {
     if (tempTcId) {
@@ -1529,6 +1544,7 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
               streaming={streaming} apiKeySet={apiKeySet}
               skills={mySkills}
               onExtract={handleExtract}
+              defaultSkillId={installedSkill?.id}
             />
           )}
           {mode === 'agent' && (
