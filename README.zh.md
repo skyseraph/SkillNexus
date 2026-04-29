@@ -4,7 +4,7 @@
 
 # SkillNexus
 
-**AI Skill 全生命周期创造平台**
+**Skill Studio：AI Skill 全生命周期创造平台**
 
 *让Skill可生成、可量化、可管理、可成长*
 
@@ -20,9 +20,9 @@
 
 ---
 
-## 什么是 SkillNexus？
+## 什么是 SkillNexus[Skill Studio]？
 
-**SkillNexus** 是 AI Skill 的全生命周期创造平台——从生成到评测到进化，系统地培育和成长 AI 能力，而不只是写提示词。
+**SkillNexus** 是 Skill 的全生命周期创造平台——从生成到评测到进化，系统地培育和成长 AI 能力。
 
 ```
 Home（管理）
