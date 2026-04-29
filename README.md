@@ -226,20 +226,22 @@ Two groups: Task Quality (G-series) and Skill Quality (S-series):
 git clone https://github.com/skyseraph/SkillNexus.git
 cd SkillNexus
 npm install
-npm run rebuild   # rebuild native modules for Electron
-```
-
-### Dev
-
-```bash
 npm run dev
 ```
+
+`npm install` automatically runs `postinstall`, which extracts the correct `better-sqlite3` native binary for your platform and Electron version. No separate rebuild step needed.
 
 ### Build
 
 ```bash
 npm run build
 ```
+
+### Windows (corporate proxy)
+
+If `npm install` silently skips `better-sqlite3` due to a proxy, the app still starts correctly — `postinstall` copies the vendored JS wrapper and selects the right prebuilt binary at runtime based on your actual Electron version (via `process.versions.modules`).
+
+If you see a `NODE_MODULE_VERSION` mismatch error, your Electron version may not have a prebuilt in `prebuilds/`. Check [doc/windows_install.md](doc/windows_install.md) for the full troubleshooting guide.
 
 ### Test
 

@@ -14,9 +14,9 @@
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test e2e/smoke",
     "test:e2e:security": "playwright test e2e/security",
-    "dist:mac": "electron-vite build && electron-builder --mac",
-    "dist:win": "electron-vite build && electron-builder --win",
-    "dist:all": "electron-vite build && electron-builder --mac --win"
+    "dist:mac": "electron-vite build && node scripts/rebuild-sqlite.js && electron-builder --mac",
+    "dist:win": "electron-vite build && node scripts/rebuild-sqlite.js && electron-builder --win",
+    "dist:all": "electron-vite build && node scripts/rebuild-sqlite.js && electron-builder --mac --win"
   },
   "build": {
     "appId": "com.skillnexus.app",
