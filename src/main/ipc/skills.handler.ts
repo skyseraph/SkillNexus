@@ -556,9 +556,10 @@ export function registerSkillsHandlers(): void {
         cpSync(rootDir, destDir, { recursive: true })
       } else {
         // Symlink the whole directory
+        // On Windows, use 'junction' which doesn't require admin privileges
         try { unlinkSync(destDir) } catch { /* not found */ }
         if (existsSync(destDir)) rmSync(destDir, { recursive: true, force: true })
-        symlinkSync(rootDir, destDir)
+        symlinkSync(rootDir, destDir, platform() === 'win32' ? 'junction' : 'dir')
       }
     } else {
       // Single skill: export the .md file
@@ -571,7 +572,7 @@ export function registerSkillsHandlers(): void {
         writeFileSync(destPath, content, 'utf-8')
       } else {
         try { unlinkSync(destPath) } catch { /* not found */ }
-        symlinkSync(srcPath, destPath)
+        symlinkSync(srcPath, destPath, platform() === 'win32' ? 'file' : undefined)
       }
     }
   })

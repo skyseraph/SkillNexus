@@ -7,6 +7,7 @@ import type { EvalScore } from '../../shared/types'
 import yaml from 'js-yaml'
 import { TOOL_DEFS, executeTool } from './agent-tools'
 import { execSync } from 'child_process'
+import { platform } from 'os'
 
 // Lightweight concurrency limiter — avoids triggering provider rate limits
 // when all 8 judge dimensions fire in parallel across many test cases.
@@ -139,12 +140,15 @@ function grepScore(output: string, judgeParam: string): EvalScore {
 function commandScore(output: string, judgeParam: string): EvalScore {
   // judgeParam is a shell command; the output is passed via STDIN / $OUTPUT env var.
   // Exit code 0 → pass (score 10), non-zero → fail (score 0).
+  // On Windows, wrap in cmd /c to ensure shell built-ins work.
+  const cmd = platform() === 'win32' ? `cmd /c ${judgeParam}` : judgeParam
   try {
-    execSync(judgeParam, {
+    execSync(cmd, {
       input: output,
       env: { ...process.env, OUTPUT: output.slice(0, 4096) },
       timeout: 5000,
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: platform() !== 'win32'
     })
     return { score: 10, violations: [], details: 'command exited 0' }
   } catch (err) {
