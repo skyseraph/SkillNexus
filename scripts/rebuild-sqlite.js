@@ -3,11 +3,12 @@
  * Rebuild better-sqlite3 for Electron.
  *
  * Strategy:
- *   1. Copy the matching prebuilt tarball from repo's prebuilds/ into
- *      node_modules/better-sqlite3/prebuilds/ so prebuild-install finds it
- *      locally — no network access or build tools required.
- *   2. Run prebuild-install (picks up the local file).
- *   3. If that fails, fall back to electron-rebuild (requires build tools).
+ *   1. Find the matching prebuilt tarball in repo's prebuilds/ directory.
+ *   2. Extract it directly into node_modules/better-sqlite3/ using the system
+ *      tar command (built into Windows 10+, macOS, Linux) — zero network
+ *      access, zero build tools required.
+ *   3. If no bundled tarball matches (e.g. new Electron version), fall back to
+ *      electron-rebuild which compiles from source.
  */
 
 const { execSync } = require('child_process')
@@ -53,38 +54,32 @@ const arch = process.arch           // x64 | arm64
 
 console.log(`[rebuild-sqlite] Electron ${electronVersion} (ABI v${abi ?? '?'}) — ${platform}-${arch}`)
 
-// Step 1: seed node_modules/better-sqlite3/prebuilds/ from our bundled tarballs.
+// Step 1: extract bundled tarball directly — no network, no build tools.
 if (abi) {
   const tarName = `better-sqlite3-v${sqliteVersion}-electron-v${abi}-${platform}-${arch}.tar.gz`
   const srcTar = path.join(root, 'prebuilds', tarName)
-  const destDir = path.join(sqliteDir, 'prebuilds')
-  const destTar = path.join(destDir, tarName)
 
   if (fs.existsSync(srcTar)) {
-    fs.mkdirSync(destDir, { recursive: true })
-    fs.copyFileSync(srcTar, destTar)
-    console.log(`[rebuild-sqlite] seeded local prebuilt: ${tarName}`)
+    // Ensure build/Release dir exists so tar can write into it.
+    fs.mkdirSync(path.join(sqliteDir, 'build', 'Release'), { recursive: true })
+
+    // tar is available on Windows 10+, macOS, and Linux.
+    const tarCmd = `tar -xzf "${srcTar}" -C "${sqliteDir}"`
+    console.log(`[rebuild-sqlite] extracting ${tarName}…`)
+    try {
+      execSync(tarCmd, { stdio: 'inherit' })
+      console.log('[rebuild-sqlite] ✓ prebuilt binary extracted')
+      process.exit(0)
+    } catch (err) {
+      console.warn(`[rebuild-sqlite] tar extraction failed: ${err.message}`)
+    }
   } else {
-    console.warn(`[rebuild-sqlite] no bundled prebuilt for ${tarName} — will try network download`)
+    console.warn(`[rebuild-sqlite] no bundled prebuilt for ${tarName} — falling back to compile`)
   }
 }
 
-// Step 2: run prebuild-install (finds the local file or falls back to download).
-const prebuildBin = path.join(
-  root, 'node_modules', '.bin',
-  process.platform === 'win32' ? 'prebuild-install.cmd' : 'prebuild-install'
-)
-const prebuildCmd = `"${prebuildBin}" --runtime electron --target ${electronVersion} --tag-prefix v`
-
-try {
-  execSync(prebuildCmd, { cwd: sqliteDir, stdio: 'inherit' })
-  console.log('[rebuild-sqlite] ✓ prebuilt binary installed')
-  process.exit(0)
-} catch {
-  console.warn('[rebuild-sqlite] prebuild-install failed — falling back to electron-rebuild (requires build tools)')
-}
-
-// Step 3: compile from source as last resort.
+// Step 2: compile from source as last resort (requires build tools).
+console.warn('[rebuild-sqlite] falling back to electron-rebuild (requires Visual Studio / Xcode / build-essential)')
 const rebuildBin = path.join(
   root, 'node_modules', '.bin',
   process.platform === 'win32' ? 'electron-rebuild.cmd' : 'electron-rebuild'
