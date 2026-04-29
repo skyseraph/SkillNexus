@@ -74,8 +74,8 @@ export default function CompareMode({ skills, apiKeySet, onNavigate }: { skills:
       ])
       const poll = setInterval(async () => {
         const [hA, hB] = await Promise.all([
-          window.api.eval.history(skillAId),
-          window.api.eval.history(skillBId)
+          window.api.eval.history(skillAId, 200),
+          window.api.eval.history(skillBId, 200)
         ])
         const recent = Date.now() - 60_000
         const filtA = hA.items.filter(r => r.createdAt > recent)
