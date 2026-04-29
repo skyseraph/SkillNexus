@@ -18,17 +18,27 @@ function getNativeBindingPath(): string | undefined {
   if (!process.versions.electron) return undefined
 
   const key = `${process.platform}-${process.arch}`
-  const candidates = [
-    // dev: out/main/index.js → ../../.. → project root → resources/
-    join(__dirname, '..', '..', '..', 'resources', key, 'better_sqlite3.node'),
-    // packaged: app.getAppPath() is the asar root
+  const nmv = process.versions.modules  // actual NMV of the running Electron
+  const byNmv = `better_sqlite3_v${nmv}.node`
+
+  const roots: string[] = [
+    // dev: out/main/index.js → ../../.. → project root
+    join(__dirname, '..', '..', '..', 'resources', key),
   ]
   try {
-    candidates.push(join(app.getAppPath(), 'resources', key, 'better_sqlite3.node'))
+    roots.push(join(app.getAppPath(), 'resources', key))
   } catch {
     // not available in test environment
   }
-  return candidates.find(p => existsSync(p))
+
+  for (const dir of roots) {
+    // prefer NMV-specific binary, fall back to generic name
+    for (const name of [byNmv, 'better_sqlite3.node']) {
+      const p = join(dir, name)
+      if (existsSync(p)) return p
+    }
+  }
+  return undefined
 }
 
 let db: Database.Database | null = null

@@ -3,17 +3,15 @@
  * Rebuild better-sqlite3 for Electron.
  *
  * Strategy:
- *   1. Extract the matching prebuilt tarball from prebuilds/ and place the
- *      .node file at resources/{platform}-{arch}/better_sqlite3.node.
- *      db/index.ts passes this path via the nativeBinding option so
- *      node-gyp-build / bindings are never invoked at runtime.
+ *   1. Scan prebuilds/ for ALL tarballs matching the current platform/arch.
+ *      Extract each one as better_sqlite3_v{abi}.node so the app can pick
+ *      the right binary at runtime using process.versions.modules (NMV),
+ *      regardless of which Electron version is actually installed.
  *
  *   2. If better-sqlite3 is missing from node_modules (npm skipped it due to
  *      optionalDependency + corporate proxy failure), copy vendor/better-sqlite3
  *      into out/node_modules/better-sqlite3 so that the external
  *      require('better-sqlite3') in the built bundle resolves correctly.
- *      Node's module resolution walks: out/main/node_modules → out/node_modules
- *      → node_modules, so out/node_modules/ is sufficient.
  */
 
 const { execSync } = require('child_process')
@@ -22,27 +20,8 @@ const fs = require('fs')
 const os = require('os')
 
 const root = path.resolve(__dirname, '..')
-
-// ---------------------------------------------------------------------------
-// 1. Detect Electron + sqlite versions
-// ---------------------------------------------------------------------------
-
-let electronVersion = '31.7.7'
-try {
-  const distVersion = fs.readFileSync(
-    path.join(root, 'node_modules', 'electron', 'dist', 'version'), 'utf8'
-  ).trim()
-  if (distVersion) electronVersion = distVersion
-} catch {
-  try {
-    const electronPkg = JSON.parse(
-      fs.readFileSync(path.join(root, 'node_modules', 'electron', 'package.json'), 'utf8')
-    )
-    electronVersion = electronPkg.version
-  } catch {
-    // fall back to hardcoded default
-  }
-}
+const platform = process.platform  // win32 | darwin | linux
+const arch = process.arch           // x64 | arm64
 
 let sqliteVersion = '11.10.0'
 try {
@@ -54,60 +33,55 @@ try {
   // fall back to hardcoded default
 }
 
-// Electron ABI map — extend when upgrading Electron.
-const ELECTRON_ABI = { '30': '125', '31': '128', '32': '130', '33': '132', '34': '134' }
-const majorVersion = electronVersion.split('.')[0]
-const abi = ELECTRON_ABI[majorVersion]
-
-const platform = process.platform  // win32 | darwin | linux
-const arch = process.arch           // x64 | arm64
-
-console.log(`[rebuild-sqlite] Electron ${electronVersion} (ABI v${abi ?? '?'}) — ${platform}-${arch}`)
-console.log(`[rebuild-sqlite] sqlite version: ${sqliteVersion}`)
-
-if (!abi) {
-  console.error(`[rebuild-sqlite] ✗ unknown Electron major version: ${majorVersion}`)
-  console.error('[rebuild-sqlite] Add it to ELECTRON_ABI map in scripts/rebuild-sqlite.js')
-  process.exit(1)
-}
+console.log(`[rebuild-sqlite] platform: ${platform}-${arch}, sqlite: ${sqliteVersion}`)
 
 // ---------------------------------------------------------------------------
-// 2. Extract prebuilt binary → resources/{platform}-{arch}/better_sqlite3.node
+// 1. Extract ALL prebuilts for this platform/arch, named by ABI version
+//    e.g. better-sqlite3-v11.10.0-electron-v125-win32-x64.tar.gz
+//       → resources/win32-x64/better_sqlite3_v125.node
 // ---------------------------------------------------------------------------
 
-const tarName = `better-sqlite3-v${sqliteVersion}-electron-v${abi}-${platform}-${arch}.tar.gz`
-const srcTar = path.join(root, 'prebuilds', tarName)
-
-console.log(`[rebuild-sqlite] looking for tarball: ${tarName}`)
-
-if (!fs.existsSync(srcTar)) {
-  console.error(`[rebuild-sqlite] ✗ no bundled prebuilt found: prebuilds/${tarName}`)
-  console.error('[rebuild-sqlite] Add the tarball to the prebuilds/ directory.')
-  process.exit(1)
-}
-
+const prebuildsDir = path.join(root, 'prebuilds')
 const destDir = path.join(root, 'resources', `${platform}-${arch}`)
-const destFile = path.join(destDir, 'better_sqlite3.node')
+fs.mkdirSync(destDir, { recursive: true })
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'better-sqlite3-'))
-try {
-  execSync(`tar -xzf "${srcTar}" -C "${tmpDir}"`, { stdio: 'inherit' })
-  const extracted = path.join(tmpDir, 'build', 'Release', 'better_sqlite3.node')
-  if (!fs.existsSync(extracted)) {
-    throw new Error(`expected build/Release/better_sqlite3.node inside ${tarName}`)
-  }
-  fs.mkdirSync(destDir, { recursive: true })
-  fs.copyFileSync(extracted, destFile)
-  console.log(`[rebuild-sqlite] ✓ prebuilt binary installed → resources/${platform}-${arch}/better_sqlite3.node`)
-} catch (err) {
-  console.error(`[rebuild-sqlite] ✗ extraction failed: ${err.message}`)
+// Match tarballs for this platform/arch
+const tarPattern = new RegExp(
+  `^better-sqlite3-v[\\d.]+-electron-v(\\d+)-${platform}-${arch}\\.tar\\.gz$`
+)
+
+const tarballs = fs.readdirSync(prebuildsDir).filter(f => tarPattern.test(f))
+
+if (tarballs.length === 0) {
+  console.error(`[rebuild-sqlite] ✗ no prebuilts found in prebuilds/ for ${platform}-${arch}`)
   process.exit(1)
-} finally {
-  fs.rmSync(tmpDir, { recursive: true, force: true })
+}
+
+for (const tarFile of tarballs) {
+  const abiMatch = tarFile.match(tarPattern)
+  const abi = abiMatch[1]
+  const destFile = path.join(destDir, `better_sqlite3_v${abi}.node`)
+  const srcTar = path.join(prebuildsDir, tarFile)
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'better-sqlite3-'))
+  try {
+    execSync(`tar -xzf "${srcTar}" -C "${tmpDir}"`, { stdio: 'inherit' })
+    const extracted = path.join(tmpDir, 'build', 'Release', 'better_sqlite3.node')
+    if (!fs.existsSync(extracted)) {
+      throw new Error(`expected build/Release/better_sqlite3.node inside ${tarFile}`)
+    }
+    fs.copyFileSync(extracted, destFile)
+    console.log(`[rebuild-sqlite] ✓ ABI v${abi} → resources/${platform}-${arch}/better_sqlite3_v${abi}.node`)
+  } catch (err) {
+    console.error(`[rebuild-sqlite] ✗ extraction failed for ${tarFile}: ${err.message}`)
+    process.exit(1)
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  }
 }
 
 // ---------------------------------------------------------------------------
-// 3. Vendor copy: if better-sqlite3 is missing from node_modules, copy
+// 2. Vendor copy: if better-sqlite3 is missing from node_modules, copy
 //    vendor/better-sqlite3 into out/node_modules/better-sqlite3 so the
 //    external require('better-sqlite3') in the built bundle resolves.
 // ---------------------------------------------------------------------------
