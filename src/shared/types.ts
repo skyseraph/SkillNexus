@@ -445,6 +445,7 @@ export interface IpcChannels {
   'studio:similarSkills': (content: string) => Promise<Skill[]>
   'studio:searchGithub': (query: string) => Promise<GithubSkillResult[]>
   'studio:fetchGithubContent': (rawUrl: string) => Promise<string>
+  'studio:recentEvalHistory': (limit: number, skillId?: string, labels?: string[]) => Promise<Array<{ id: string; skillName: string; skillContent: string; inputPrompt: string; output: string; label: string | null; totalScore: number; createdAt: number }>>
   'config:get': () => Promise<AppConfigPublic>
   'config:set': (config: Partial<AppConfig>) => Promise<void>
   'config:test': (providerId: string) => Promise<{ ok: boolean; error?: string }>

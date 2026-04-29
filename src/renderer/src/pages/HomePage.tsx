@@ -186,7 +186,11 @@ function ExportTab({ skill, toast }: { skill: Skill; toast?: (msg: string, type?
     <div className="export-tab">
       <p className="export-desc">Sync this Skill to local AI tools. Copy creates a standalone file; Symlink keeps it in sync with edits.</p>
       <div className="export-list">
-        {targets.map(t => (
+        {targets.length === 0 ? (
+          <div className="export-empty">
+            No AI tools found. Enable tools in <strong>Settings → AI Tool Scan &amp; Export</strong> and make sure the tool is installed.
+          </div>
+        ) : targets.map(t => (
           <div key={t.id} className="export-row">
             <div className="export-tool-info">
               <span className={`tool-dot ${t.exists ? 'exists' : ''}`} />
@@ -567,6 +571,7 @@ function ScanModal({ onClose, onImport }: {
           ) : results.length === 0 ? (
             <div className="scan-empty">
               <p>No Skills found in local AI tool directories.</p>
+              <p className="scan-empty-hint">Make sure tools are enabled in <strong>Settings → AI Tool Scan &amp; Export</strong>, and that you have Skills saved in those directories.</p>
               <div className="scan-dirs">
                 {scannedDirs.map(d => (
                   <div key={d.dir} className={`scan-dir-row ${d.exists ? 'exists' : 'missing'}`}>
@@ -1317,6 +1322,7 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
         .tool-name { font-size: 13px; font-weight: 500; flex-shrink: 0; }
         .tool-dir { font-size: 11px; color: var(--text-muted); font-family: 'Courier New', monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .export-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+        .export-empty { padding: 24px 16px; text-align: center; color: var(--text-muted); font-size: 13px; line-height: 1.6; }
         .export-status { font-size: 11px; padding: 1px 6px; border-radius: 3px; }
         .export-status.ok { color: var(--success); background: rgba(74,222,128,0.1); }
         .export-status.err { color: var(--danger); background: rgba(239,68,68,0.1); }
@@ -1331,6 +1337,7 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
         .scan-loading { padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
         .scan-empty { padding: 16px 24px; color: var(--text-muted); font-size: 13px; }
         .scan-empty p { margin: 0 0 12px; text-align: center; }
+        .scan-empty-hint { color: var(--text-muted); font-size: 12px; }
         .scan-dirs { display: flex; flex-direction: column; gap: 4px; }
         .scan-dir-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--radius); background: var(--surface); font-size: 12px; }
         .scan-dir-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
