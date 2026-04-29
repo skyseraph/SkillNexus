@@ -89,25 +89,21 @@ if (!fs.existsSync(srcTar)) {
 const destDir = path.join(root, 'resources', `${platform}-${arch}`)
 const destFile = path.join(destDir, 'better_sqlite3.node')
 
-if (fs.existsSync(destFile)) {
-  console.log(`[rebuild-sqlite] ✓ already installed → resources/${platform}-${arch}/better_sqlite3.node`)
-} else {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'better-sqlite3-'))
-  try {
-    execSync(`tar -xzf "${srcTar}" -C "${tmpDir}"`, { stdio: 'inherit' })
-    const extracted = path.join(tmpDir, 'build', 'Release', 'better_sqlite3.node')
-    if (!fs.existsSync(extracted)) {
-      throw new Error(`expected build/Release/better_sqlite3.node inside ${tarName}`)
-    }
-    fs.mkdirSync(destDir, { recursive: true })
-    fs.copyFileSync(extracted, destFile)
-    console.log(`[rebuild-sqlite] ✓ prebuilt binary installed → resources/${platform}-${arch}/better_sqlite3.node`)
-  } catch (err) {
-    console.error(`[rebuild-sqlite] ✗ extraction failed: ${err.message}`)
-    process.exit(1)
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true })
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'better-sqlite3-'))
+try {
+  execSync(`tar -xzf "${srcTar}" -C "${tmpDir}"`, { stdio: 'inherit' })
+  const extracted = path.join(tmpDir, 'build', 'Release', 'better_sqlite3.node')
+  if (!fs.existsSync(extracted)) {
+    throw new Error(`expected build/Release/better_sqlite3.node inside ${tarName}`)
   }
+  fs.mkdirSync(destDir, { recursive: true })
+  fs.copyFileSync(extracted, destFile)
+  console.log(`[rebuild-sqlite] ✓ prebuilt binary installed → resources/${platform}-${arch}/better_sqlite3.node`)
+} catch (err) {
+  console.error(`[rebuild-sqlite] ✗ extraction failed: ${err.message}`)
+  process.exit(1)
+} finally {
+  fs.rmSync(tmpDir, { recursive: true, force: true })
 }
 
 // ---------------------------------------------------------------------------
