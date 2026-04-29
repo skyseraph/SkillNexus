@@ -3,10 +3,20 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin({ exclude: [] })],
+    build: {
+      rollupOptions: {
+        external: ['better-sqlite3', 'node-gyp-build']
+      }
+    }
   },
   preload: {
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin({ exclude: [] })],
+    build: {
+      rollupOptions: {
+        external: ['better-sqlite3', 'node-gyp-build']
+      }
+    }
   },
   renderer: {
     root: 'src/renderer',
