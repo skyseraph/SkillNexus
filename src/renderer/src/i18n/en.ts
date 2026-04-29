@@ -357,6 +357,7 @@ export const en: Translations = {
   'studio.disc.loading_id':         'Loading...',
   'studio.disc.source_label':       'Source',
   'studio.disc.rate_limit':         'GitHub search rate limit reached (10/min). Add a GitHub Token in Settings to increase the limit.',
+  'studio.disc.auth_failed':        'GitHub authentication failed. Check your GitHub Token in Settings.',
   'studio.pp.clarity':              'Clarity',
   'studio.pp.clarity_desc':         'Make instructions clearer and unambiguous',
   'studio.pp.specificity':          'Specificity',

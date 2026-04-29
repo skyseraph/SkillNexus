@@ -357,6 +357,7 @@ export const zh: Translations = {
   'studio.disc.loading_id':         '载入中...',
   'studio.disc.source_label':       '出处',
   'studio.disc.rate_limit':         '已达 GitHub 搜索频率限制（10次/分钟）。可在 Settings 中添加 GitHub Token 提升限额。',
+  'studio.disc.auth_failed':        'GitHub 认证失败，请在 Settings 中检查您的 GitHub Token。',
   'studio.pp.clarity':              '清晰度',
   'studio.pp.clarity_desc':         '让指令更清晰、无歧义',
   'studio.pp.specificity':          '具体性',

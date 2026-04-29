@@ -68,22 +68,19 @@ export default function CompareMode({ skills, apiKeySet, onNavigate }: { skills:
       setProgress(Math.max(data.progress, 10))
     })
     try {
-      await Promise.all([
+      const [jobIdA, jobIdB] = await Promise.all([
         window.api.eval.start(skillAId, tcIds),
         window.api.eval.start(skillBId, tcIds)
       ])
       const poll = setInterval(async () => {
-        const [hA, hB] = await Promise.all([
-          window.api.eval.history(skillAId, 200),
-          window.api.eval.history(skillBId, 200)
+        const [resA, resB] = await Promise.all([
+          window.api.eval.getByJobId(jobIdA),
+          window.api.eval.getByJobId(jobIdB)
         ])
-        const recent = Date.now() - 60_000
-        const filtA = hA.items.filter(r => r.createdAt > recent)
-        const filtB = hB.items.filter(r => r.createdAt > recent)
-        if (filtA.length > 0 && filtB.length > 0) {
+        if (resA.length >= tcIds.length && resB.length >= tcIds.length) {
           clearInterval(poll); pollRef.current = null
           cleanupRef.current?.(); cleanupRef.current = null
-          setScoresA(avgDims(filtA)); setScoresB(avgDims(filtB))
+          setScoresA(avgDims(resA)); setScoresB(avgDims(resB))
           setRunning(false)
         }
       }, 2000)
