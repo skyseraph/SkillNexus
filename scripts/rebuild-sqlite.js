@@ -55,7 +55,7 @@ try {
 }
 
 // Electron ABI map — extend when upgrading Electron.
-const ELECTRON_ABI = { '31': '128', '32': '130', '33': '132', '34': '134' }
+const ELECTRON_ABI = { '30': '125', '31': '128', '32': '130', '33': '132', '34': '134' }
 const majorVersion = electronVersion.split('.')[0]
 const abi = ELECTRON_ABI[majorVersion]
 
