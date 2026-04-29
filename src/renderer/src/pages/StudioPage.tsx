@@ -95,7 +95,9 @@ function DiscoveryPanel({
       const msg = e instanceof Error ? e.message : String(e)
       setGhError(msg.includes('rate limit')
         ? t('studio.disc.rate_limit')
-        : msg)
+        : msg.includes('authentication failed')
+          ? t('studio.disc.auth_failed')
+          : msg)
       setGhResults([])
     } finally {
       setGhLoading(false)
@@ -1269,9 +1271,16 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
   const [exDesc, setExDesc] = useState('')
 
   const cleanupRef = useRef<(() => void) | null>(null)
+  const editorRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    window.api.config.get().then(c => setApiKeySet((c.providers ?? []).length > 0)).catch(() => setApiKeySet(false))
+    if (streaming && editorRef.current) {
+      editorRef.current.scrollTop = editorRef.current.scrollHeight
+    }
+  }, [editorContent, streaming])
+
+  useEffect(() => {
+    window.api.config.get().then(c => setApiKeySet((c.providers ?? []).some(p => p.apiKeySet))).catch(() => setApiKeySet(false))
     window.api.skills.getAll().then(skills => {
       setMySkills(skills)
       if (initialSkillId) {
@@ -1562,6 +1571,7 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
               {noSkill && <span className="studio-v2-no-skill-note">{t('studio.no_skill_note')}</span>}
             </div>
             <textarea
+              ref={editorRef}
               className="studio-v2-editor"
               value={editorContent + (streaming ? '▌' : '')}
               onChange={e => !streaming && setEditorContent(e.target.value)}

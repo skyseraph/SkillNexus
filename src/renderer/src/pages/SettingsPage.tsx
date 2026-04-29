@@ -289,7 +289,7 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
 
   const handleTest = async (id: string) => {
     setTestingId(id)
-    setTestResults(r => ({ ...r, [id]: { ok: false } }))
+    setTestResults(r => { const next = { ...r }; delete next[id]; return next })
     const result = await window.api.config.test(id)
     setTestResults(r => ({ ...r, [id]: result }))
     setTestingId(null)

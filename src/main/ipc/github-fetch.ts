@@ -23,6 +23,10 @@ export function fetchJson(url: string, token?: string): Promise<unknown> {
       res.on('end', () => {
         try {
           const body = Buffer.concat(chunks).toString('utf-8')
+          if (res.statusCode === 401) {
+            reject(new Error('GitHub authentication failed. Check your GitHub Token in Settings.'))
+            return
+          }
           if (res.statusCode === 403) {
             reject(new Error('GitHub API rate limit reached. Add a GitHub Token in Settings to increase the limit.'))
             return
@@ -52,6 +56,14 @@ export function fetchText(url: string, token?: string): Promise<string> {
     req.on('response', (res) => {
       res.on('data', (c) => chunks.push(c))
       res.on('end', () => {
+        if (res.statusCode === 401) {
+          reject(new Error('GitHub authentication failed. Check your GitHub Token in Settings.'))
+          return
+        }
+        if (res.statusCode === 403) {
+          reject(new Error('GitHub API rate limit reached. Add a GitHub Token in Settings to increase the limit.'))
+          return
+        }
         if (res.statusCode && res.statusCode >= 400) {
           reject(new Error(`Failed to fetch file: ${res.statusCode}`))
           return

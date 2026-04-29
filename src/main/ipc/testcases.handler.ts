@@ -140,9 +140,10 @@ export function registerTestCasesHandlers(): void {
       'testcases:generate'
     )
 
-    // Parse NDJSON lines
+    // Parse NDJSON lines — strip markdown fences some models wrap output in
+    const rawContent = result.content.replace(/^```[a-z]*\n?/gm, '').replace(/^```\s*$/gm, '')
     const created: TestCase[] = []
-    for (const line of result.content.split('\n')) {
+    for (const line of rawContent.split('\n')) {
       const trimmed = line.trim()
       if (!trimmed.startsWith('{')) continue
       try {
