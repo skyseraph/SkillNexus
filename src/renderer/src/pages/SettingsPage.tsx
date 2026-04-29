@@ -788,6 +788,7 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
         .qr-placeholder-icon { font-size: 22px; color: var(--text-muted); line-height: 1; }
         .qr-placeholder-text { font-size: 8px; color: var(--text-muted); }
         .qr-label { font-size: 11px; color: var(--text-muted); }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000; display: flex; align-items: center; justify-content: center; }
         .qr-modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 16px; width: 240px; }
         .qr-modal-title { font-size: 14px; font-weight: 600; color: var(--text); }
         .qr-modal-box { width: 160px; height: 160px; border: 1px dashed var(--border); border-radius: 8px; background: var(--surface2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
