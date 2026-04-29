@@ -92,6 +92,27 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
   const [toolAutoSaved, setToolAutoSaved] = useState(false)
   const toolSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Fetch models state
+  const [fetchingModels, setFetchingModels] = useState(false)
+  const [fetchedModels, setFetchedModels] = useState<string[]>([])
+  const [showModelDropdown, setShowModelDropdown] = useState(false)
+
+  const handleFetchModels = async () => {
+    if (!form.baseUrl.trim()) return
+    setFetchingModels(true)
+    setFetchedModels([])
+    setShowModelDropdown(false)
+    try {
+      const models = await window.api.config.fetchModels(form.baseUrl.trim(), form.apiFormat, form.apiKey || undefined)
+      setFetchedModels(models)
+      setShowModelDropdown(models.length > 0)
+    } catch (e) {
+      setFetchedModels([])
+    } finally {
+      setFetchingModels(false)
+    }
+  }
+
   // API Keys state
   const [githubTokenInput, setGithubTokenInput] = useState('')
   const [editingGithubToken, setEditingGithubToken] = useState(false)
@@ -392,7 +413,23 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
               </div>
               <div className="form-field">
                 <label>Model</label>
-                <input value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} placeholder="MiniMax-M2.7" />
+                <div className="model-input-row">
+                  <input value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} placeholder="MiniMax-M2.7" />
+                  {form.apiFormat === 'openai' && (
+                    <button type="button" className="btn btn-xs btn-ghost" onClick={handleFetchModels} disabled={fetchingModels || !form.baseUrl.trim()} title="Fetch available models">
+                      {fetchingModels ? '…' : '↓ Fetch'}
+                    </button>
+                  )}
+                </div>
+                {showModelDropdown && fetchedModels.length > 0 && (
+                  <div className="model-dropdown">
+                    {fetchedModels.map(m => (
+                      <button key={m} type="button" className="model-dropdown-item" onClick={() => { setForm(f => ({ ...f, model: m })); setShowModelDropdown(false) }}>
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="form-field full">
                 <label>API Format</label>
@@ -700,6 +737,11 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
         .form-field .hint { font-weight: 400; font-size: 11px; }
         .form-field input { padding: 7px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 13px; }
         .form-field input:focus { outline: none; border-color: var(--accent); }
+        .model-input-row { display: flex; gap: 6px; align-items: center; }
+        .model-input-row input { flex: 1; }
+        .model-dropdown { margin-top: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); max-height: 180px; overflow-y: auto; }
+        .model-dropdown-item { display: block; width: 100%; text-align: left; padding: 7px 12px; font-size: 13px; color: var(--text); background: none; border: none; cursor: pointer; }
+        .model-dropdown-item:hover { background: var(--surface-hover, rgba(255,255,255,0.06)); }
         .form-error { font-size: 12px; color: var(--danger); margin: 8px 0 0; }
         .form-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
         .test-result { font-size: 13px; font-weight: 500; }

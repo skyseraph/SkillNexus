@@ -91,6 +91,30 @@ type ConfigSetPayload = Pick<AppConfig, 'toolPaths' | 'enabledTools' | 'toolApiK
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   })
+
+  ipcMain.handle('config:fetchModels', async (_event, baseUrl: string, apiFormat: 'anthropic' | 'openai', apiKey?: string) => {
+    const base = baseUrl.replace(/\/$/, '')
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+
+    // Ollama exposes /api/tags; OpenAI-compat exposes /v1/models
+    const isOllama = base.includes('11434') || base.toLowerCase().includes('ollama')
+    const url = isOllama ? `${base}/api/tags` : `${base}/v1/models`
+
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(8000) })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const json = await res.json() as Record<string, unknown>
+
+    // Ollama: { models: [{ name, model }] }
+    // OpenAI-compat: { data: [{ id }] }
+    if (isOllama && Array.isArray(json.models)) {
+      return (json.models as Array<{ name?: string; model?: string }>).map(m => m.model ?? m.name ?? '').filter(Boolean)
+    }
+    if (Array.isArray(json.data)) {
+      return (json.data as Array<{ id?: string }>).map(m => m.id ?? '').filter(Boolean)
+    }
+    throw new Error('Unexpected response format')
+  })
 }
 
 export function loadApiKeysToEnv(): void {

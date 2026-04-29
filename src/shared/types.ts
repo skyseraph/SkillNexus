@@ -452,4 +452,5 @@ export interface IpcChannels {
   'config:saveProvider': (p: LLMProvider) => Promise<void>
   'config:deleteProvider': (id: string) => Promise<void>
   'config:setActive': (id: string) => Promise<void>
+  'config:fetchModels': (baseUrl: string, apiFormat: 'anthropic' | 'openai', apiKey?: string) => Promise<string[]>
 }

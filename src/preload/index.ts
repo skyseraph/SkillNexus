@@ -133,7 +133,9 @@ const api = {
     deleteProvider: (id: string): Promise<void> =>
       ipcRenderer.invoke('config:deleteProvider', id),
     setActive: (id: string): Promise<void> =>
-      ipcRenderer.invoke('config:setActive', id)
+      ipcRenderer.invoke('config:setActive', id),
+    fetchModels: (baseUrl: string, apiFormat: 'anthropic' | 'openai', apiKey?: string): Promise<string[]> =>
+      ipcRenderer.invoke('config:fetchModels', baseUrl, apiFormat, apiKey)
   },
   shell: {
     openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
