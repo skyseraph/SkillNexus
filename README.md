@@ -51,6 +51,8 @@ A **Skill** is a modular capability unit following the [Agent Skills open standa
 
 ![Home Page](docs/images/task.png)
 
+---
+
 ### 🎨 Studio — Skill Generation
 
 **4 generation modes:**
@@ -69,11 +71,15 @@ A **Skill** is a modular capability unit following the [Agent Skills open standa
 
 ![Studio Page](docs/images/studio.png)
 
+---
+
 ### 🧪 TestCase — Test Suite Management
 
 - Manual CRUD for test cases
 - AI batch generation (1–20 cases, NDJSON streaming)
 - 3 judge types: `llm` · `grep` · `command`
+
+---
 
 ### 📊 Eval — 8-Dimension Evaluation Engine
 
@@ -97,6 +103,8 @@ Two groups: Task Quality (G-series) and Skill Quality (S-series):
 ![Eval Page](docs/images/eval-雷达图.png)
 
 ![Eval Page](docs/images/eval-热力图.png)
+
+---
 
 ### 🧬 Evo — Multi-Strategy Evolution Engine
 
@@ -124,15 +132,29 @@ Two groups: Task Quality (G-series) and Skill Quality (S-series):
 
 ![Evo Page](docs/images/evo-进化结果.png)
 
+---
+
 ### 🏆 Trending — Leaderboard
 
-Rank all Skills by total score or individual dimensions, aggregated from eval history.
+- Rank all Skills by total score or individual dimensions
+- Aggregated from eval history in real time
+- Discover high-quality Skills to guide evolution direction
 
-![Studio Page](docs/images/studio.png)
+![Trending Page](docs/images/treading.png)
+
+---
 
 ### ⚙️ Settings — LLM Provider
 
-13 preset providers (Anthropic, DeepSeek, Kimi, MiniMax, Zhipu, OpenRouter, Ollama…) plus fully custom baseURL. API keys stored encrypted, never exposed to the renderer.
+13 preset providers plus fully custom baseURL. API keys stored encrypted, never exposed to the renderer.
+
+| Category | Providers |
+|----------|-----------|
+| Official | Anthropic |
+| China Official | MiniMax (CN/Global) · DeepSeek · Kimi · Zhipu GLM · ByteDance · Alibaba · Baidu |
+| Aggregator | OpenRouter |
+| Local | Ollama |
+| Custom | Any baseURL + API Key |
 
 ---
 
@@ -263,6 +285,25 @@ SkillNexus/
 │   └── changes/                 # Active change proposals
 └── CLAUDE.md                    # Project guidelines & coding principles
 ```
+
+---
+
+## 📝 Blog Series
+
+A 10-part series on SkillNexus, from hands-on usage to technical internals.
+
+| # | Article |
+|---|---------|
+| 01 | [Your Skill Directory Is Turning Into a Mess](https://skyseraph.github.io/series/skill-nexus/01-why-skill-nexus.md) |
+| 02 | [First Skill Evaluation in 5 Minutes — Getting Started](https://skyseraph.github.io/series/skill-nexus/02-quickstart.md) |
+| 03 | [From One Line to a Working Skill — Studio's 5 Creation Modes](https://skyseraph.github.io/series/skill-nexus/03-studio.md) |
+| 04 | [8-Dimension Eval Framework: Turning "Feels OK" into Data](https://skyseraph.github.io/series/skill-nexus/04-eval.md) |
+| 05 | [Evolution Engine: Making Skills Automatically Better](https://skyseraph.github.io/series/skill-nexus/05-evo.md) |
+| 06 | [Trending: Your Skill Asset Map](https://skyseraph.github.io/series/skill-nexus/06-trending.md) |
+| 07 | [Architecture: Electron Dual-Process + Zero-Dependency Evolution SDK](https://skyseraph.github.io/series/skill-nexus/7-architecture.md) |
+| 08 | [Current State & Roadmap: What's Next for SkillNexus](https://skyseraph.github.io/series/skill-nexus/08-roadmap.md) |
+| 09 | [Eval Reports Beyond a Quick Glance — Offline Report System](https://skyseraph.github.io/series/skill-nexus/09-offline-report.md) |
+| 10 | [Visualization Design: Why Skill Evaluation Needs 6 Chart Types](https://skyseraph.github.io/series/skill-nexus/10-visualization.md) |
 
 ---
 
