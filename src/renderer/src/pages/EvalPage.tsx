@@ -1080,9 +1080,9 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
       setHistoryTotal(res.total)
       setHistoryPage(page)
     }).catch((e) => console.error('[EvalPage] history load failed:', e))
-    // Load full history for charts (no pagination limit)
+    // Load full history for charts and search (no pagination limit)
     window.api.eval.history(selectedSkill, 10000, 0).then((res) => {
-      setChartHistory(res.items.filter(r => r.status === 'success'))
+      setChartHistory(res.items)
     }).catch((e) => console.error('[EvalPage] chart history load failed:', e))
   }, [selectedSkill])
 
@@ -1139,7 +1139,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
 
   const [chartTab, setChartTab] = useState<'radar' | 'trend' | 'multidim' | 'heatmap' | 'boxplot' | 'bycase'>('radar')
 
-  const successHistory = chartHistory  // full dataset for charts
+  const successHistory = chartHistory.filter(r => r.status === 'success')  // full dataset for charts
   const avgScores = avgDimScores(successHistory)
   const minScores = successHistory.length >= 5 ? minDimScores(successHistory) : undefined
   const maxScores = successHistory.length >= 5 ? maxDimScores(successHistory) : undefined
@@ -1147,7 +1147,10 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
     ? successHistory.reduce((s, r) => s + r.totalScore, 0) / successHistory.length
     : null
 
-  const filteredHistory = history.filter((r) => {
+  // When search/filter is active, use the full chartHistory to avoid pagination truncation (E2)
+  const isFiltering = historySearch !== '' || historyStatus !== 'all' || historyTcFilter !== ''
+  const historyBase = isFiltering ? chartHistory : history
+  const filteredHistory = historyBase.filter((r) => {
     if (historyStatus !== 'all' && r.status !== historyStatus) return false
     if (historyTcFilter && r.testCaseName !== historyTcFilter) return false
     if (historySearch) {
@@ -1543,7 +1546,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
               })()}
             </div>
 
-            {totalPages > 1 && (
+            {totalPages > 1 && !isFiltering && (
               <div className="pagination">
                 <button className="btn btn-ghost btn-sm" disabled={historyPage === 0} onClick={() => refreshHistory(historyPage - 1)}>← 上一页</button>
                 <span className="page-info">{historyPage + 1} / {totalPages}</span>
