@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
+import { existsSync } from 'fs'
 
 /**
  * Resolve the path to the better_sqlite3.node native binding.
@@ -11,8 +12,15 @@ import { join } from 'path'
  * This works even when better-sqlite3's npm install script failed
  * (e.g. corporate proxy), because we bypass node-gyp-build entirely
  * by passing the path via the `nativeBinding` option.
+ *
+ * Returns undefined when not running inside Electron (e.g. vitest),
+ * so the standard node_modules binding is used instead.
  */
 function getNativeBindingPath(): string | undefined {
+  // Only use the prebuilt Electron binary when running inside Electron.
+  // In test environments (plain Node.js) let better-sqlite3 find its own binding.
+  if (!process.versions.electron) return undefined
+
   const key = `${process.platform}-${process.arch}`
   // In dev: project root is 3 levels up from src/main/db
   // In prod (packaged): app.getAppPath() is the asar root
@@ -24,7 +32,6 @@ function getNativeBindingPath(): string | undefined {
   } catch {
     // app.getAppPath() not available in test environment
   }
-  const { existsSync } = require('fs') as typeof import('fs')
   return candidates.find(p => existsSync(p))
 }
 
