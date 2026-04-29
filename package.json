@@ -27,10 +27,12 @@
     },
     "files": [
       "out/**/*",
-      "!out/**/*.map"
+      "!out/**/*.map",
+      "resources/**/*"
     ],
     "asarUnpack": [
-      "node_modules/better-sqlite3/**/*"
+      "node_modules/better-sqlite3/**/*",
+      "resources/**/*"
     ],
     "mac": {
       "target": [
@@ -66,12 +68,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "better-sqlite3": "^11.0.0",
     "electron-store": "^8.2.0",
     "fflate": "^0.8.2",
     "js-yaml": "^4.1.0"
-  },
-  "optionalDependencies": {
-    "better-sqlite3": "^11.0.0"
   },
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.0",

@@ -2,6 +2,32 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
 
+/**
+ * Resolve the path to the better_sqlite3.node native binding.
+ *
+ * rebuild-sqlite.js extracts the prebuilt binary to:
+ *   resources/{platform}-{arch}/better_sqlite3.node
+ *
+ * This works even when better-sqlite3's npm install script failed
+ * (e.g. corporate proxy), because we bypass node-gyp-build entirely
+ * by passing the path via the `nativeBinding` option.
+ */
+function getNativeBindingPath(): string | undefined {
+  const key = `${process.platform}-${process.arch}`
+  // In dev: project root is 3 levels up from src/main/db
+  // In prod (packaged): app.getAppPath() is the asar root
+  const candidates = [
+    join(__dirname, '..', '..', '..', 'resources', key, 'better_sqlite3.node'),
+  ]
+  try {
+    candidates.push(join(app.getAppPath(), 'resources', key, 'better_sqlite3.node'))
+  } catch {
+    // app.getAppPath() not available in test environment
+  }
+  const { existsSync } = require('fs') as typeof import('fs')
+  return candidates.find(p => existsSync(p))
+}
+
 let db: Database.Database | null = null
 
 const SCHEMA = `
@@ -73,7 +99,8 @@ export function initDatabase(): Database.Database {
   if (db) return db
 
   const dbPath = join(app.getPath('userData'), 'skill-nexus.db')
-  db = new Database(dbPath)
+  const nativeBinding = getNativeBindingPath()
+  db = new Database(dbPath, ...(nativeBinding ? [{ nativeBinding }] : []))
 
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
