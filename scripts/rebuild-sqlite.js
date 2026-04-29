@@ -26,12 +26,21 @@ if (!fs.existsSync(sqliteDir)) {
 // Read versions dynamically so this script stays correct across lockfile updates.
 let electronVersion = '31.7.7'
 try {
-  const electronPkg = JSON.parse(
-    fs.readFileSync(path.join(root, 'node_modules', 'electron', 'package.json'), 'utf8')
-  )
-  electronVersion = electronPkg.version
+  // Prefer dist/version — it's written by electron's own install script and
+  // is more reliable than package.json on some platforms.
+  const distVersion = fs.readFileSync(
+    path.join(root, 'node_modules', 'electron', 'dist', 'version'), 'utf8'
+  ).trim()
+  if (distVersion) electronVersion = distVersion
 } catch {
-  // fall back to the hardcoded default
+  try {
+    const electronPkg = JSON.parse(
+      fs.readFileSync(path.join(root, 'node_modules', 'electron', 'package.json'), 'utf8')
+    )
+    electronVersion = electronPkg.version
+  } catch {
+    // fall back to the hardcoded default
+  }
 }
 
 let sqliteVersion = '11.10.0'
@@ -53,6 +62,8 @@ const platform = process.platform  // win32 | darwin | linux
 const arch = process.arch           // x64 | arm64
 
 console.log(`[rebuild-sqlite] Electron ${electronVersion} (ABI v${abi ?? '?'}) — ${platform}-${arch}`)
+console.log(`[rebuild-sqlite] sqlite version: ${sqliteVersion}`)
+console.log(`[rebuild-sqlite] looking for tarball: better-sqlite3-v${sqliteVersion}-electron-v${abi}-${platform}-${arch}.tar.gz`)
 
 // Step 1: extract bundled tarball and place binary where node-gyp-build expects it.
 if (abi) {
