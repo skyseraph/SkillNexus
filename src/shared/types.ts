@@ -404,7 +404,7 @@ export interface IpcChannels {
   'skills:readFile': (filePath: string, skillId: string) => Promise<string>
   'skills:openDialog': (mode: 'file' | 'dir') => Promise<string | null>
   'skills:scan': () => Promise<ScanResult>
-  'skills:importScanned': (filePath: string) => Promise<Skill>
+  'skills:importScanned': (filePath: string, skillType?: SkillType) => Promise<Skill>
   'skills:export': (skillId: string, toolId: string, mode: 'copy' | 'symlink') => Promise<void>
   'skills:getToolTargets': () => Promise<ToolTarget[]>
   'skills:setTrustLevel': (id: string, level: 1 | 2 | 3 | 4) => Promise<void>

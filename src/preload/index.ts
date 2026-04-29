@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { Skill, SkillFileEntry, TestCase, EvalResult, EvalHistoryPage, EvalExport, AppConfigPublic, AppConfig, ScannedSkill, ScanResult, ToolTarget, MarketSkill, EvoRunResult, LLMProvider, ThreeConditionResult, SkillRankEntry, SkillScore5D, GithubSkillResult, EvoAnalysis, EvoConfig, EvoChainEntry, EvoSkillResult, ParetoPoint, CoEvoResult, TransferReport, SkillXResult, SkillClawResult, JobEntry, PluginManifest } from '../shared/types'
+import type { Skill, SkillFileEntry, SkillType, TestCase, EvalResult, EvalHistoryPage, EvalExport, AppConfigPublic, AppConfig, ScannedSkill, ScanResult, ToolTarget, MarketSkill, EvoRunResult, LLMProvider, ThreeConditionResult, SkillRankEntry, SkillScore5D, GithubSkillResult, EvoAnalysis, EvoConfig, EvoChainEntry, EvoSkillResult, ParetoPoint, CoEvoResult, TransferReport, SkillXResult, SkillClawResult, JobEntry, PluginManifest } from '../shared/types'
 import type { TelemetryEventName, TelemetryEventProperties } from '../shared/telemetry-events'
 
 const api = {
@@ -13,7 +13,7 @@ const api = {
     readFile: (filePath: string, skillId: string): Promise<string> => ipcRenderer.invoke('skills:readFile', filePath, skillId),
     openDialog: (mode: 'file' | 'dir'): Promise<string | null> => ipcRenderer.invoke('skills:openDialog', mode),
     scan: (): Promise<ScanResult> => ipcRenderer.invoke('skills:scan'),
-    importScanned: (filePath: string): Promise<Skill> => ipcRenderer.invoke('skills:importScanned', filePath),
+    importScanned: (filePath: string, skillType?: SkillType): Promise<Skill> => ipcRenderer.invoke('skills:importScanned', filePath, skillType),
     export: (skillId: string, toolId: string, mode: 'copy' | 'symlink'): Promise<void> =>
       ipcRenderer.invoke('skills:export', skillId, toolId, mode),
     getToolTargets: (): Promise<ToolTarget[]> => ipcRenderer.invoke('skills:getToolTargets'),

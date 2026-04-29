@@ -528,6 +528,10 @@ function ScanModal({ onClose, onImport }: {
       setScannedDirs(r.scannedDirs)
       setSelected(new Set(r.skills.filter(s => !s.alreadyInstalled).map(s => s.filePath)))
       setScanning(false)
+    }).catch(err => {
+      console.error('[ScanModal] scan error:', err)
+      setScannedDirs([{ toolName: 'Error', dir: String(err), exists: false }])
+      setScanning(false)
     })
   }, [])
 
@@ -542,7 +546,7 @@ function ScanModal({ onClose, onImport }: {
     const imported: ScannedSkill[] = []
     for (const s of toImport) {
       try {
-        await window.api.skills.importScanned(s.filePath)
+        await window.api.skills.importScanned(s.filePath, s.skillType)
         setImportStatus(prev => ({ ...prev, [s.filePath]: true }))
         imported.push(s)
       } catch {
@@ -551,6 +555,16 @@ function ScanModal({ onClose, onImport }: {
     }
     setImporting(false)
     onImport(imported)
+  }
+
+  const selectableFilePaths = results.filter(s => !s.alreadyInstalled).map(s => s.filePath)
+  const allSelected = selectableFilePaths.length > 0 && selectableFilePaths.every(fp => selected.has(fp))
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(selectableFilePaths))
+    }
   }
 
   const byTool = results.reduce<Record<string, ScannedSkill[]>>((acc, s) => {
@@ -584,9 +598,27 @@ function ScanModal({ onClose, onImport }: {
               </div>
             </div>
           ) : (
-            Object.entries(byTool).map(([toolName, skills]) => (
+            Object.entries(byTool).map(([toolName, skills]) => {
+              const groupSelectable = skills.filter(s => !s.alreadyInstalled).map(s => s.filePath)
+              const groupAllSelected = groupSelectable.length > 0 && groupSelectable.every(fp => selected.has(fp))
+              const toggleGroup = () => {
+                setSelected(prev => {
+                  const n = new Set(prev)
+                  if (groupAllSelected) groupSelectable.forEach(fp => n.delete(fp))
+                  else groupSelectable.forEach(fp => n.add(fp))
+                  return n
+                })
+              }
+              return (
               <div key={toolName} className="scan-group">
-                <div className="scan-group-header">{toolName}</div>
+                <div className="scan-group-header">
+                  <span>{toolName}</span>
+                  {groupSelectable.length > 0 && (
+                    <button className="scan-group-toggle" onClick={toggleGroup} disabled={importing}>
+                      {groupAllSelected ? 'Deselect all' : 'Select all'}
+                    </button>
+                  )}
+                </div>
                 {skills.map(s => (
                   <label key={s.filePath} className={`scan-item ${s.alreadyInstalled ? 'installed' : ''}`}>
                     <input type="checkbox" disabled={s.alreadyInstalled || importing}
@@ -599,12 +631,15 @@ function ScanModal({ onClose, onImport }: {
                   </label>
                 ))}
               </div>
-            ))
+            )})
           )}
         </div>
         {!scanning && results.length > 0 && (
           <div className="modal-footer">
-            <span className="scan-count">{selected.size} selected</span>
+            <button className="btn btn-ghost btn-xs" onClick={toggleAll} disabled={importing}>
+              {allSelected ? 'Deselect All' : 'Select All'}
+            </button>
+            <span className="scan-count">{selected.size} / {selectableFilePaths.length} selected</span>
             <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
             <button className="btn btn-primary" onClick={doImport} disabled={importing || selected.size === 0}>
               {importing ? 'Importing...' : `Import ${selected.size} Skill${selected.size !== 1 ? 's' : ''}`}
@@ -969,12 +1004,11 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
   const [uninstallTarget, setUninstallTarget] = useState<{ id: string; name: string; info: { evalCount: number; tcCount: number; evolvedCount: number } } | null>(null)
 
   const loadSkills = useCallback(async () => {
-    if (loading) return
     setLoading(true)
     try { setSkills(await window.api.skills.getAll()) }
     catch (e) { toast?.(String(e), 'error') }
     finally { setLoading(false) }
-  }, [loading, toast])
+  }, [toast])
 
   useEffect(() => {
     window.api.skills.getAll()
@@ -1347,7 +1381,10 @@ export default function HomePage({ toast, onNavigate }: { toast?: (msg: string, 
         .scan-dir-status { font-size: 11px; flex-shrink: 0; color: var(--text-muted); }
         .scan-dir-row.exists .scan-dir-status { color: var(--success); }
         .scan-group { margin-bottom: 16px; }
-        .scan-group-header { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+        .scan-group-header { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+        .scan-group-toggle { font-size: 11px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--accent); background: none; border: none; cursor: pointer; padding: 0; opacity: 0.8; }
+        .scan-group-toggle:hover { opacity: 1; text-decoration: underline; }
+        .scan-group-toggle:disabled { opacity: 0.4; cursor: not-allowed; }
         .scan-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius); cursor: pointer; font-size: 13px; }
         .scan-item:hover { background: var(--surface); }
         .scan-item.installed { opacity: 0.6; }

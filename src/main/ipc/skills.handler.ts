@@ -3,6 +3,7 @@ import { getDb } from '../db'
 import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, symlinkSync, existsSync, unlinkSync } from 'fs'
 import { basename, resolve, extname, join, relative, dirname } from 'path'
 import { app } from 'electron'
+import { platform } from 'os'
 import yaml from 'js-yaml'
 import { getConfig } from './config.handler'
 import type { Skill, SkillFileEntry, SkillType, ToolTarget, ScannedSkill, ScanResult, EvoChainEntry, EvoAnalysis } from '../../shared/types'
@@ -18,6 +19,15 @@ const ALLOWED_PATH_PREFIXES = () => {
       resolve(app.getPath('documents')),
       resolve(app.getPath('desktop'))
     ]
+    // On Windows, also allow %APPDATA% and %LOCALAPPDATA% (tool config dirs)
+    if (platform() === 'win32') {
+      const home = resolve(app.getPath('home'))
+      if (process.env.APPDATA) _allowedPrefixes.push(resolve(process.env.APPDATA))
+      if (process.env.LOCALAPPDATA) _allowedPrefixes.push(resolve(process.env.LOCALAPPDATA))
+      // Fallback if env vars not set
+      _allowedPrefixes.push(resolve(join(home, 'AppData', 'Roaming')))
+      _allowedPrefixes.push(resolve(join(home, 'AppData', 'Local')))
+    }
   }
   return _allowedPrefixes
 }
@@ -50,28 +60,54 @@ const IGNORE_DIRS = new Set(['node_modules', '.git', '__pycache__', '.venv', 've
 const IGNORE_FILES = new Set(['.DS_Store', 'Thumbs.db'])
 
 // ── AI tool export targets ─────────────────────────────────────────────────────
-const TOOL_DEFAULTS: Record<string, { name: string; exportDir: string; ext: string }> = {
-  'claude-code': { name: 'Claude Code',   exportDir: '.claude/commands',            ext: '.md' },
-  'cursor':      { name: 'Cursor',         exportDir: '.cursor/rules',               ext: '.mdc' },
-  'windsurf':    { name: 'Windsurf',       exportDir: '.codeium/windsurf/memories',  ext: '.md' },
-  'codex':       { name: 'Codex CLI',      exportDir: '.codex',                      ext: '.md' },
-  'gemini':      { name: 'Gemini CLI',     exportDir: '.gemini/skills',              ext: '.md' },
-  'opencode':    { name: 'OpenCode',       exportDir: '.opencode',                   ext: '.md' },
-  'openclaw':    { name: 'OpenClaw',       exportDir: '.openclaw',                   ext: '.md' },
-  'codebuddy':   { name: 'CodeBuddy',      exportDir: '.codebuddy/skills',           ext: '.md' },
+// exportDir: path relative to home on Mac/Linux
+// scanDirs: additional directories to scan (besides exportDir); for tools that use different read vs write dirs
+// winAppDataDir: path relative to %APPDATA% on Windows (takes priority when set)
+const TOOL_DEFAULTS: Record<string, { name: string; exportDir: string; scanDirs?: string[]; winExportDir?: string; winAppDataDir?: string; ext: string }> = {
+  'claude-code': { name: 'Claude Code',   exportDir: '.claude/commands',  scanDirs: ['.claude/skills'],              ext: '.md' },
+  'cursor':      { name: 'Cursor',         exportDir: '.cursor/rules',     winAppDataDir: 'Cursor/User/globalStorage/cursor.rules', ext: '.mdc' },
+  'windsurf':    { name: 'Windsurf',       exportDir: '.codeium/windsurf/memories', winAppDataDir: 'Codeium/windsurf/memories', ext: '.md' },
+  'codex':       { name: 'Codex CLI',      exportDir: '.codex',                                                       ext: '.md' },
+  'gemini':      { name: 'Gemini CLI',     exportDir: '.gemini/skills',                                               ext: '.md' },
+  'opencode':    { name: 'OpenCode',       exportDir: '.opencode',                                                    ext: '.md' },
+  'openclaw':    { name: 'OpenClaw',       exportDir: '.openclaw',                                                    ext: '.md' },
+  'codebuddy':   { name: 'CodeBuddy',      exportDir: '.codebuddy/skills', winAppDataDir: 'CodeBuddy/skills',         ext: '.md' },
 }
 
-function resolveToolDir(toolId: string): { name: string; exportDir: string; ext: string } | null {
+function resolveToolDir(toolId: string): { name: string; exportDir: string; scanDirs: string[]; ext: string } | null {
   const def = TOOL_DEFAULTS[toolId]
   if (!def) return null
   const home = app.getPath('home')
   const cfg = getConfig()
   const override = cfg.toolPaths?.[toolId]
-  const raw = override ?? def.exportDir
-  // Expand leading ~ to home directory before resolving
-  const expanded = raw.startsWith('~') ? raw.replace(/^~/, home) : raw
-  const exportDir = resolve(home, expanded)
-  return { name: def.name, exportDir, ext: def.ext }
+
+  let exportDir: string
+  let scanDirs: string[]
+
+  if (override) {
+    // User-configured path: expand ~ and resolve; supports multiple paths separated by ':'
+    const parts = override.split(':').map(p => p.trim()).filter(Boolean)
+    const expanded = parts.map(p => {
+      const e = p.startsWith('~') ? p.replace(/^~/, home) : p
+      return resolve(e)
+    })
+    exportDir = expanded[0]
+    scanDirs = expanded  // scan all user-specified paths
+  } else if (platform() === 'win32') {
+    if (def.winAppDataDir) {
+      const appData = process.env.APPDATA || join(home, 'AppData', 'Roaming')
+      exportDir = join(appData, def.winAppDataDir)
+    } else {
+      exportDir = join(home, def.winExportDir ?? def.exportDir)
+    }
+    scanDirs = [exportDir]
+  } else {
+    exportDir = join(home, def.exportDir)
+    // Include additional scan-only dirs (e.g. ~/.claude/skills alongside ~/.claude/commands)
+    scanDirs = [exportDir, ...(def.scanDirs ?? []).map(d => join(home, d))]
+  }
+
+  return { name: def.name, exportDir, scanDirs, ext: def.ext }
 }
 
 // ── Parse single .md skill file ───────────────────────────────────────────────
@@ -364,52 +400,99 @@ export function registerSkillsHandlers(): void {
     )
     const skills: ScannedSkill[] = []
     const scannedDirs: ScanResult['scannedDirs'] = []
+    const seenFilePaths = new Set<string>()
+
+    const scanDir = (dir: string, toolId: string, toolName: string) => {
+      const dirDisplay = dir.startsWith(home) ? '~' + dir.slice(home.length) : dir
+      const exists = existsSync(dir)
+      scannedDirs.push({ toolName, dir: dirDisplay, exists })
+      if (!exists) return
+
+      let entries: string[]
+      try { entries = readdirSync(dir) } catch { return }
+
+      for (const entry of entries) {
+        const fullPath = join(dir, entry)
+        let st: ReturnType<typeof statSync>
+        try { st = statSync(fullPath) } catch { continue }
+
+        if (st.isDirectory()) {
+          // Agent skill: directory containing SKILL.md / README.md / <dirname>.md
+          const entryMd = findEntryMd(fullPath)
+          if (!entryMd) continue
+          if (seenFilePaths.has(entryMd)) continue
+          seenFilePaths.add(entryMd)
+
+          let name = entry
+          let skillType: SkillType = 'agent'
+          try {
+            const content = readFileSync(entryMd, 'utf-8')
+            const match = content.match(/^---\n([\s\S]*?)\n---/)
+            if (match) {
+              const fm = yaml.load(match[1]) as Record<string, unknown>
+              if (fm?.name) name = fm.name as string
+              if ((fm?.skill_type as string) === 'single') skillType = 'single'
+            }
+          } catch { /* use dirname */ }
+
+          skills.push({ name, filePath: entryMd, toolId, toolName, alreadyInstalled: installedPaths.has(entryMd), skillType })
+        } else if (entry.endsWith('.md') || entry.endsWith('.mdc')) {
+          // Single skill: flat .md / .mdc file
+          if (seenFilePaths.has(fullPath)) continue
+          seenFilePaths.add(fullPath)
+
+          let name = basename(entry, extname(entry))
+          let skillType: SkillType = 'single'
+          try {
+            const content = readFileSync(fullPath, 'utf-8')
+            const match = content.match(/^---\n([\s\S]*?)\n---/)
+            if (match) {
+              const fm = yaml.load(match[1]) as Record<string, unknown>
+              if (fm?.name) name = fm.name as string
+              if ((fm?.skill_type as string) === 'agent') skillType = 'agent'
+            }
+          } catch { /* use filename */ }
+
+          skills.push({ name, filePath: fullPath, toolId, toolName, alreadyInstalled: installedPaths.has(fullPath), skillType })
+        }
+      }
+    }
 
     for (const toolId of Object.keys(TOOL_DEFAULTS)) {
       if (cfg.enabledTools?.[toolId] === false) continue
       const r = resolveToolDir(toolId)
       if (!r) continue
-      const dirDisplay = r.exportDir.startsWith(home) ? '~' + r.exportDir.slice(home.length) : r.exportDir
-      const exists = existsSync(r.exportDir)
-      scannedDirs.push({ toolName: r.name, dir: dirDisplay, exists })
-      if (!exists) continue
-      let entries: string[]
-      try { entries = readdirSync(r.exportDir) } catch { continue }
-
-      for (const entry of entries) {
-        if (!entry.endsWith('.md') && !entry.endsWith('.mdc')) continue
-        const filePath = join(r.exportDir, entry)
-        let st
-        try { st = statSync(filePath) } catch { continue }
-        if (!st.isFile()) continue
-
-        let name = basename(entry, extname(entry))
-        let skillType: SkillType = 'single'
-        try {
-          const content = readFileSync(filePath, 'utf-8')
-          const match = content.match(/^---\n([\s\S]*?)\n---/)
-          if (match) {
-            const fm = yaml.load(match[1]) as Record<string, unknown>
-            if (fm?.name) name = fm.name as string
-            if ((fm?.skill_type as string) === 'agent') skillType = 'agent'
-          }
-        } catch { /* use filename as name */ }
-
-        skills.push({ name, filePath, toolId, toolName: r.name, alreadyInstalled: installedPaths.has(filePath), skillType })
+      for (const dir of r.scanDirs) {
+        scanDir(dir, toolId, r.name)
       }
     }
     return { skills, scannedDirs }
   })
 
   // Import a scanned skill (already on disk, just DB register)
-  ipcMain.handle('skills:importScanned', (_event, filePath: string): Skill => {
+  // filePath may be an entry .md inside an agent skill dir, or a standalone .md file
+  ipcMain.handle('skills:importScanned', (_event, filePath: string, skillType?: SkillType): Skill => {
     assertPathAllowed(filePath)
     const db = getDb()
-    const parsed = parseSkillFile(filePath)
     const now = Date.now()
     const id = `skill-${now}-${Math.random().toString(36).slice(2, 8)}`
-    const rootDir = dirname(resolve(filePath))
 
+    // If this is an agent skill (entry .md inside a directory), use parseSkillDir on the parent
+    const parentDir = dirname(resolve(filePath))
+    const isAgentSkill = skillType === 'agent'
+
+    if (isAgentSkill) {
+      const parsed = parseSkillDir(parentDir)
+      db.prepare(`
+        INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, trust_level, installed_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, parsed.name, parsed.format, parsed.version, JSON.stringify(parsed.tags),
+        parsed.yamlFrontmatter, parsed.markdownContent, resolve(filePath), parsed.rootDir, 'agent', 1, now, now)
+      return { id, ...parsed, trustLevel: 1 as const, installedAt: now, updatedAt: now }
+    }
+
+    const parsed = parseSkillFile(filePath)
+    const rootDir = parentDir
     db.prepare(`
       INSERT INTO skills (id, name, format, version, tags, yaml_frontmatter, markdown_content, file_path, root_dir, skill_type, trust_level, installed_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -446,9 +529,15 @@ export function registerSkillsHandlers(): void {
     const r = resolveToolDir(toolId)
     if (!r) throw new Error(`Unknown tool: ${toolId}`)
 
-    // Security: target must be under home directory
+    // Security: target must be under home or %APPDATA% (Windows)
     const home = resolve(app.getPath('home'))
-    if (!r.exportDir.startsWith(home)) throw new Error('Export path must be within home directory')
+    const appData = platform() === 'win32'
+      ? resolve(process.env.APPDATA || join(home, 'AppData', 'Roaming'))
+      : null
+    const exportDirResolved = resolve(r.exportDir)
+    if (!exportDirResolved.startsWith(home) && !(appData && exportDirResolved.startsWith(appData))) {
+      throw new Error('Export path must be within home or AppData directory')
+    }
 
     mkdirSync(r.exportDir, { recursive: true })
 
