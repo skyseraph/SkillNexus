@@ -313,16 +313,16 @@ SkillNexus 博文系列，共 10 篇，从工具使用到技术细节。
 
 | # | 文章 |
 |---|------|
-| 01 | [你的 Skill 目录，正在变成屎山](https://skyseraph.github.io/series/skill-nexus/01-why-skill-nexus.md) |
-| 02 | [5 分钟完成第一次 Skill 评测](https://skyseraph.github.io/series/skill-nexus/02-quickstart.md) |
-| 03 | [从一行描述到可用 Skill——Studio 的 5 种创作模式](https://skyseraph.github.io/series/skill-nexus/03-studio.md) |
-| 04 | [8 维度评测框架：让"感觉还行"变成数据](https://skyseraph.github.io/series/skill-nexus/04-eval.md) |
-| 05 | [进化引擎：让 Skill 自动变好](https://skyseraph.github.io/series/skill-nexus/05-evo.md) |
-| 06 | [Trending 榜单：你的 Skill 资产地图](https://skyseraph.github.io/series/skill-nexus/06-trending.md) |
-| 07 | [技术架构：Electron 双进程 + 零依赖进化 SDK](https://skyseraph.github.io/series/skill-nexus/07-architecture.md) |
-| 08 | [现状与路线图：SkillNexus 的下一步](https://skyseraph.github.io/series/skill-nexus/08-roadmap.md) |
-| 09 | [评测报告不只是看完就算——离线报告系统](https://skyseraph.github.io/series/skill-nexus/09-offline-report.md) |
-| 10 | [可视化设计：为什么 Skill 评测需要 6 种图表](https://skyseraph.github.io/series/skill-nexus/10-visualization.md) |
+| 01 | [你的 Skill 目录，正在变成屎山](https://skyseraph.github.io/series/skill-nexus/2026/01-why-skill-nexus) |
+| 02 | [5 分钟完成第一次 Skill 评测](https://skyseraph.github.io/series/skill-nexus/2026/02-quickstart) |
+| 03 | [从一行描述到可用 Skill——Studio 的 5 种创作模式](https://skyseraph.github.io/series/skill-nexus/2026/03-studio) |
+| 04 | [8 维度评测框架：让"感觉还行"变成数据](https://skyseraph.github.io/series/skill-nexus/2026/04-eval) |
+| 05 | [进化引擎：让 Skill 自动变好](https://skyseraph.github.io/series/skill-nexus/2026/05-evo) |
+| 06 | [Trending 榜单：你的 Skill 资产地图](https://skyseraph.github.io/series/skill-nexus/2026/06-trending) |
+| 07 | [技术架构：Electron 双进程 + 零依赖进化 SDK](https://skyseraph.github.io/series/skill-nexus/2026/07-architecture) |
+| 08 | [现状与路线图：SkillNexus 的下一步](https://skyseraph.github.io/series/skill-nexus/2026/08-roadmap) |
+| 09 | [评测报告不只是看完就算——离线报告系统](https://skyseraph.github.io/series/skill-nexus/2026/09-offline-report) |
+| 10 | [可视化设计：为什么 Skill 评测需要 6 种图表](https://skyseraph.github.io/series/skill-nexus/2026/10-visualization) |
 
 ---
 

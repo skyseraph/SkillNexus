@@ -294,16 +294,16 @@ A 10-part series on SkillNexus, from hands-on usage to technical internals.
 
 | # | Article |
 |---|---------|
-| 01 | [Your Skill Directory Is Turning Into a Mess](https://skyseraph.github.io/series/skill-nexus/01-why-skill-nexus.md) |
-| 02 | [First Skill Evaluation in 5 Minutes — Getting Started](https://skyseraph.github.io/series/skill-nexus/02-quickstart.md) |
-| 03 | [From One Line to a Working Skill — Studio's 5 Creation Modes](https://skyseraph.github.io/series/skill-nexus/03-studio.md) |
-| 04 | [8-Dimension Eval Framework: Turning "Feels OK" into Data](https://skyseraph.github.io/series/skill-nexus/04-eval.md) |
-| 05 | [Evolution Engine: Making Skills Automatically Better](https://skyseraph.github.io/series/skill-nexus/05-evo.md) |
-| 06 | [Trending: Your Skill Asset Map](https://skyseraph.github.io/series/skill-nexus/06-trending.md) |
-| 07 | [Architecture: Electron Dual-Process + Zero-Dependency Evolution SDK](https://skyseraph.github.io/series/skill-nexus/7-architecture.md) |
-| 08 | [Current State & Roadmap: What's Next for SkillNexus](https://skyseraph.github.io/series/skill-nexus/08-roadmap.md) |
-| 09 | [Eval Reports Beyond a Quick Glance — Offline Report System](https://skyseraph.github.io/series/skill-nexus/09-offline-report.md) |
-| 10 | [Visualization Design: Why Skill Evaluation Needs 6 Chart Types](https://skyseraph.github.io/series/skill-nexus/10-visualization.md) |
+| 01 | [Your Skill Directory Is Turning Into a Mess](https://skyseraph.github.io/series/skill-nexus/2026/01-why-skill-nexus) |
+| 02 | [First Skill Evaluation in 5 Minutes — Getting Started](https://skyseraph.github.io/series/skill-nexus/2026/02-quickstart) |
+| 03 | [From One Line to a Working Skill — Studio's 5 Creation Modes](https://skyseraph.github.io/series/skill-nexus/2026/03-studio) |
+| 04 | [8-Dimension Eval Framework: Turning "Feels OK" into Data](https://skyseraph.github.io/series/skill-nexus/2026/04-eval) |
+| 05 | [Evolution Engine: Making Skills Automatically Better](https://skyseraph.github.io/series/skill-nexus/2026/05-evo) |
+| 06 | [Trending: Your Skill Asset Map](https://skyseraph.github.io/series/skill-nexus/2026/06-trending) |
+| 07 | [Architecture: Electron Dual-Process + Zero-Dependency Evolution SDK](https://skyseraph.github.io/series/skill-nexus/2026/7-architecture) |
+| 08 | [Current State & Roadmap: What's Next for SkillNexus](https://skyseraph.github.io/series/skill-nexus/2026/08-roadmap) |
+| 09 | [Eval Reports Beyond a Quick Glance — Offline Report System](https://skyseraph.github.io/series/skill-nexus/2026/09-offline-report) |
+| 10 | [Visualization Design: Why Skill Evaluation Needs 6 Chart Types](https://skyseraph.github.io/series/skill-nexus/2026/10-visualization) |
 
 ---
 

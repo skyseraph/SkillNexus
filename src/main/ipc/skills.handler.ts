@@ -1,6 +1,6 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { getDb } from '../db'
-import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, symlinkSync, existsSync, unlinkSync } from 'fs'
+import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, symlinkSync, existsSync, unlinkSync, cpSync, rmSync } from 'fs'
 import { basename, resolve, extname, join, relative, dirname } from 'path'
 import { app } from 'electron'
 import { platform } from 'os'
@@ -523,7 +523,7 @@ export function registerSkillsHandlers(): void {
   // Export a skill to an AI tool's directory
   ipcMain.handle('skills:export', (_event, skillId: string, toolId: string, mode: 'copy' | 'symlink') => {
     const db = getDb()
-    const row = db.prepare('SELECT file_path, name FROM skills WHERE id = ?').get(skillId) as Record<string, unknown> | undefined
+    const row = db.prepare('SELECT file_path, root_dir, name, skill_type FROM skills WHERE id = ?').get(skillId) as Record<string, unknown> | undefined
     if (!row) throw new Error(`Skill ${skillId} not found`)
 
     const r = resolveToolDir(toolId)
@@ -536,22 +536,43 @@ export function registerSkillsHandlers(): void {
       : null
     const exportDirResolved = resolve(r.exportDir)
     if (!exportDirResolved.startsWith(home) && !(appData && exportDirResolved.startsWith(appData))) {
-      throw new Error('Export path must be within home or AppData directory')
+      throw new Error(`Export path must be within home or AppData directory (got: ${exportDirResolved})`)
     }
 
     mkdirSync(r.exportDir, { recursive: true })
 
-    const srcPath = resolve(row.file_path as string)
+    const skillType = (row.skill_type as string) || 'single'
     const safeName = (row.name as string).replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '-').toLowerCase() || 'skill'
-    const destPath = join(r.exportDir, `${safeName}${r.ext}`)
 
-    if (mode === 'copy') {
-      const content = readFileSync(srcPath, 'utf-8')
-      writeFileSync(destPath, content, 'utf-8')
+    if (skillType === 'agent') {
+      // Agent skill: export the entire rootDir as a subdirectory
+      const rootDir = resolve(row.root_dir as string)
+      if (!existsSync(rootDir)) throw new Error(`Agent skill directory not found: ${rootDir}`)
+      const destDir = join(r.exportDir, safeName)
+
+      if (mode === 'copy') {
+        // Remove existing dir at dest if present, then copy recursively
+        if (existsSync(destDir)) rmSync(destDir, { recursive: true, force: true })
+        cpSync(rootDir, destDir, { recursive: true })
+      } else {
+        // Symlink the whole directory
+        try { unlinkSync(destDir) } catch { /* not found */ }
+        if (existsSync(destDir)) rmSync(destDir, { recursive: true, force: true })
+        symlinkSync(rootDir, destDir)
+      }
     } else {
-      // Remove existing symlink/file at dest if present
-      try { unlinkSync(destPath) } catch { /* not found */ }
-      symlinkSync(srcPath, destPath)
+      // Single skill: export the .md file
+      const srcPath = resolve(row.file_path as string)
+      if (!existsSync(srcPath)) throw new Error(`Source file not found: ${srcPath}`)
+      const destPath = join(r.exportDir, `${safeName}${r.ext}`)
+
+      if (mode === 'copy') {
+        const content = readFileSync(srcPath, 'utf-8')
+        writeFileSync(destPath, content, 'utf-8')
+      } else {
+        try { unlinkSync(destPath) } catch { /* not found */ }
+        symlinkSync(srcPath, destPath)
+      }
     }
   })
 
