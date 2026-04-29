@@ -332,6 +332,10 @@ export const en: Translations = {
   'eval.three.per_case_title':      'Per-case details',
   'eval.three.start_btn':           'Start three-condition eval ({count} cases)',
 
+  // chart empty states
+  'eval.radar_empty':               'Not enough dimensions (need ≥ 3). Run a full eval to populate the chart.',
+  'eval.boxplot_empty':             'Box plot needs at least 3 eval runs. You have {n} so far — run more evals to unlock this view.',
+
   // trending — extra
   'trending.dim.overall':   '⭐ Overall',
 

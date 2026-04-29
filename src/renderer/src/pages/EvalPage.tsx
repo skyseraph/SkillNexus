@@ -85,7 +85,7 @@ function RadarChart({ scores, minScores, maxScores, size = 200 }: {
   const t = useT()
   const DIM_LABELS = makeDimLabels(t)
   const dims = DIM_ORDER.filter((d) => d in scores)
-  if (dims.length < 3) return <div className="chart-empty">维度数据不足（需要至少 3 个维度），请先运行一次完整评测。</div>
+  if (dims.length < 3) return <div className="chart-empty">{t('eval.radar_empty')}</div>
   const pad = 36  // space for labels
   const cx = size / 2, cy = size / 2, r = size / 2 - pad
   const angle = (i: number) => (Math.PI * 2 * i) / dims.length - Math.PI / 2
@@ -525,7 +525,7 @@ function BoxPlotChart({ history, width = 520, height = 160 }: {
   const t = useT()
   const DIM_LABELS = makeDimLabels(t)
   const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string } | null>(null)
-  if (history.length < 3) return <div className="chart-empty">箱线图需要至少 3 次评测数据，当前仅有 {history.length} 次。</div>
+  if (history.length < 3) return <div className="chart-empty">{t('eval.boxplot_empty', { n: history.length })}</div>
   const pad = { l: 80, r: 20, t: 10, b: 24 }
   const W = width - pad.l - pad.r
   const H = height - pad.t - pad.b
