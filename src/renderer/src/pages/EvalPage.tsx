@@ -519,13 +519,18 @@ function jitter(i: number, range: number): number {
   return ((i * 2654435761) % 1000) / 1000 * range - range / 2
 }
 
-function BoxPlotChart({ history, width = 520, height = 160 }: {
-  history: EvalResult[]; width?: number; height?: number
+function BoxPlotChart({ history, width = 520, height = 160, onRunEval }: {
+  history: EvalResult[]; width?: number; height?: number; onRunEval?: () => void
 }) {
   const t = useT()
   const DIM_LABELS = makeDimLabels(t)
   const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string } | null>(null)
-  if (history.length < 3) return <div className="chart-empty">{t('eval.boxplot_empty', { n: history.length })}</div>
+  if (history.length < 3) return (
+    <div className="chart-empty">
+      {t('eval.boxplot_empty', { n: history.length })}
+      {onRunEval && <><br /><button className="link-btn" onClick={onRunEval}>{t('common.go_eval_arrow')}</button></>}
+    </div>
+  )
   const pad = { l: 80, r: 20, t: 10, b: 24 }
   const W = width - pad.l - pad.r
   const H = height - pad.t - pad.b
@@ -1365,7 +1370,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
               {chartTab === 'boxplot' && (
                 <div>
                   <p className="chart-hint">◆ 均值　｜　竖线 = 中位数　｜　矩形 = Q1–Q3 区间　｜　横线端点 = min/max</p>
-                  <BoxPlotChart history={successHistory} width={560} height={Math.max(160, DIM_ORDER.length * 26 + 34)} />
+                  <BoxPlotChart history={successHistory} width={560} height={Math.max(160, DIM_ORDER.length * 26 + 34)} onRunEval={() => setPageTab('eval')} />
                 </div>
               )}
               {chartTab === 'bycase' && (() => {

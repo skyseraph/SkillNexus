@@ -89,6 +89,8 @@ export const zh: Translations = {
   'eval.dim_desc.cost_awareness':        '是否避免冗余、token 效率合理',
   'eval.dim_desc.maintainability':       'Skill 结构是否清晰、易于维护和更新',
   'eval.framework_label':   '📐 评测框架（8 维度 · G1-G5 任务质量 + S1-S3 Skill 质量）',
+  'eval.radar_empty':       '维度数据不足（需要至少 3 个维度），请先运行一次完整评测。',
+  'eval.boxplot_empty':     '箱线图需要至少 3 次评测数据，当前仅有 {n} 次，继续运行评测即可解锁。',
   'eval.run':               '运行评测',
   'eval.history_count':     '评测历史（共 {n} 条）',
   'eval.avg':               '均值',
