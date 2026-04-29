@@ -229,3 +229,4 @@ node_modules/
 e2e/
 test-results/
 *.tsbuildinfo
+package-lock.json
