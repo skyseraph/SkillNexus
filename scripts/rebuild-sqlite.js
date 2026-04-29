@@ -3,13 +3,17 @@
  * Rebuild better-sqlite3 for Electron.
  *
  * Strategy:
- *   Extract the matching prebuilt tarball from repo's prebuilds/ and place
- *   the .node file at resources/{platform}-{arch}/better_sqlite3.node.
- *   This path is independent of node_modules, so it works even when
- *   better-sqlite3's install script fails (e.g. corporate proxy / no build tools).
+ *   1. Extract the matching prebuilt tarball from prebuilds/ and place the
+ *      .node file at resources/{platform}-{arch}/better_sqlite3.node.
+ *      db/index.ts passes this path via the nativeBinding option so
+ *      node-gyp-build / bindings are never invoked at runtime.
  *
- *   The db/index.ts loader checks this path first before falling back to
- *   the standard node_modules resolution.
+ *   2. If better-sqlite3 is missing from node_modules (npm skipped it due to
+ *      optionalDependency + corporate proxy failure), copy vendor/better-sqlite3
+ *      into out/node_modules/better-sqlite3 so that the external
+ *      require('better-sqlite3') in the built bundle resolves correctly.
+ *      Node's module resolution walks: out/main/node_modules → out/node_modules
+ *      → node_modules, so out/node_modules/ is sufficient.
  */
 
 const { execSync } = require('child_process')
@@ -19,7 +23,10 @@ const os = require('os')
 
 const root = path.resolve(__dirname, '..')
 
-// Read electron version — prefer dist/version (written by electron's install script)
+// ---------------------------------------------------------------------------
+// 1. Detect Electron + sqlite versions
+// ---------------------------------------------------------------------------
+
 let electronVersion = '31.7.7'
 try {
   const distVersion = fs.readFileSync(
@@ -37,12 +44,10 @@ try {
   }
 }
 
-// Read sqlite version — fall back to hardcoded if node_modules not present
 let sqliteVersion = '11.10.0'
-const sqliteDir = path.join(root, 'node_modules', 'better-sqlite3')
 try {
   const sqlitePkg = JSON.parse(
-    fs.readFileSync(path.join(sqliteDir, 'package.json'), 'utf8')
+    fs.readFileSync(path.join(root, 'node_modules', 'better-sqlite3', 'package.json'), 'utf8')
   )
   sqliteVersion = sqlitePkg.version
 } catch {
@@ -66,6 +71,10 @@ if (!abi) {
   process.exit(1)
 }
 
+// ---------------------------------------------------------------------------
+// 2. Extract prebuilt binary → resources/{platform}-{arch}/better_sqlite3.node
+// ---------------------------------------------------------------------------
+
 const tarName = `better-sqlite3-v${sqliteVersion}-electron-v${abi}-${platform}-${arch}.tar.gz`
 const srcTar = path.join(root, 'prebuilds', tarName)
 
@@ -77,30 +86,57 @@ if (!fs.existsSync(srcTar)) {
   process.exit(1)
 }
 
-// Destination: resources/{platform}-{arch}/better_sqlite3.node
-// This path is checked first by db/index.ts before node_modules resolution.
 const destDir = path.join(root, 'resources', `${platform}-${arch}`)
 const destFile = path.join(destDir, 'better_sqlite3.node')
 
-// Skip if already installed
 if (fs.existsSync(destFile)) {
   console.log(`[rebuild-sqlite] ✓ already installed → resources/${platform}-${arch}/better_sqlite3.node`)
-  process.exit(0)
+} else {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'better-sqlite3-'))
+  try {
+    execSync(`tar -xzf "${srcTar}" -C "${tmpDir}"`, { stdio: 'inherit' })
+    const extracted = path.join(tmpDir, 'build', 'Release', 'better_sqlite3.node')
+    if (!fs.existsSync(extracted)) {
+      throw new Error(`expected build/Release/better_sqlite3.node inside ${tarName}`)
+    }
+    fs.mkdirSync(destDir, { recursive: true })
+    fs.copyFileSync(extracted, destFile)
+    console.log(`[rebuild-sqlite] ✓ prebuilt binary installed → resources/${platform}-${arch}/better_sqlite3.node`)
+  } catch (err) {
+    console.error(`[rebuild-sqlite] ✗ extraction failed: ${err.message}`)
+    process.exit(1)
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  }
 }
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'better-sqlite3-'))
-try {
-  execSync(`tar -xzf "${srcTar}" -C "${tmpDir}"`, { stdio: 'inherit' })
-  const extracted = path.join(tmpDir, 'build', 'Release', 'better_sqlite3.node')
-  if (!fs.existsSync(extracted)) {
-    throw new Error(`expected build/Release/better_sqlite3.node inside ${tarName}`)
+// ---------------------------------------------------------------------------
+// 3. Vendor copy: if better-sqlite3 is missing from node_modules, copy
+//    vendor/better-sqlite3 into out/node_modules/better-sqlite3 so the
+//    external require('better-sqlite3') in the built bundle resolves.
+// ---------------------------------------------------------------------------
+
+const nmSqlite = path.join(root, 'node_modules', 'better-sqlite3')
+const vendorSrc = path.join(root, 'vendor', 'better-sqlite3')
+const outModules = path.join(root, 'out', 'node_modules', 'better-sqlite3')
+
+if (!fs.existsSync(nmSqlite) && fs.existsSync(vendorSrc)) {
+  console.log('[rebuild-sqlite] better-sqlite3 missing from node_modules — copying vendor/ to out/node_modules/')
+  copyDirSync(vendorSrc, outModules)
+  console.log('[rebuild-sqlite] ✓ vendor better-sqlite3 → out/node_modules/better-sqlite3')
+} else {
+  console.log('[rebuild-sqlite] ✓ better-sqlite3 present in node_modules — skipping vendor copy')
+}
+
+function copyDirSync(src, dest) {
+  fs.mkdirSync(dest, { recursive: true })
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name)
+    const destPath = path.join(dest, entry.name)
+    if (entry.isDirectory()) {
+      copyDirSync(srcPath, destPath)
+    } else {
+      fs.copyFileSync(srcPath, destPath)
+    }
   }
-  fs.mkdirSync(destDir, { recursive: true })
-  fs.copyFileSync(extracted, destFile)
-  console.log(`[rebuild-sqlite] ✓ prebuilt binary installed → resources/${platform}-${arch}/better_sqlite3.node`)
-} catch (err) {
-  console.error(`[rebuild-sqlite] ✗ extraction failed: ${err.message}`)
-  process.exit(1)
-} finally {
-  fs.rmSync(tmpDir, { recursive: true, force: true })
 }

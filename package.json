@@ -5,7 +5,7 @@
   "main": "out/main/index.js",
   "scripts": {
     "dev": "node scripts/rebuild-sqlite.js && electron-vite dev",
-    "build": "node scripts/rebuild-sqlite.js && electron-vite build",
+    "build": "electron-vite build && node scripts/rebuild-sqlite.js",
     "preview": "electron-vite preview",
     "postinstall": "node scripts/rebuild-sqlite.js",
     "rebuild": "node scripts/rebuild-sqlite.js",

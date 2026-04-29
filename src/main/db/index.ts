@@ -1,5 +1,3 @@
-// Static import so vitest can mock 'better-sqlite3' in tests.
-// In Electron runtime, loadBetterSqlite3() overrides this with the vendor copy.
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
@@ -10,56 +8,28 @@ import { existsSync } from 'fs'
  *
  * rebuild-sqlite.js extracts the prebuilt binary to:
  *   resources/{platform}-{arch}/better_sqlite3.node
+ * and also copies vendor/better-sqlite3 into out/node_modules/better-sqlite3
+ * so that the external require('better-sqlite3') in the built bundle resolves
+ * correctly even when npm install skipped the package.
  *
- * Returns undefined when not running inside Electron (e.g. vitest),
- * so the standard node_modules binding is used instead.
+ * Returns undefined in test environments (plain Node.js / vitest).
  */
 function getNativeBindingPath(): string | undefined {
   if (!process.versions.electron) return undefined
 
   const key = `${process.platform}-${process.arch}`
   const candidates = [
+    // dev: out/main/index.js → ../../.. → project root → resources/
     join(__dirname, '..', '..', '..', 'resources', key, 'better_sqlite3.node'),
+    // packaged: app.getAppPath() is the asar root
   ]
   try {
     candidates.push(join(app.getAppPath(), 'resources', key, 'better_sqlite3.node'))
   } catch {
-    // app.getAppPath() not available in test environment
+    // not available in test environment
   }
   return candidates.find(p => existsSync(p))
 }
-
-/**
- * Load the better-sqlite3 JS wrapper.
- *
- * In Electron: load from vendor/ (always in repo) with nativeBinding injected,
- * so npm install failures (optionalDependency + proxy) don't matter.
- *
- * In tests: return the statically-imported Database so vitest mocks work.
- */
-function loadBetterSqlite3(): typeof Database {
-  if (!process.versions.electron) {
-    // Tests: vitest has already mocked the static import above
-    return Database
-  }
-  // Electron: vendor copy first, node_modules fallback
-  const vendorPath = join(__dirname, '..', '..', '..', 'vendor', 'better-sqlite3', 'lib', 'index.js')
-  const candidates = [vendorPath, 'better-sqlite3']
-  for (const mod of candidates) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require(mod) as typeof Database
-    } catch {
-      // try next
-    }
-  }
-  throw new Error(
-    'better-sqlite3 could not be loaded from vendor/ or node_modules.\n' +
-    'Run: npm install'
-  )
-}
-
-const DatabaseImpl = loadBetterSqlite3()
 
 let db: Database.Database | null = null
 
@@ -133,7 +103,7 @@ export function initDatabase(): Database.Database {
 
   const dbPath = join(app.getPath('userData'), 'skill-nexus.db')
   const nativeBinding = getNativeBindingPath()
-  db = new DatabaseImpl(dbPath, ...(nativeBinding ? [{ nativeBinding }] : [])) as Database.Database
+  db = new Database(dbPath, ...(nativeBinding ? [{ nativeBinding }] : []))
 
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
