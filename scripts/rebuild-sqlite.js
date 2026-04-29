@@ -3,17 +3,17 @@
  * Rebuild better-sqlite3 for Electron.
  *
  * Strategy:
- *   1. Find the matching prebuilt tarball in repo's prebuilds/ directory.
- *   2. Extract it directly into node_modules/better-sqlite3/ using the system
- *      tar command (built into Windows 10+, macOS, Linux) — zero network
- *      access, zero build tools required.
- *   3. If no bundled tarball matches (e.g. new Electron version), fall back to
- *      electron-rebuild which compiles from source.
+ *   1. Extract the matching prebuilt tarball from repo's prebuilds/ and place
+ *      the .node file at prebuilds/{platform}-{arch}/electron-v{abi}.node —
+ *      the exact path node-gyp-build looks for at Electron runtime.
+ *      Zero network access, zero build tools required.
+ *   2. If no bundled tarball matches, fall back to electron-rebuild (source compile).
  */
 
 const { execSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
+const os = require('os')
 
 const root = path.resolve(__dirname, '..')
 const sqliteDir = path.join(root, 'node_modules', 'better-sqlite3')
@@ -54,24 +54,32 @@ const arch = process.arch           // x64 | arm64
 
 console.log(`[rebuild-sqlite] Electron ${electronVersion} (ABI v${abi ?? '?'}) — ${platform}-${arch}`)
 
-// Step 1: extract bundled tarball directly — no network, no build tools.
+// Step 1: extract bundled tarball and place binary where node-gyp-build expects it.
 if (abi) {
   const tarName = `better-sqlite3-v${sqliteVersion}-electron-v${abi}-${platform}-${arch}.tar.gz`
   const srcTar = path.join(root, 'prebuilds', tarName)
 
   if (fs.existsSync(srcTar)) {
-    // Ensure build/Release dir exists so tar can write into it.
-    fs.mkdirSync(path.join(sqliteDir, 'build', 'Release'), { recursive: true })
+    // Destination: prebuilds/{platform}-{arch}/electron-v{abi}.node
+    // This is exactly where node-gyp-build looks for Electron prebuilds.
+    const destDir = path.join(sqliteDir, 'prebuilds', `${platform}-${arch}`)
+    const destFile = path.join(destDir, `electron-v${abi}.node`)
 
-    // tar is available on Windows 10+, macOS, and Linux.
-    const tarCmd = `tar -xzf "${srcTar}" -C "${sqliteDir}"`
-    console.log(`[rebuild-sqlite] extracting ${tarName}…`)
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'better-sqlite3-'))
     try {
-      execSync(tarCmd, { stdio: 'inherit' })
-      console.log('[rebuild-sqlite] ✓ prebuilt binary extracted')
+      execSync(`tar -xzf "${srcTar}" -C "${tmpDir}"`, { stdio: 'inherit' })
+      const extracted = path.join(tmpDir, 'build', 'Release', 'better_sqlite3.node')
+      if (!fs.existsSync(extracted)) {
+        throw new Error(`expected build/Release/better_sqlite3.node inside ${tarName}`)
+      }
+      fs.mkdirSync(destDir, { recursive: true })
+      fs.copyFileSync(extracted, destFile)
+      console.log(`[rebuild-sqlite] ✓ prebuilt binary installed → prebuilds/${platform}-${arch}/electron-v${abi}.node`)
       process.exit(0)
     } catch (err) {
-      console.warn(`[rebuild-sqlite] tar extraction failed: ${err.message}`)
+      console.warn(`[rebuild-sqlite] extraction failed: ${err.message}`)
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
     }
   } else {
     console.warn(`[rebuild-sqlite] no bundled prebuilt for ${tarName} — falling back to compile`)
