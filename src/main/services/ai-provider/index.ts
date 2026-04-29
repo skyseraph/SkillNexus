@@ -20,24 +20,46 @@ let _provider: LLMProvider | null = null
 
 export function setActiveProvider(provider: LLMProvider): void {
   _provider = provider
-  _client = new Anthropic({
-    apiKey: provider.apiKey || 'no-key',
-    baseURL: provider.baseUrl || undefined
-  })
+  // Only instantiate Anthropic client for anthropic-format providers
+  if ((provider.apiFormat ?? 'anthropic') === 'anthropic') {
+    _client = new Anthropic({
+      apiKey: provider.apiKey || 'no-key',
+      baseURL: provider.baseUrl || undefined
+    })
+  } else {
+    _client = null
+  }
 }
 
 export function getAIProvider(): AIProvider {
-  if (!_client || !_provider) {
+  if (!_provider) {
     // Default fallback
     _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? 'no-key' })
     _provider = {
       id: 'anthropic-default', name: 'Anthropic', baseUrl: '',
       apiKey: process.env.ANTHROPIC_API_KEY ?? '', model: 'claude-sonnet-4-6',
-      category: 'official'
+      category: 'official', apiFormat: 'anthropic'
     }
   }
-  const client = _client
   const provider = _provider
+  const isOpenAI = (provider.apiFormat ?? 'anthropic') === 'openai'
+
+  if (isOpenAI) {
+    return {
+      name: provider.name,
+      isAvailable: () => true,
+      call: (opts: AIRequestOptions) => callOpenAICompat(provider, opts),
+      stream: (opts: AIRequestOptions, onChunk: (c: string) => void) => streamOpenAICompat(provider, opts, onChunk)
+    }
+  }
+
+  if (!_client) {
+    _client = new Anthropic({
+      apiKey: provider.apiKey || 'no-key',
+      baseURL: provider.baseUrl || undefined
+    })
+  }
+  const client = _client
   return {
     name: provider.name,
     isAvailable: () => !!provider.apiKey || !provider.baseUrl.includes('api.anthropic.com'),
@@ -48,8 +70,13 @@ export function getAIProvider(): AIProvider {
 
 /** Returns the active Anthropic client instance (initialises default if needed). */
 export function getActiveClient(): Anthropic {
-  if (!_client) getAIProvider() // trigger default init
-  return _client!
+  // Ensure provider is initialised
+  getAIProvider()
+  if (!_client) {
+    // Fallback for openai-format providers that don't use Anthropic SDK
+    _client = new Anthropic({ apiKey: 'no-key' })
+  }
+  return _client
 }
 
 async function callAnthropicSdk(client: Anthropic, options: AIRequestOptions): Promise<AIResponse> {
@@ -96,6 +123,102 @@ async function streamAnthropicSdk(
       inputTokens = event.message.usage.input_tokens
     } else if (event.type === 'message_delta') {
       outputTokens = event.usage.output_tokens
+    }
+  }
+  return { content: fullContent, inputTokens, outputTokens, durationMs: Date.now() - start }
+}
+
+async function callOpenAICompat(provider: LLMProvider, options: AIRequestOptions): Promise<AIResponse> {
+  const start = Date.now()
+  const baseUrl = provider.baseUrl.replace(/\/$/, '')
+  const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {})
+    },
+    body: JSON.stringify({
+      model: options.model,
+      max_tokens: options.maxTokens ?? 4096,
+      messages: [
+        { role: 'system', content: options.systemPrompt },
+        { role: 'user', content: options.userMessage }
+      ]
+    })
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw new Error(`OpenAI API error ${res.status}: ${text}`)
+  }
+  const data = await res.json() as {
+    choices: Array<{ message: { content: string } }>
+    usage?: { prompt_tokens: number; completion_tokens: number }
+  }
+  const content = data.choices?.[0]?.message?.content ?? ''
+  return {
+    content,
+    inputTokens: data.usage?.prompt_tokens ?? 0,
+    outputTokens: data.usage?.completion_tokens ?? 0,
+    durationMs: Date.now() - start
+  }
+}
+
+async function streamOpenAICompat(
+  provider: LLMProvider,
+  options: AIRequestOptions,
+  onChunk: (chunk: string) => void
+): Promise<AIResponse> {
+  const start = Date.now()
+  const baseUrl = provider.baseUrl.replace(/\/$/, '')
+  const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {})
+    },
+    body: JSON.stringify({
+      model: options.model,
+      max_tokens: options.maxTokens ?? 4096,
+      stream: true,
+      messages: [
+        { role: 'system', content: options.systemPrompt },
+        { role: 'user', content: options.userMessage }
+      ]
+    })
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw new Error(`OpenAI API error ${res.status}: ${text}`)
+  }
+  let fullContent = ''
+  let inputTokens = 0
+  let outputTokens = 0
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let buf = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    const lines = buf.split('\n')
+    buf = lines.pop() ?? ''
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed.startsWith('data:')) continue
+      const payload = trimmed.slice(5).trim()
+      if (payload === '[DONE]') continue
+      try {
+        const evt = JSON.parse(payload) as {
+          choices?: Array<{ delta?: { content?: string } }>
+          usage?: { prompt_tokens: number; completion_tokens: number }
+        }
+        const delta = evt.choices?.[0]?.delta?.content
+        if (delta) { fullContent += delta; onChunk(delta) }
+        if (evt.usage) {
+          inputTokens = evt.usage.prompt_tokens
+          outputTokens = evt.usage.completion_tokens
+        }
+      } catch { /* skip malformed SSE lines */ }
     }
   }
   return { content: fullContent, inputTokens, outputTokens, durationMs: Date.now() - start }

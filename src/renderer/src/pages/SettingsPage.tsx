@@ -56,6 +56,7 @@ type EditForm = {
   apiKey: string
   apiKeyPlaceholder: string
   category: LLMProvider['category']
+  apiFormat: 'anthropic' | 'openai'
   websiteUrl: string
   isPreset: boolean
   presetId: string
@@ -63,7 +64,7 @@ type EditForm = {
 
 const EMPTY_FORM: EditForm = {
   id: '', name: '', baseUrl: '', model: '', apiKey: '', apiKeyPlaceholder: 'sk-...',
-  category: 'custom', websiteUrl: '', isPreset: false, presetId: ''
+  category: 'custom', apiFormat: 'anthropic', websiteUrl: '', isPreset: false, presetId: ''
 }
 
 function slugify(s: string) {
@@ -132,7 +133,8 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
   const openEdit = (p: PublicProvider) => {
     setForm({ id: p.id, name: p.name, baseUrl: p.baseUrl, model: p.model, apiKey: '',
       apiKeyPlaceholder: LLM_PROVIDER_PRESETS.find(x => x.id === p.presetId)?.keyPlaceholder ?? 'sk-...',
-      category: p.category, websiteUrl: p.websiteUrl ?? '', isPreset: !!p.isPreset, presetId: p.presetId ?? '' })
+      category: p.category, apiFormat: p.apiFormat ?? 'anthropic',
+      websiteUrl: p.websiteUrl ?? '', isPreset: !!p.isPreset, presetId: p.presetId ?? '' })
     setEditingId(p.id)
     setTestResults({})
     setFormError('')
@@ -146,6 +148,7 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
       id, name: preset.name, baseUrl: preset.baseUrl, model: preset.defaultModel,
       apiKey: '', apiKeyPlaceholder: preset.keyPlaceholder ?? 'sk-...',
       category: preset.category,
+      apiFormat: preset.apiFormat ?? 'anthropic',
       websiteUrl: preset.websiteUrl ?? '', isPreset: true, presetId: preset.id
     })
     setEditingId(null)
@@ -170,6 +173,7 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
       model: form.model.trim(),
       apiKey: form.apiKey.trim(),
       category: form.category,
+      apiFormat: form.apiFormat,
       websiteUrl: form.websiteUrl.trim() || undefined,
       isPreset: form.isPreset,
       presetId: form.presetId || undefined
@@ -391,8 +395,33 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
                 <input value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} placeholder="MiniMax-M2.7" />
               </div>
               <div className="form-field full">
-                <label>Base URL <span className="hint">— passed directly to Anthropic SDK as baseURL</span></label>
-                <input value={form.baseUrl} onChange={e => setForm(f => ({ ...f, baseUrl: e.target.value }))} placeholder="https://api.minimaxi.com/anthropic" />
+                <label>API Format</label>
+                <div className="format-toggle">
+                  {(['anthropic', 'openai'] as const).map(fmt => (
+                    <button
+                      key={fmt}
+                      type="button"
+                      className={`format-btn ${form.apiFormat === fmt ? 'active' : ''}`}
+                      onClick={() => setForm(f => ({ ...f, apiFormat: fmt }))}
+                    >
+                      {fmt === 'anthropic' ? 'Anthropic' : 'OpenAI Compatible'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="form-field full">
+                <label>Base URL
+                  <span className="hint">
+                    {form.apiFormat === 'openai'
+                      ? '— calls /v1/chat/completions (OpenAI-compatible)'
+                      : '— passed to Anthropic SDK as baseURL'}
+                  </span>
+                </label>
+                <input
+                  value={form.baseUrl}
+                  onChange={e => setForm(f => ({ ...f, baseUrl: e.target.value }))}
+                  placeholder={form.apiFormat === 'openai' ? 'https://api.siliconflow.cn' : 'https://api.minimaxi.com/anthropic'}
+                />
               </div>
               <div className="form-field full">
                 <label>API Key {editingId && <span className="hint">(leave blank to keep existing)</span>}</label>
@@ -676,6 +705,10 @@ export default function SettingsPage({ onConfigSaved, theme, onThemeChange, toas
         .test-result { font-size: 13px; font-weight: 500; }
         .test-result.ok { color: var(--success); }
         .test-result.fail { color: var(--danger); max-width: 320px; word-break: break-all; }
+        .format-toggle { display: flex; gap: 6px; }
+        .format-btn { padding: 5px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); font-size: 12px; cursor: pointer; transition: all var(--transition); }
+        .format-btn:hover { border-color: var(--accent); color: var(--text); }
+        .format-btn.active { border-color: var(--accent); background: rgba(108,99,255,0.15); color: var(--accent); font-weight: 600; }
 
         /* Tools */
         .section-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; margin-top: 6px; }

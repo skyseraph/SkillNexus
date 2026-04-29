@@ -130,10 +130,11 @@ export type ProviderCategory = 'official' | 'cn_official' | 'aggregator' | 'loca
 export interface LLMProvider {
   id: string              // unique slug
   name: string
-  baseUrl: string         // e.g. https://api.minimaxi.com/anthropic  (passed to Anthropic SDK baseURL)
+  baseUrl: string         // base URL passed to the SDK / fetch
   apiKey: string          // stored in electron-store; empty string when not set
   model: string           // e.g. MiniMax-M2.7
   category: ProviderCategory
+  apiFormat?: 'anthropic' | 'openai'  // default 'anthropic'
   websiteUrl?: string
   isPreset?: boolean      // created from a built-in preset
   presetId?: string       // which preset it came from
@@ -145,6 +146,7 @@ export interface LLMProviderPreset {
   baseUrl: string
   defaultModel: string
   category: ProviderCategory
+  apiFormat?: 'anthropic' | 'openai'  // default 'anthropic'
   websiteUrl?: string
   keyPlaceholder?: string
   requiresKey: boolean
@@ -152,21 +154,21 @@ export interface LLMProviderPreset {
 
 export const LLM_PROVIDER_PRESETS: LLMProviderPreset[] = [
   // ── Official ──────────────────────────────────────────────────────────────
-  { id: 'anthropic',    name: 'Anthropic',       baseUrl: 'https://api.anthropic.com',                     defaultModel: 'claude-sonnet-4-6',              category: 'official',    websiteUrl: 'https://console.anthropic.com',          keyPlaceholder: 'sk-ant-...',  requiresKey: true },
+  { id: 'anthropic',    name: 'Anthropic',       baseUrl: 'https://api.anthropic.com',                     defaultModel: 'claude-sonnet-4-6',              category: 'official',    apiFormat: 'anthropic', websiteUrl: 'https://console.anthropic.com',          keyPlaceholder: 'sk-ant-...',  requiresKey: true },
   // ── CN Official ───────────────────────────────────────────────────────────
-  { id: 'minimax-cn',   name: 'MiniMax (CN)',     baseUrl: 'https://api.minimaxi.com/anthropic',            defaultModel: 'MiniMax-M2.7',                   category: 'cn_official', websiteUrl: 'https://platform.minimaxi.com',          keyPlaceholder: '',            requiresKey: true },
-  { id: 'minimax-en',   name: 'MiniMax (Global)', baseUrl: 'https://api.minimax.io/anthropic',             defaultModel: 'MiniMax-M2.7',                   category: 'cn_official', websiteUrl: 'https://platform.minimax.io',            keyPlaceholder: '',            requiresKey: true },
-  { id: 'deepseek',     name: 'DeepSeek',         baseUrl: 'https://api.deepseek.com/anthropic',           defaultModel: 'DeepSeek-V3.2',                  category: 'cn_official', websiteUrl: 'https://platform.deepseek.com',          keyPlaceholder: 'sk-...',      requiresKey: true },
-  { id: 'kimi',         name: 'Kimi (Moonshot)',  baseUrl: 'https://api.moonshot.cn/anthropic',            defaultModel: 'kimi-k2.5',                      category: 'cn_official', websiteUrl: 'https://platform.moonshot.cn',           keyPlaceholder: 'sk-...',      requiresKey: true },
-  { id: 'zhipu',        name: 'Zhipu GLM',        baseUrl: 'https://open.bigmodel.cn/api/anthropic',       defaultModel: 'glm-5',                          category: 'cn_official', websiteUrl: 'https://open.bigmodel.cn',               keyPlaceholder: '',            requiresKey: true },
-  { id: 'doubao',       name: 'DouBao Seed',      baseUrl: 'https://ark.cn-beijing.volces.com/api/coding', defaultModel: 'doubao-seed-2-0-code-preview-latest', category: 'cn_official', websiteUrl: 'https://www.volcengine.com/product/doubao', keyPlaceholder: '', requiresKey: true },
+  { id: 'minimax-cn',   name: 'MiniMax (CN)',     baseUrl: 'https://api.minimaxi.com/anthropic',            defaultModel: 'MiniMax-M2.7',                   category: 'cn_official', apiFormat: 'anthropic', websiteUrl: 'https://platform.minimaxi.com',          keyPlaceholder: '',            requiresKey: true },
+  { id: 'minimax-en',   name: 'MiniMax (Global)', baseUrl: 'https://api.minimax.io/anthropic',             defaultModel: 'MiniMax-M2.7',                   category: 'cn_official', apiFormat: 'anthropic', websiteUrl: 'https://platform.minimax.io',            keyPlaceholder: '',            requiresKey: true },
+  { id: 'deepseek',     name: 'DeepSeek',         baseUrl: 'https://api.deepseek.com/anthropic',           defaultModel: 'DeepSeek-V3.2',                  category: 'cn_official', apiFormat: 'anthropic', websiteUrl: 'https://platform.deepseek.com',          keyPlaceholder: 'sk-...',      requiresKey: true },
+  { id: 'kimi',         name: 'Kimi (Moonshot)',  baseUrl: 'https://api.moonshot.cn/anthropic',            defaultModel: 'kimi-k2.5',                      category: 'cn_official', apiFormat: 'anthropic', websiteUrl: 'https://platform.moonshot.cn',           keyPlaceholder: 'sk-...',      requiresKey: true },
+  { id: 'zhipu',        name: 'Zhipu GLM',        baseUrl: 'https://open.bigmodel.cn/api/anthropic',       defaultModel: 'glm-5',                          category: 'cn_official', apiFormat: 'anthropic', websiteUrl: 'https://open.bigmodel.cn',               keyPlaceholder: '',            requiresKey: true },
+  { id: 'doubao',       name: 'DouBao Seed',      baseUrl: 'https://ark.cn-beijing.volces.com/api/coding', defaultModel: 'doubao-seed-2-0-code-preview-latest', category: 'cn_official', apiFormat: 'anthropic', websiteUrl: 'https://www.volcengine.com/product/doubao', keyPlaceholder: '', requiresKey: true },
   // ── Aggregators ───────────────────────────────────────────────────────────
-  { id: 'siliconflow',  name: 'SiliconFlow',      baseUrl: 'https://api.siliconflow.cn',                   defaultModel: 'Pro/MiniMaxAI/MiniMax-M2.7',     category: 'aggregator',  websiteUrl: 'https://siliconflow.cn',                keyPlaceholder: 'sk-...',      requiresKey: true },
-  { id: 'aihubmix',     name: 'AiHubMix',         baseUrl: 'https://aihubmix.com',                         defaultModel: 'claude-sonnet-4-6',              category: 'aggregator',  websiteUrl: 'https://aihubmix.com',                  keyPlaceholder: '',            requiresKey: true },
-  { id: 'openrouter',   name: 'OpenRouter',        baseUrl: 'https://openrouter.ai/api',                   defaultModel: 'anthropic/claude-sonnet-4-6',    category: 'aggregator',  websiteUrl: 'https://openrouter.ai',                 keyPlaceholder: 'sk-or-...',   requiresKey: true },
+  { id: 'siliconflow',  name: 'SiliconFlow',      baseUrl: 'https://api.siliconflow.cn',                   defaultModel: 'Pro/MiniMaxAI/MiniMax-M2.7',     category: 'aggregator',  apiFormat: 'openai',    websiteUrl: 'https://siliconflow.cn',                keyPlaceholder: 'sk-...',      requiresKey: true },
+  { id: 'aihubmix',     name: 'AiHubMix',         baseUrl: 'https://aihubmix.com',                         defaultModel: 'claude-sonnet-4-6',              category: 'aggregator',  apiFormat: 'openai',    websiteUrl: 'https://aihubmix.com',                  keyPlaceholder: '',            requiresKey: true },
+  { id: 'openrouter',   name: 'OpenRouter',        baseUrl: 'https://openrouter.ai/api',                   defaultModel: 'anthropic/claude-sonnet-4-6',    category: 'aggregator',  apiFormat: 'openai',    websiteUrl: 'https://openrouter.ai',                 keyPlaceholder: 'sk-or-...',   requiresKey: true },
   // ── Local ─────────────────────────────────────────────────────────────────
-  { id: 'ollama',       name: 'Ollama',            baseUrl: 'http://localhost:11434',                       defaultModel: 'llama3.2',                       category: 'local',       websiteUrl: 'https://ollama.com',                    keyPlaceholder: '',            requiresKey: false },
-  { id: 'lmstudio',    name: 'LM Studio',          baseUrl: 'http://localhost:1234',                        defaultModel: 'local-model',                    category: 'local',       websiteUrl: 'https://lmstudio.ai',                   keyPlaceholder: '',            requiresKey: false },
+  { id: 'ollama',       name: 'Ollama',            baseUrl: 'http://localhost:11434',                       defaultModel: 'llama3.2',                       category: 'local',       apiFormat: 'openai',    websiteUrl: 'https://ollama.com',                    keyPlaceholder: '',            requiresKey: false },
+  { id: 'lmstudio',    name: 'LM Studio',          baseUrl: 'http://localhost:1234',                        defaultModel: 'local-model',                    category: 'local',       apiFormat: 'openai',    websiteUrl: 'https://lmstudio.ai',                   keyPlaceholder: '',            requiresKey: false },
 ]
 
 export interface GithubSkillResult {
