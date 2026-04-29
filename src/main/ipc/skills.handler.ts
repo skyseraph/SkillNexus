@@ -1,12 +1,18 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { getDb } from '../db'
 import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, symlinkSync, existsSync, unlinkSync, cpSync, rmSync } from 'fs'
-import { basename, resolve, extname, join, relative, dirname } from 'path'
+import { basename, resolve, extname, join, relative, dirname, delimiter } from 'path'
 import { app } from 'electron'
 import { platform } from 'os'
 import yaml from 'js-yaml'
 import { getConfig } from './config.handler'
 import type { Skill, SkillFileEntry, SkillType, ToolTarget, ScannedSkill, ScanResult, EvoChainEntry, EvoAnalysis } from '../../shared/types'
+
+// Windows paths are case-insensitive; use this for all prefix checks
+function pathStartsWith(p: string, prefix: string): boolean {
+  if (platform() === 'win32') return p.toLowerCase().startsWith(prefix.toLowerCase())
+  return p.startsWith(prefix)
+}
 
 // ── Security: allowed root directories ───────────────────────────────────────
 let _allowedPrefixes: string[] | null = null
@@ -85,8 +91,8 @@ function resolveToolDir(toolId: string): { name: string; exportDir: string; scan
   let scanDirs: string[]
 
   if (override) {
-    // User-configured path: expand ~ and resolve; supports multiple paths separated by ':'
-    const parts = override.split(':').map(p => p.trim()).filter(Boolean)
+    // User-configured path: expand ~ and resolve; supports multiple paths separated by OS path delimiter (: on Mac/Linux, ; on Windows)
+    const parts = override.split(delimiter).map(p => p.trim()).filter(Boolean)
     const expanded = parts.map(p => {
       const e = p.startsWith('~') ? p.replace(/^~/, home) : p
       return resolve(e)
@@ -382,7 +388,7 @@ export function registerSkillsHandlers(): void {
         id: toolId,
         name: r.name,
         exportDir: r.exportDir,
-        exportDirDisplay: r.exportDir.startsWith(home) ? '~' + r.exportDir.slice(home.length) : r.exportDir,
+        exportDirDisplay: pathStartsWith(r.exportDir, home) ? '~' + r.exportDir.slice(home.length) : r.exportDir,
         ext: r.ext,
         exists: existsSync(r.exportDir),
         enabled
@@ -403,7 +409,7 @@ export function registerSkillsHandlers(): void {
     const seenFilePaths = new Set<string>()
 
     const scanDir = (dir: string, toolId: string, toolName: string) => {
-      const dirDisplay = dir.startsWith(home) ? '~' + dir.slice(home.length) : dir
+      const dirDisplay = pathStartsWith(dir, home) ? '~' + dir.slice(home.length) : dir
       const exists = existsSync(dir)
       scannedDirs.push({ toolName, dir: dirDisplay, exists })
       if (!exists) return
@@ -535,7 +541,7 @@ export function registerSkillsHandlers(): void {
       ? resolve(process.env.APPDATA || join(home, 'AppData', 'Roaming'))
       : null
     const exportDirResolved = resolve(r.exportDir)
-    if (!exportDirResolved.startsWith(home) && !(appData && exportDirResolved.startsWith(appData))) {
+    if (!pathStartsWith(exportDirResolved, home) && !(appData && pathStartsWith(exportDirResolved, appData))) {
       throw new Error(`Export path must be within home or AppData directory (got: ${exportDirResolved})`)
     }
 
