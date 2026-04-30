@@ -1,6 +1,6 @@
 {
   "name": "skill-nexus",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "description": "Skill 创造平台：让Skill可生成、可量化、可管理、可成长",
   "main": "out/main/index.js",
   "scripts": {
