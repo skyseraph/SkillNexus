@@ -14,7 +14,7 @@
 [![Electron](https://img.shields.io/badge/Electron-31-47848F.svg)](https://electronjs.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](#)
 
-[English](README.md) · [博客](https://skyseraph.github.io)· [专栏](https://skyseraph.github.io/series/skill-nexus/)
+[English](README.md) · [专栏](https://skyseraph.github.io/series/skill-nexus/)
 
 </div>
 
