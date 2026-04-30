@@ -16,7 +16,10 @@
     "test:e2e:security": "playwright test e2e/security",
     "dist:mac": "electron-vite build && node scripts/rebuild-sqlite.js && electron-builder --mac",
     "dist:win": "electron-vite build && node scripts/rebuild-sqlite.js && electron-builder --win",
-    "dist:all": "electron-vite build && node scripts/rebuild-sqlite.js && electron-builder --mac --win"
+    "dist:all": "electron-vite build && node scripts/rebuild-sqlite.js && electron-builder --mac --win",
+    "release": "node scripts/release.js",
+    "release:minor": "node scripts/release.js minor",
+    "release:major": "node scripts/release.js major"
   },
   "build": {
     "appId": "com.skillnexus.app",
