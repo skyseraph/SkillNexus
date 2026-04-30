@@ -408,12 +408,11 @@ export function registerSkillsHandlers(): void {
     const scannedDirs: ScanResult['scannedDirs'] = []
     const seenFilePaths = new Set<string>()
 
-    const scanDir = (dir: string, toolId: string, toolName: string) => {
-      const dirDisplay = pathStartsWith(dir, home) ? '~' + dir.slice(home.length) : dir
-      const exists = existsSync(dir)
-      scannedDirs.push({ toolName, dir: dirDisplay, exists })
-      if (!exists) return
-
+    // Recursively scan entries inside a directory.
+    // - Subdirectory with an entry .md  → agent skill (leaf, no further recursion)
+    // - Subdirectory without entry .md  → container directory, recurse into it
+    // - .md / .mdc file                 → single skill
+    const scanEntries = (dir: string, toolId: string, toolName: string) => {
       let entries: string[]
       try { entries = readdirSync(dir) } catch { return }
 
@@ -423,25 +422,29 @@ export function registerSkillsHandlers(): void {
         try { st = statSync(fullPath) } catch { continue }
 
         if (st.isDirectory()) {
-          // Agent skill: directory containing SKILL.md / README.md / <dirname>.md
           const entryMd = findEntryMd(fullPath)
-          if (!entryMd) continue
-          if (seenFilePaths.has(entryMd)) continue
-          seenFilePaths.add(entryMd)
+          if (entryMd) {
+            // This directory is an agent skill
+            if (seenFilePaths.has(entryMd)) continue
+            seenFilePaths.add(entryMd)
 
-          let name = entry
-          let skillType: SkillType = 'agent'
-          try {
-            const content = readFileSync(entryMd, 'utf-8')
-            const match = content.match(/^---\n([\s\S]*?)\n---/)
-            if (match) {
-              const fm = yaml.load(match[1]) as Record<string, unknown>
-              if (fm?.name) name = fm.name as string
-              if ((fm?.skill_type as string) === 'single') skillType = 'single'
-            }
-          } catch { /* use dirname */ }
+            let name = entry
+            let skillType: SkillType = 'agent'
+            try {
+              const content = readFileSync(entryMd, 'utf-8')
+              const match = content.match(/^---\n([\s\S]*?)\n---/)
+              if (match) {
+                const fm = yaml.load(match[1]) as Record<string, unknown>
+                if (fm?.name) name = fm.name as string
+                if ((fm?.skill_type as string) === 'single') skillType = 'single'
+              }
+            } catch { /* use dirname */ }
 
-          skills.push({ name, filePath: entryMd, toolId, toolName, alreadyInstalled: installedPaths.has(entryMd), skillType })
+            skills.push({ name, filePath: entryMd, toolId, toolName, alreadyInstalled: installedPaths.has(entryMd), skillType })
+          } else {
+            // No entry .md — treat as a container directory and recurse
+            scanEntries(fullPath, toolId, toolName)
+          }
         } else if (entry.endsWith('.md') || entry.endsWith('.mdc')) {
           // Single skill: flat .md / .mdc file
           if (seenFilePaths.has(fullPath)) continue
@@ -462,6 +465,14 @@ export function registerSkillsHandlers(): void {
           skills.push({ name, filePath: fullPath, toolId, toolName, alreadyInstalled: installedPaths.has(fullPath), skillType })
         }
       }
+    }
+
+    const scanDir = (dir: string, toolId: string, toolName: string) => {
+      const dirDisplay = pathStartsWith(dir, home) ? '~' + dir.slice(home.length) : dir
+      const exists = existsSync(dir)
+      scannedDirs.push({ toolName, dir: dirDisplay, exists })
+      if (!exists) return
+      scanEntries(dir, toolId, toolName)
     }
 
     for (const toolId of Object.keys(TOOL_DEFAULTS)) {

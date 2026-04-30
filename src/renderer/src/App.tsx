@@ -60,6 +60,10 @@ export default function App() {
     if (['eval', 'evo', 'studio', 'trending'].includes(p)) {
       setSkillsRefreshKey(k => k + 1)
     }
+    // Re-check provider config whenever leaving settings or entering any AI page
+    if (p !== 'settings') {
+      checkApiKey()
+    }
   }
 
   const checkApiKey = () => {
@@ -133,7 +137,7 @@ export default function App() {
             {mounted.has('home') && <HomePage toast={toast} onNavigate={handleNavigate} />}
           </div>
           <div style={{ display: page === 'studio' ? undefined : 'none', height: '100%' }}>
-            {mounted.has('studio') && <StudioPage key={v('studio')} initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} />}
+            {mounted.has('studio') && <StudioPage key={v('studio')} initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} apiKeySet={apiKeySet} />}
           </div>
           <div style={{ display: page === 'eval' ? undefined : 'none', height: '100%' }}>
             {mounted.has('eval') && <EvalPage key={v('eval')} initialSkillId={navSkillId ?? undefined} onNavigate={handleNavigate} skillsRefreshKey={skillsRefreshKey} />}

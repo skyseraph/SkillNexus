@@ -1233,7 +1233,7 @@ function ValidationPanel({ expanded, onToggle, installedSkill }: {
 // ── StudioPage ────────────────────────────────────────────────────────────────
 
 
-export default function StudioPage({ initialSkillId, onNavigate }: { initialSkillId?: string; onNavigate?: (page: string, skillId?: string) => void } = {}) {
+export default function StudioPage({ initialSkillId, onNavigate, apiKeySet: apiKeySetProp }: { initialSkillId?: string; onNavigate?: (page: string, skillId?: string) => void; apiKeySet?: boolean | null } = {}) {
   const t = useT()
   const CREATION_TABS = [
     { id: 'describe' as StudioMode, label: t('studio.tab.describe'), icon: '✍️' },
@@ -1243,7 +1243,9 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
     { id: 'agent'    as StudioMode, label: t('studio.tab.agent'),    icon: '🤖' }
   ]
   // Global state
-  const [apiKeySet, setApiKeySet] = useState<boolean | null>(null)
+  // apiKeySet is owned by App and passed down; fall back to local fetch only if prop is absent (e.g. standalone render in tests)
+  const [apiKeySetLocal, setApiKeySetLocal] = useState<boolean | null>(null)
+  const apiKeySet = apiKeySetProp !== undefined ? apiKeySetProp : apiKeySetLocal
   const [mode, setMode] = useState<StudioMode>('describe')
   const [methods, setMethods] = useState<GenerationMethod[]>(() => [
     { id: 'builtin', label: t('studio.method.builtin'), icon: '⚡', type: 'builtin', sourceName: 'SkillNexus', sourceUrl: 'https://github.com/skyseraph/SkillNexus' },
@@ -1280,7 +1282,10 @@ export default function StudioPage({ initialSkillId, onNavigate }: { initialSkil
   }, [editorContent, streaming])
 
   useEffect(() => {
-    window.api.config.get().then(c => setApiKeySet((c.providers ?? []).some(p => p.apiKeySet))).catch(() => setApiKeySet(false))
+    // Only fetch locally if App didn't pass apiKeySet down (e.g. standalone/test render)
+    if (apiKeySetProp === undefined) {
+      window.api.config.get().then(c => setApiKeySetLocal((c.providers ?? []).some(p => p.apiKeySet))).catch(() => setApiKeySetLocal(false))
+    }
     window.api.skills.getAll().then(skills => {
       setMySkills(skills)
       if (initialSkillId) {
