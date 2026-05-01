@@ -100,15 +100,15 @@ export default function CompareMode({ skills, apiKeySet, onNavigate }: { skills:
 
   return (
     <div className="compare-mode">
-      {apiKeySet === false && <div className="guard-banner">⚠️ 未配置 LLM 供应商，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>Settings</button> 添加。</div>}
+      {apiKeySet === false && <div className="guard-banner">{t('cmp.guard_no_llm')}</div>}
 
       <div className="eval-card">
-        <span className="card-title">选择两个 Skill 对比</span>
+        <span className="card-title">{t('cmp.title_select')}</span>
         <div className="cmp-skill-row">
           <div className="cmp-skill-picker">
             <label className="cmp-skill-label">Skill A</label>
             <select value={skillAId} onChange={e => setSkillAId(e.target.value)} className="skill-select">
-              <option value="">选择 Skill A...</option>
+              <option value="">{t('cmp.option_skill_a')}</option>
               {skills.filter(s => s.id !== skillBId).map(s => <option key={s.id} value={s.id}>{s.name} v{s.version}</option>)}
             </select>
           </div>
@@ -116,7 +116,7 @@ export default function CompareMode({ skills, apiKeySet, onNavigate }: { skills:
           <div className="cmp-skill-picker">
             <label className="cmp-skill-label">Skill B</label>
             <select value={skillBId} onChange={e => setSkillBId(e.target.value)} className="skill-select">
-              <option value="">选择 Skill B...</option>
+              <option value="">{t('cmp.option_skill_b')}</option>
               {skills.filter(s => s.id !== skillAId).map(s => <option key={s.id} value={s.id}>{s.name} v{s.version}</option>)}
             </select>
           </div>
@@ -125,10 +125,10 @@ export default function CompareMode({ skills, apiKeySet, onNavigate }: { skills:
         {testCases.length > 0 && (
           <div className="cmp-tc-section">
             <div className="card-row" style={{ marginBottom: 8 }}>
-              <span className="card-title" style={{ marginBottom: 0 }}>测试用例 (来自 Skill A)</span>
+              <span className="card-title" style={{ marginBottom: 0 }}>{t('cmp.title_test_cases')}</span>
               <div className="bulk-btns">
-                <button className="btn btn-ghost btn-sm" onClick={() => setSelectedTcIds(new Set(testCases.map(t => t.id)))}>全选</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => setSelectedTcIds(new Set())}>取消</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setSelectedTcIds(new Set(testCases.map(t => t.id)))}>{t('common.select_all')}</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setSelectedTcIds(new Set())}>{t('common.cancel')}</button>
               </div>
             </div>
             <div className="tc-list" style={{ maxHeight: 140, overflowY: 'auto' }}>
@@ -146,12 +146,14 @@ export default function CompareMode({ skills, apiKeySet, onNavigate }: { skills:
         )}
 
         {skillAId && testCases.length === 0 && (
-          <div className="info-banner">Skill A 还没有测试用例，请先<button className="link-btn" onClick={() => onNavigate?.('eval')}>在 TestCase 页面添加</button>。</div>
+          <div className="info-banner">{t('cmp.info_no_test_cases')}</div>
         )}
 
         <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleRun}
           disabled={!skillAId || !skillBId || selectedTcIds.size === 0 || running || apiKeySet === false}>
-          {running ? <><span className="gen-spinner" />{` 评测中 ${progress}%...`}</> : `▶ 开始对比评测 (${selectedTcIds.size} 用例)`}
+          {running
+            ? <><span className="gen-spinner" />{' '}{t('cmp.status_evaluating').replace('{progress}', String(progress))}</>
+            : t('cmp.btn_start').replace('{n}', String(selectedTcIds.size))}
         </button>
         {error && <div className="guard-banner" style={{ marginTop: 10 }}>⚠️ {error}</div>}
       </div>
@@ -159,13 +161,13 @@ export default function CompareMode({ skills, apiKeySet, onNavigate }: { skills:
       {running && (
         <div className="eval-card progress-card">
           <div className="progress-track"><div className="progress-fill" style={{ width: `${progress}%` }} /></div>
-          <p className="progress-msg">正在对 {skillAName} 和 {skillBName} 并行评测，请稍候...</p>
+          <p className="progress-msg">{t('cmp.progress_msg').replace('{a}', skillAName).replace('{b}', skillBName)}</p>
         </div>
       )}
 
       {scoresA && scoresB && (
         <div className="eval-card">
-          <span className="card-title">对比结果</span>
+          <span className="card-title">{t('cmp.title_results')}</span>
           <div className="cmp-overall-row">
             <div className="cmp-overall-item" style={{ color: avgA! >= (avgB ?? 0) ? 'var(--success)' : 'var(--text)' }}>
               <div className="cmp-overall-name">{skillAName}</div>
@@ -180,10 +182,10 @@ export default function CompareMode({ skills, apiKeySet, onNavigate }: { skills:
           {allDims.length > 0 && (
             <div className="cmp-dim-table">
               <div className="cmp-dim-header">
-                <span className="cmp-dim-col">维度</span>
+                <span className="cmp-dim-col">{t('cmp.dim_header')}</span>
                 <span className="cmp-dim-col">{skillAName}</span>
                 <span className="cmp-dim-col">{skillBName}</span>
-                <span className="cmp-dim-col">差值</span>
+                <span className="cmp-dim-col">{t('cmp.delta_header')}</span>
               </div>
               {allDims.map(dim => {
                 const a = scoresA[dim] ?? 0, b = scoresB[dim] ?? 0
@@ -211,10 +213,10 @@ export default function CompareMode({ skills, apiKeySet, onNavigate }: { skills:
           <div className="cmp-winner">
             {avgA !== null && avgB !== null && (
               avgA > avgB
-                ? <span className="winner-badge a">🏆 {skillAName} 胜出 (+{(avgA - avgB).toFixed(2)})</span>
+                ? <span className="winner-badge a">{t('cmp.winner').replace('{name}', skillAName).replace('{delta}', (avgA - avgB).toFixed(2))}</span>
                 : avgB > avgA
-                  ? <span className="winner-badge b">🏆 {skillBName} 胜出 (+{(avgB - avgA).toFixed(2)})</span>
-                  : <span className="winner-badge neu">平局</span>
+                  ? <span className="winner-badge b">{t('cmp.winner').replace('{name}', skillBName).replace('{delta}', (avgB - avgA).toFixed(2))}</span>
+                  : <span className="winner-badge neu">{t('cmp.tie')}</span>
             )}
           </div>
         </div>

@@ -156,8 +156,8 @@ function DiscoveryPanel({
               <span className="studio-v2-card-score">5D {avg5D(s)}</span>
             </div>
             <div className="studio-v2-card-actions">
-              <button className="studio-v2-card-btn" onClick={() => setPreview(s.content)}>预览</button>
-              <button className="studio-v2-card-btn primary" onClick={() => onLoad(s.content)}>载入</button>
+              <button className="studio-v2-card-btn" onClick={() => setPreview(s.content)}>{t('studio.disc.preview')}</button>
+              <button className="studio-v2-card-btn primary" onClick={() => onLoad(s.content)}>{t('studio.disc.load')}</button>
             </div>
           </div>
         ))}
@@ -166,10 +166,10 @@ function DiscoveryPanel({
           <>
             {ghError && <div className="studio-v2-gh-error">{ghError}</div>}
             {!ghSearched && !ghLoading && (
-              <div className="studio-v2-empty">输入关键词后按 Enter 或点击搜索</div>
+              <div className="studio-v2-empty">{t('studio.disc.search_hint')}</div>
             )}
             {ghSearched && !ghLoading && ghResults.length === 0 && !ghError && (
-              <div className="studio-v2-empty">未找到相关 .md 文件</div>
+              <div className="studio-v2-empty">{t('studio.disc.no_md_found')}</div>
             )}
             {ghResults.map(r => (
               <div key={r.id} className="studio-v2-skill-card">
@@ -186,7 +186,7 @@ function DiscoveryPanel({
                 </div>
                 <div className="studio-v2-card-actions">
                   <button className="studio-v2-card-btn" onClick={() => window.api.shell.openExternal(r.url)}>
-                    打开 →
+                    {t('studio.disc.open_external')}
                   </button>
                   <button
                     className="studio-v2-card-btn primary"
@@ -224,7 +224,7 @@ function DiscoveryPanel({
               </div>
             </div>
             <div className="studio-v2-card-actions">
-              <button className="studio-v2-card-btn primary" onClick={() => onLoad(s.markdownContent)}>载入</button>
+              <button className="studio-v2-card-btn primary" onClick={() => onLoad(s.markdownContent)}>{t('studio.disc.load')}</button>
             </div>
           </div>
         ))}
@@ -238,13 +238,13 @@ function DiscoveryPanel({
         <div className="studio-v2-preview-overlay" onClick={() => setPreview(null)}>
           <div className="studio-v2-preview-modal" onClick={e => e.stopPropagation()}>
             <div className="studio-v2-preview-header">
-              <span>预览</span>
+              <span>{t('studio.disc.preview')}</span>
               <button onClick={() => setPreview(null)}>✕</button>
             </div>
             <pre className="studio-v2-preview-content">{preview}</pre>
             <div className="studio-v2-preview-footer">
               <button className="studio-v2-btn primary" onClick={() => { onLoad(preview!); setPreview(null) }}>
-                载入到编辑器
+                {t('studio.disc.load_to_editor')}
               </button>
             </div>
           </div>
@@ -264,10 +264,11 @@ function MethodBar({
   onSelect: (id: string) => void
   onAddCustom: () => void
 }) {
+  const t = useT()
   const active = methods.find(m => m.id === activeId)
   return (
     <div className="studio-v2-method-bar">
-      <span className="studio-v2-method-label">生成方式</span>
+      <span className="studio-v2-method-label">{t('studio.method.generation')}</span>
       <div className="studio-v2-method-list">
         {methods.map(m => (
           <button
@@ -278,13 +279,13 @@ function MethodBar({
             {m.icon} {m.label}
           </button>
         ))}
-        <button className="studio-v2-method-chip add" onClick={onAddCustom}>+ 自定义</button>
+        <button className="studio-v2-method-chip add" onClick={onAddCustom}>{t('studio.method.custom')}</button>
       </div>
       {active?.sourceUrl && (
         <button
           className="studio-v2-method-source"
           onClick={() => window.api.shell.openExternal(active.sourceUrl!)}
-          title={`查看 ${active.sourceName || active.label} 出处`}
+          title={t('studio.method.view_source').replace('{label}', active.sourceName || active.label)}
         >
           🔗 {active.sourceName || t('studio.disc.source_label')}
         </button>
@@ -296,13 +297,14 @@ function MethodBar({
 // ── MethodHint ────────────────────────────────────────────────────────────────
 
 function MethodHint({ method }: { method: GenerationMethod }) {
+  const t = useT()
   if (method.type !== 'external') return null
   return (
     <div className="studio-v2-method-hint">
       <span className="studio-v2-hint-icon">🔗</span>
       <span>{method.hint}</span>
       <button className="studio-v2-hint-link" onClick={() => window.api.shell.openExternal(method.url!)}>
-        打开 {method.label} →
+        {t('studio.method.open_link').replace('{label}', method.label)}
       </button>
     </div>
   )
@@ -327,36 +329,36 @@ function SkillCreatorPanel({ streaming, apiKeySet, onGenerate }: {
     <div className="studio-v2-input-area studio-v2-skill-creator">
       <div className="studio-v2-sc-grid">
         <div className="studio-v2-sc-field">
-          <label>Skill 名称 <span className="studio-v2-sc-req">*</span></label>
+          <label>{t('studio.sc.name_label')} <span className="studio-v2-sc-req">*</span></label>
           <input
-            placeholder="例如：MeetingMinutesExtractor"
+            placeholder={t('studio.sc.name_placeholder')}
             value={name}
             onChange={e => setName(e.target.value)}
           />
         </div>
         <div className="studio-v2-sc-field">
-          <label>标签（逗号分隔）</label>
+          <label>{t('studio.sc.tags_label')}</label>
           <input
-            placeholder="例如：meeting, summary, action-items"
+            placeholder={t('studio.sc.tags_placeholder')}
             value={tags}
             onChange={e => setTags(e.target.value)}
           />
         </div>
       </div>
       <div className="studio-v2-sc-field">
-        <label>功能描述 <span className="studio-v2-sc-req">*</span></label>
+        <label>{t('studio.sc.desc_label')} <span className="studio-v2-sc-req">*</span></label>
         <textarea
           rows={2}
-          placeholder="这个 Skill 做什么？例如：从会议记录中提取行动项，包含负责人和截止日期"
+          placeholder={t('studio.sc.desc_placeholder')}
           value={description}
           onChange={e => setDescription(e.target.value)}
         />
       </div>
       <div className="studio-v2-sc-field">
-        <label>执行步骤（可选）</label>
+        <label>{t('studio.sc.steps_label')}</label>
         <textarea
           rows={3}
-          placeholder="分步描述 AI 应如何处理输入，例如：&#10;1. 识别所有行动项&#10;2. 提取负责人姓名&#10;3. 格式化为 Markdown 表格"
+          placeholder={t('studio.sc.steps_placeholder')}
           value={steps}
           onChange={e => setSteps(e.target.value)}
         />
@@ -406,12 +408,12 @@ function PromptPerfectPanel({ editorContent, streaming, apiKeySet, onOptimize }:
         ))}
       </div>
       {!hasContent && (
-        <div className="studio-v2-pp-hint">请先在编辑器中输入或载入 Skill 内容，再进行优化</div>
+        <div className="studio-v2-pp-hint">{t('studio.pp.no_content_hint')}</div>
       )}
       {hasContent && (
         <div className="studio-v2-pp-preview">
-          <span className="studio-v2-pp-preview-label">当前内容</span>
-          <span className="studio-v2-pp-preview-len">{editorContent.length} 字符</span>
+          <span className="studio-v2-pp-preview-label">{t('studio.pp.current_content')}</span>
+          <span className="studio-v2-pp-preview-len">{t('studio.pp.char_count').replace('{n}', String(editorContent.length))}</span>
         </div>
       )}
       <button
@@ -431,6 +433,7 @@ function CustomMethodModal({ onAdd, onClose }: {
   onAdd: (m: GenerationMethod) => void
   onClose: () => void
 }) {
+  const t = useT()
   const [label, setLabel] = useState('')
   const [url, setUrl] = useState('')
   const [err, setErr] = useState('')
@@ -438,19 +441,19 @@ function CustomMethodModal({ onAdd, onClose }: {
   const handleAdd = () => {
     if (!label.trim()) { setErr(t('studio.custom_method.name_required')); return }
     if (!url.startsWith('https://') && !url.startsWith('http://')) {
-      setErr('URL 必须以 https:// 或 http:// 开头'); return
+      setErr(t('studio.custom_method.url_invalid')); return
     }
-    onAdd({ id: `custom-${Date.now()}`, label: label.trim(), icon: '🔗', type: 'external', url, hint: `在 ${label} 完成后将内容粘贴至编辑器` })
+    onAdd({ id: `custom-${Date.now()}`, label: label.trim(), icon: '🔗', type: 'external', url, hint: t('studio.custom_method.hint_template').replace('{label}', label) })
     onClose()
   }
 
   return (
     <div className="studio-v2-modal-overlay" onClick={onClose}>
       <div className="studio-v2-modal" onClick={e => e.stopPropagation()}>
-        <div className="studio-v2-modal-title">添加自定义生成方法</div>
+        <div className="studio-v2-modal-title">{t('studio.custom_method.modal_title')}</div>
         <div className="studio-v2-modal-field">
-          <label>名称</label>
-          <input placeholder="例如：My Prompt Tool" value={label} onChange={e => setLabel(e.target.value)} />
+          <label>{t('studio.custom_method.name_label')}</label>
+          <input placeholder={t('studio.custom_method.name_placeholder')} value={label} onChange={e => setLabel(e.target.value)} />
         </div>
         <div className="studio-v2-modal-field">
           <label>URL</label>
@@ -458,8 +461,8 @@ function CustomMethodModal({ onAdd, onClose }: {
         </div>
         {err && <div className="studio-v2-modal-err">{err}</div>}
         <div className="studio-v2-modal-actions">
-          <button className="studio-v2-btn ghost" onClick={onClose}>取消</button>
-          <button className="studio-v2-btn primary" onClick={handleAdd}>添加</button>
+          <button className="studio-v2-btn ghost" onClick={onClose}>{t('common.cancel')}</button>
+          <button className="studio-v2-btn primary" onClick={handleAdd}>{t('studio.custom_method.add')}</button>
         </div>
       </div>
     </div>
@@ -480,7 +483,7 @@ function InputAreaDescribe({ prompt, setPrompt, streaming, apiKeySet, onGenerate
         rows={4}
         value={prompt}
         onChange={e => setPrompt(e.target.value)}
-        placeholder="描述你想要的 Skill，例如：把会议记录整理成行动项（含负责人和截止日期）..."
+        placeholder={t('studio.input.describe_placeholder')}
       />
       <button
         className="studio-v2-btn primary"
@@ -512,22 +515,22 @@ function InputAreaExamples({ pairs, setPairs, desc, setDesc, streaming, apiKeySe
       {pairs.map((pair, idx) => (
         <div key={pair.id} className="studio-v2-ex-pair">
           <div className="studio-v2-ex-header">
-            <span>示例 {idx + 1}</span>
+            <span>{t('studio.examples.title').replace('{n}', String(idx + 1))}</span>
             {pairs.length > 1 && <button className="studio-v2-icon-btn" onClick={() => removePair(pair.id)}>✕</button>}
           </div>
           <div className="studio-v2-ex-fields">
-            <textarea rows={2} placeholder="输入 Input..." value={pair.input}
+            <textarea rows={2} placeholder={t('studio.examples.input_placeholder')} value={pair.input}
               onChange={e => updatePair(pair.id, 'input', e.target.value)} />
-            <textarea rows={2} placeholder="期望输出 Expected Output..." value={pair.output}
+            <textarea rows={2} placeholder={t('studio.examples.output_placeholder')} value={pair.output}
               onChange={e => updatePair(pair.id, 'output', e.target.value)} />
           </div>
         </div>
       ))}
       {pairs.length < 10 && (
-        <button className="studio-v2-btn ghost sm" onClick={addPair}>+ 添加示例</button>
+        <button className="studio-v2-btn ghost sm" onClick={addPair}>{t('studio.examples.add_btn')}</button>
       )}
       <input
-        placeholder="补充说明（可选）..."
+        placeholder={t('studio.examples.notes_placeholder')}
         value={desc} onChange={e => setDesc(e.target.value)}
         style={{ marginTop: 8 }}
       />
@@ -684,7 +687,7 @@ function InputAreaExtract({ streaming, apiKeySet, skills, onExtract, defaultSkil
                   className="studio-v2-record-label-chip"
                   style={{ color: labelColor, borderColor: `${labelColor}66` }}
                   onClick={() => handleRecordLabel(r)}
-                  title="点击切换标签"
+                  title={t('studio.extract.label_toggle_title')}
                 >
                   {labelOpt.display}
                 </button>
@@ -692,7 +695,7 @@ function InputAreaExtract({ streaming, apiKeySet, skills, onExtract, defaultSkil
             )
           })}
           {records.length > 5 && (
-            <div className="studio-v2-extract-more">+ {records.length - 5} 条更多记录</div>
+            <div className="studio-v2-extract-more">{t('studio.extract.more_records').replace('{n}', String(records.length - 5))}</div>
           )}
         </div>
       )}
@@ -757,11 +760,11 @@ function Score5DMini({ scores, loading }: { scores: SkillScore5D | null; loading
           )
         })}
         <span className="studio-v2-score-avg" style={{ color: avg >= 7 ? 'var(--success)' : avg >= 5 ? 'var(--warning)' : 'var(--danger)' }}>
-          均 {avg.toFixed(1)}
+          {t('studio.score.average').replace('{n}', avg.toFixed(1))}
         </span>
         {weakDims.length > 0 && (
           <button className="studio-v2-score-hint-toggle" onClick={() => setHintOpen(v => !v)}>
-            {hintOpen ? '▾' : '▸'} 改进建议
+            {hintOpen ? '▾' : '▸'} {t('studio.score.improvement_hint')}
           </button>
         )}
       </div>
@@ -869,11 +872,11 @@ function StructQualityMini({ content }: { content: string }) {
           )
         })}
         <span className="studio-v2-score-avg" style={{ color: avg >= 7 ? 'var(--success)' : avg >= 5 ? 'var(--warning)' : 'var(--danger)' }}>
-          均 {avg.toFixed(1)}
+          {t('studio.score.average').replace('{n}', avg.toFixed(1))}
         </span>
         {weakDims.length > 0 && (
           <button className="studio-v2-score-hint-toggle" onClick={() => setHintOpen(v => !v)}>
-            {hintOpen ? '▾' : '▸'} 改进建议
+            {hintOpen ? '▾' : '▸'} {t('studio.score.improvement_hint')}
           </button>
         )}
       </div>
@@ -894,11 +897,12 @@ function StructQualityMini({ content }: { content: string }) {
 // ── SimilarWarn ───────────────────────────────────────────────────────────────
 
 function SimilarWarn({ skills }: { skills: Skill[] }) {
+  const t = useT()
   if (skills.length === 0) return null
   return (
     <div className="studio-v2-similar-warn">
       <span>⚠️</span>
-      <span>发现相似 Skill，考虑更新而非新建：{skills.map(s => s.name).join('、')}</span>
+      <span>{t('studio.similar_warning').replace('{names}', skills.map(s => s.name).join(', '))}</span>
     </div>
   )
 }
@@ -992,9 +996,9 @@ function QuickRunPane({ editorContent, apiKeySet }: { editorContent: string; api
 
   return (
     <div className="studio-v2-quickrun">
-      <div className="studio-v2-quickrun-label">⚡ 快速运行 <span className="studio-v2-quickrun-hint">安装前体验效果</span></div>
+      <div className="studio-v2-quickrun-label">{t('studio.quickrun.label')} <span className="studio-v2-quickrun-hint">{t('studio.quickrun.hint')}</span></div>
       {isAgentContent ? (
-        <div className="studio-v2-agent-run-hint">🤖 Agent Skill 需要工具调用支持，请先安装后在 Eval 页面运行评测。</div>
+        <div className="studio-v2-agent-run-hint">{t('studio.quickrun.agent_hint')}</div>
       ) : (
         <div className="studio-v2-qt-row">
           <textarea
@@ -1012,7 +1016,7 @@ function QuickRunPane({ editorContent, apiKeySet }: { editorContent: string; api
       )}
       {!isAgentContent && output && (
         <div className="studio-v2-quickrun-output">
-          <div className="studio-v2-qt-output-label">输出{running && <span className="studio-v2-streaming-dot"> ●</span>}</div>
+          <div className="studio-v2-qt-output-label">{t('studio.quickrun.output_label')}{running && <span className="studio-v2-streaming-dot"> ●</span>}</div>
           <pre>{output}{running ? '▌' : ''}</pre>
         </div>
       )}
@@ -1042,15 +1046,15 @@ function AgentDesignPanel({ streaming, apiKeySet, onGenerate }: {
   return (
     <div className="studio-v2-agent-panel">
       <div className="studio-v2-agent-field">
-        <label>Agent 名称</label>
+        <label>{t('studio.agent.name_label')}</label>
         <input placeholder="e.g. Research Agent" value={name} onChange={e => setName(e.target.value)} />
       </div>
       <div className="studio-v2-agent-field">
-        <label>目标描述</label>
-        <textarea rows={2} placeholder="这个 Agent 要完成什么任务？" value={goal} onChange={e => setGoal(e.target.value)} />
+        <label>{t('studio.agent.goal_label')}</label>
+        <textarea rows={2} placeholder={t('studio.agent.goal_placeholder')} value={goal} onChange={e => setGoal(e.target.value)} />
       </div>
       <div className="studio-v2-agent-field">
-        <label>工具声明 <span className="studio-v2-agent-field-hint">（可多选）</span></label>
+        <label>{t('studio.agent.tools_label')} <span className="studio-v2-agent-field-hint">{t('studio.agent.tools_hint')}</span></label>
         <div className="studio-v2-tool-chips">
           {PRESET_TOOLS.map(t => {
             const soon = SOON_TOOLS.has(t)
@@ -1066,8 +1070,8 @@ function AgentDesignPanel({ streaming, apiKeySet, onGenerate }: {
         </div>
       </div>
       <div className="studio-v2-agent-field">
-        <label>执行步骤</label>
-        <textarea rows={4} placeholder="描述 Agent 的执行步骤，例如：先搜索资料，再提炼关键信息，最后生成报告..." value={steps} onChange={e => setSteps(e.target.value)} />
+        <label>{t('studio.agent.steps_label')}</label>
+        <textarea rows={4} placeholder={t('studio.agent.steps_placeholder')} value={steps} onChange={e => setSteps(e.target.value)} />
       </div>
       <button className="studio-v2-btn primary" disabled={!canGenerate}
         onClick={() => onGenerate({ name, goal, tools, steps })}>
@@ -1111,7 +1115,7 @@ function QuickTestPane({ installedSkill }: { installedSkill: Skill | null }) {
     try {
       const tc: Omit<TestCase, 'id' | 'createdAt'> = {
         skillId: installedSkill.id,
-        name: `快速测试 ${new Date().toLocaleTimeString()}`,
+        name: t('studio.quicktest.name_template').replace('{time}', new Date().toLocaleTimeString()),
         input: input.trim(),
         judgeType: 'llm',
         judgeParam: t('studio.quicktest.judge_param')
@@ -1154,7 +1158,7 @@ function QuickTestPane({ installedSkill }: { installedSkill: Skill | null }) {
   }
 
   if (!installedSkill) {
-    return <div className="studio-v2-val-empty">请先安装 Skill 后再快速测试</div>
+    return <div className="studio-v2-val-empty">{t('studio.quicktest.no_skill')}</div>
   }
 
   // Parse agent output or plain text, extract file paths
@@ -1182,14 +1186,14 @@ function QuickTestPane({ installedSkill }: { installedSkill: Skill | null }) {
           <div className="studio-v2-qt-files">
             {filePaths.map(p => (
               <button key={p} className="studio-v2-qt-file-btn" onClick={() => window.api.shell.openPath(p)} title={p}>
-                📂 打开 {p.replace(/\\/g, '/').split('/').pop()}
+                {t('studio.quicktest.open_file').replace('{name}', p.replace(/\\/g, '/').split('/').pop() ?? p)}
               </button>
             ))}
           </div>
         )}
         {agentTrace.length > 0 && (
           <details className="studio-v2-qt-trace">
-            <summary>执行轨迹（{agentTrace.length} 步）</summary>
+            <summary>{t('studio.quicktest.trace_summary').replace('{n}', String(agentTrace.length))}</summary>
             {agentTrace.map((step, i) => (
               <div key={i} className="studio-v2-qt-trace-step">
                 <span className="studio-v2-qt-trace-tool">{step.toolName}</span>
@@ -1219,9 +1223,9 @@ function QuickTestPane({ installedSkill }: { installedSkill: Skill | null }) {
         <div className="studio-v2-qt-result">
           <div className="studio-v2-qt-output">
             <div className="studio-v2-qt-output-label">
-              输出
+              {t('studio.quickrun.output_label')}
               <span className="studio-v2-qt-score" style={{ color: result.totalScore >= 7 ? 'var(--success)' : 'var(--warning)' }}>
-                评分 {result.totalScore.toFixed(1)}
+                {t('studio.quicktest.score').replace('{n}', result.totalScore.toFixed(1))}
               </span>
             </div>
             {renderOutput(result.output)}
@@ -1328,20 +1332,21 @@ function ValidationPanel({ expanded, onToggle, installedSkill }: {
   expanded: boolean; onToggle: () => void
   installedSkill: Skill | null
 }) {
+  const t = useT()
   const [tab, setTab] = useState<ValTab>('quicktest')
 
   return (
     <div className="studio-v2-val-panel">
       <div className="studio-v2-val-header" onClick={onToggle}>
-        <span className="studio-v2-val-title">⚡ 快速测试</span>
+        <span className="studio-v2-val-title">⚡ {t('studio.validation.quicktest_tab')}</span>
         <span className="studio-v2-val-toggle">{expanded ? '▼' : '▲'}</span>
       </div>
       {expanded && (
         <div className="studio-v2-val-body">
           <div className="studio-v2-val-tabs">
-            <button className={`studio-v2-val-tab ${tab === 'quicktest' ? 'active' : ''}`} onClick={() => setTab('quicktest')}>快速测试</button>
+            <button className={`studio-v2-val-tab ${tab === 'quicktest' ? 'active' : ''}`} onClick={() => setTab('quicktest')}>{t('studio.validation.quicktest_tab')}</button>
             <button className={`studio-v2-val-tab ${tab === 'oneclick' ? 'active' : ''} ${!installedSkill ? 'disabled' : ''}`}
-              onClick={() => installedSkill && setTab('oneclick')} disabled={!installedSkill}>一键测评</button>
+              onClick={() => installedSkill && setTab('oneclick')} disabled={!installedSkill}>{t('studio.validation.oneclick_tab')}</button>
           </div>
           {tab === 'quicktest' && <QuickTestPane installedSkill={installedSkill} />}
           {tab === 'oneclick' && installedSkill && <OneClickEvalPane installedSkill={installedSkill} />}
@@ -1578,7 +1583,7 @@ export default function StudioPage({ initialSkillId, onNavigate, apiKeySet: apiK
       <div className="studio-v2-header">
         <div className="studio-v2-header-left">
           <h1>Skill Studio</h1>
-          <p className="studio-v2-subtitle">发现 · 创作 · 验证 · 部署</p>
+          <p className="studio-v2-subtitle">{t('studio.header.subtitle')}</p>
         </div>
         <div className="studio-v2-header-right">
           {avg5D && (
@@ -1598,7 +1603,7 @@ export default function StudioPage({ initialSkillId, onNavigate, apiKeySet: apiK
 
       {apiKeySet === false && (
         <div className="studio-v2-guard">
-          ⚠️ 未配置 AI Provider。请前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>Settings</button> 添加后再使用生成功能。
+          {t('studio.guard.no_provider')}
         </div>
       )}
 
@@ -1696,7 +1701,7 @@ export default function StudioPage({ initialSkillId, onNavigate, apiKeySet: apiK
               className="studio-v2-editor"
               value={editorContent + (streaming ? '▌' : '')}
               onChange={e => !streaming && setEditorContent(e.target.value)}
-              placeholder="生成的 Skill 将出现在这里，也可以直接粘贴或编辑..."
+              placeholder={t('studio.editor.placeholder')}
               readOnly={streaming}
             />
           </div>
@@ -1720,12 +1725,12 @@ export default function StudioPage({ initialSkillId, onNavigate, apiKeySet: apiK
                     <span className="studio-v2-flow-arrow">→</span>
                     <button className="studio-v2-flow-step" onClick={() => onNavigate?.('eval', installedSkill.id)}>
                       <span className="studio-v2-flow-num">②</span>
-                      <span>评测</span>
+                      <span>{t('studio.flow.eval')}</span>
                     </button>
                     <span className="studio-v2-flow-arrow">→</span>
                     <button className="studio-v2-flow-step" onClick={() => onNavigate?.('evo', installedSkill.id)}>
                       <span className="studio-v2-flow-num">③</span>
-                      <span>进化</span>
+                      <span>{t('studio.flow.evolve')}</span>
                     </button>
                   </div>
                 </div>
