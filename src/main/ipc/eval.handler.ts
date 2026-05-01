@@ -63,7 +63,8 @@ export function registerEvalHandlers(): void {
       status: r.status,
       createdAt: r.created_at,
       testCaseId: (r.test_case_id as string) ?? undefined,
-      testCaseName: (r.test_case_name as string) ?? undefined
+      testCaseName: (r.test_case_name as string) ?? undefined,
+      evalMode: (r.eval_mode as string) ?? undefined
     }))
     return { items, total, limit, offset }
   })
@@ -85,7 +86,8 @@ export function registerEvalHandlers(): void {
       status: r.status,
       createdAt: r.created_at,
       testCaseId: (r.test_case_id as string) ?? undefined,
-      testCaseName: (r.test_case_name as string) ?? undefined
+      testCaseName: (r.test_case_name as string) ?? undefined,
+      evalMode: (r.eval_mode as string) ?? undefined
     }
   })
 

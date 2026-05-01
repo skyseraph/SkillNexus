@@ -201,3 +201,75 @@ describe('judgeType semantics', () => {
     expect(parseNdjsonLine(line)!.judgeType).toBe('llm')
   })
 })
+
+// ── update patch logic ───────────────────────────────────────────────────────
+
+/** Mirrors the patch-merge logic in testcases.handler.ts `testcases:update` */
+function applyUpdatePatch(
+  existing: { name: string; input: string; judgeType: 'llm' | 'grep' | 'command'; judgeParam: string },
+  patch: Partial<{ name: string; input: string; judgeType: string; judgeParam: string }>
+): { name: string; input: string; judgeType: 'llm' | 'grep' | 'command'; judgeParam: string } {
+  const name       = typeof patch.name       === 'string' ? String(patch.name).slice(0, MAX_NAME_LEN)                                    : existing.name
+  const input      = typeof patch.input      === 'string' ? patch.input                                                                   : existing.input
+  const judgeType  = VALID_JUDGE_TYPES.has(patch.judgeType ?? '') ? (patch.judgeType as 'llm' | 'grep' | 'command')                      : existing.judgeType
+  const judgeParam = typeof patch.judgeParam === 'string' ? patch.judgeParam                                                              : existing.judgeParam
+  return { name, input, judgeType, judgeParam }
+}
+
+describe('applyUpdatePatch — testcase inline edit', () => {
+  const base = { name: 'Original', input: 'old input', judgeType: 'llm' as const, judgeParam: 'old param' }
+
+  it('updates name only', () => {
+    const result = applyUpdatePatch(base, { name: 'New Name' })
+    expect(result.name).toBe('New Name')
+    expect(result.input).toBe('old input')
+    expect(result.judgeType).toBe('llm')
+    expect(result.judgeParam).toBe('old param')
+  })
+
+  it('updates input only', () => {
+    const result = applyUpdatePatch(base, { input: 'new input' })
+    expect(result.input).toBe('new input')
+    expect(result.name).toBe('Original')
+  })
+
+  it('updates judgeType to grep', () => {
+    const result = applyUpdatePatch(base, { judgeType: 'grep' })
+    expect(result.judgeType).toBe('grep')
+  })
+
+  it('updates judgeType to command', () => {
+    const result = applyUpdatePatch(base, { judgeType: 'command' })
+    expect(result.judgeType).toBe('command')
+  })
+
+  it('rejects invalid judgeType and keeps existing', () => {
+    const result = applyUpdatePatch(base, { judgeType: 'invalid' })
+    expect(result.judgeType).toBe('llm')
+  })
+
+  it('updates judgeParam to empty string (explicit clear)', () => {
+    const result = applyUpdatePatch(base, { judgeParam: '' })
+    expect(result.judgeParam).toBe('')
+  })
+
+  it('updates all fields at once', () => {
+    const result = applyUpdatePatch(base, { name: 'N', input: 'I', judgeType: 'grep', judgeParam: 'P' })
+    expect(result).toEqual({ name: 'N', input: 'I', judgeType: 'grep', judgeParam: 'P' })
+  })
+
+  it('truncates name to 120 chars on update', () => {
+    const result = applyUpdatePatch(base, { name: 'Z'.repeat(200) })
+    expect(result.name).toHaveLength(120)
+  })
+
+  it('empty patch returns original values unchanged', () => {
+    const result = applyUpdatePatch(base, {})
+    expect(result).toEqual(base)
+  })
+
+  it('preserves input with empty string when explicitly set', () => {
+    const result = applyUpdatePatch(base, { input: '' })
+    expect(result.input).toBe('')
+  })
+})

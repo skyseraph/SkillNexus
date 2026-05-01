@@ -1,6 +1,7 @@
 import vm from 'vm'
 import fs from 'fs'
 import { resolve } from 'path'
+import { spawnSync } from 'child_process'
 import { app } from 'electron'
 
 export interface ToolResult {
@@ -48,6 +49,18 @@ export const TOOL_DEFS: Record<string, ToolDef> = {
       required: ['path']
     }
   },
+  file_write: {
+    name: 'file_write',
+    description: 'Write text content to a file. Only allowed within user home, documents, downloads, and desktop directories.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Absolute path to the file to write' },
+        content: { type: 'string', description: 'Text content to write' }
+      },
+      required: ['path', 'content']
+    }
+  },
   http_request: {
     name: 'http_request',
     description: 'Make an HTTPS GET request to a URL and return the response body.',
@@ -58,17 +71,28 @@ export const TOOL_DEFS: Record<string, ToolDef> = {
       },
       required: ['url']
     }
+  },
+  shell: {
+    name: 'shell',
+    description: 'Execute a read-only shell command (ls, cat, grep, find, etc.). Pipes and redirects are not allowed.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: 'Shell command to execute' }
+      },
+      required: ['command']
+    }
   }
 }
 
 const TAVILY_URL = 'https://api.tavily.com/search'
-const MAX_RESULT_LENGTH = 2000
+const MAX_PER_RESULT = 800
+const MAX_TOTAL_RESULTS = 3000
 
 async function webSearch(query: string, tavilyKey?: string): Promise<ToolResult> {
   if (!tavilyKey) {
     return {
-      output: `[Mock web_search] Query: "${query}"\nResult: No Tavily API key configured. This is a simulated result.\nSummary: The search for "${query}" would return relevant web results. Configure a Tavily API key in Settings → Tool API Keys to enable real search.`,
-      error: 'TAVILY_KEY_NOT_SET'
+      output: `[Mock web_search] Query: "${query}"\nResult: No Tavily API key configured. This is a simulated result.\nSummary: The search for "${query}" would return relevant web results. Configure a Tavily API key in Settings → Tool API Keys to enable real search.`
     }
   }
   try {
@@ -79,10 +103,16 @@ async function webSearch(query: string, tavilyKey?: string): Promise<ToolResult>
     })
     if (!res.ok) throw new Error(`Tavily API error: ${res.status} ${res.statusText}`)
     const data = await res.json() as { results?: Array<{ title: string; url: string; content: string }> }
-    const results = (data.results ?? []).map((r, i) =>
-      `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.content}`
-    ).join('\n\n')
-    const output = results.length > MAX_RESULT_LENGTH ? results.slice(0, MAX_RESULT_LENGTH) + '...[truncated]' : results
+    const parts = (data.results ?? []).slice(0, 3).map((r, i) => {
+      const body = r.content.length > MAX_PER_RESULT
+        ? r.content.slice(0, MAX_PER_RESULT) + '...[truncated]'
+        : r.content
+      return `[${i + 1}] ${r.title}\nURL: ${r.url}\n${body}`
+    })
+    const joined = parts.join('\n\n')
+    const output = joined.length > MAX_TOTAL_RESULTS
+      ? joined.slice(0, MAX_TOTAL_RESULTS) + '...[total truncated]'
+      : joined
     return { output: output || 'No results found.' }
   } catch (err) {
     return { output: '', error: err instanceof Error ? err.message : String(err) }
@@ -90,6 +120,7 @@ async function webSearch(query: string, tavilyKey?: string): Promise<ToolResult>
 }
 
 const MAX_FILE_SIZE = 100 * 1024 // 100 KB
+const MAX_WRITE_SIZE = 500 * 1024 // 500 KB
 const HTTP_RESPONSE_MAX = 4000
 const HTTP_TIMEOUT_MS = 10_000
 
@@ -120,6 +151,22 @@ function fileRead(filePath: string): ToolResult {
   }
 }
 
+function fileWrite(filePath: string, content: string): ToolResult {
+  if (content.length > MAX_WRITE_SIZE) {
+    return { output: '', error: `Content too large (${content.length} bytes, max ${MAX_WRITE_SIZE})` }
+  }
+  const r = resolve(filePath)
+  if (!getAllowedPrefixes().some(p => r.startsWith(p))) {
+    return { output: '', error: `Access denied: ${r}` }
+  }
+  try {
+    fs.writeFileSync(r, content, 'utf-8')
+    return { output: `Written ${content.length} bytes to ${r}` }
+  } catch (err) {
+    return { output: '', error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
 async function httpRequest(url: string): Promise<ToolResult> {
   if (!url.startsWith('https://')) {
     return { output: '', error: 'Only HTTPS URLs are allowed' }
@@ -135,6 +182,32 @@ async function httpRequest(url: string): Promise<ToolResult> {
   } catch (err) {
     return { output: '', error: err instanceof Error ? err.message : String(err) }
   }
+}
+
+const SHELL_ALLOWED_PREFIXES = ['ls', 'cat', 'echo', 'pwd', 'grep', 'find', 'wc', 'head', 'tail', 'date']
+const SHELL_OUTPUT_MAX = 4000
+const SHELL_TIMEOUT_MS = 5000
+
+function shellExec(command: string): ToolResult {
+  if (/[|>&;`$()]/.test(command)) {
+    return { output: '', error: 'Pipes, redirects, and shell operators are not allowed' }
+  }
+  const cmd = command.trim()
+  const allowed = SHELL_ALLOWED_PREFIXES.some(p => cmd === p || cmd.startsWith(p + ' '))
+  if (!allowed) {
+    return { output: '', error: `Command not allowed. Allowed commands: ${SHELL_ALLOWED_PREFIXES.join(', ')}` }
+  }
+  const [bin, ...args] = cmd.split(/\s+/)
+  const result = spawnSync(bin, args, { timeout: SHELL_TIMEOUT_MS, encoding: 'utf-8' })
+  if (result.error) {
+    return { output: '', error: result.error.message }
+  }
+  if (result.status !== 0) {
+    const stderr = result.stderr?.toString().trim() || `exited with code ${result.status}`
+    return { output: '', error: stderr }
+  }
+  const out = result.stdout?.toString() ?? ''
+  return { output: out.length > SHELL_OUTPUT_MAX ? out.slice(0, SHELL_OUTPUT_MAX) + '...[truncated]' : out }
 }
 
 function codeExec(code: string): ToolResult {
@@ -175,17 +248,11 @@ export async function executeTool(
   input: Record<string, unknown>,
   tavilyKey?: string
 ): Promise<ToolResult> {
-  if (name === 'web_search') {
-    return webSearch(String(input.query ?? ''), tavilyKey)
-  }
-  if (name === 'code_exec') {
-    return codeExec(String(input.code ?? ''))
-  }
-  if (name === 'file_read') {
-    return fileRead(String(input.path ?? ''))
-  }
-  if (name === 'http_request') {
-    return httpRequest(String(input.url ?? ''))
-  }
+  if (name === 'web_search') return webSearch(String(input.query ?? ''), tavilyKey)
+  if (name === 'code_exec') return codeExec(String(input.code ?? ''))
+  if (name === 'file_read') return fileRead(String(input.path ?? ''))
+  if (name === 'file_write') return fileWrite(String(input.path ?? ''), String(input.content ?? ''))
+  if (name === 'http_request') return httpRequest(String(input.url ?? ''))
+  if (name === 'shell') return shellExec(String(input.command ?? ''))
   return { output: '', error: `Unknown tool: ${name}` }
 }

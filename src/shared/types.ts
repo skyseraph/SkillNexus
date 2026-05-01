@@ -66,6 +66,7 @@ export interface EvalResult {
   createdAt: number
   testCaseId?: string
   testCaseName?: string
+  evalMode?: 'llm' | 'structural' | 'grep' | 'command'
 }
 
 export interface SkillRankEntry {
@@ -238,6 +239,7 @@ export interface EvoAnalysis {
   rootCause: string
   generalityTest: string
   regressionRisk: string
+  improvementPriority?: string
 }
 
 export type EvoPhase =
@@ -321,6 +323,7 @@ export interface EvoSkillResult {
   bestId: string
   iterations: number
   finalAvgScore: number
+  exploratoryRewriteTriggered?: boolean
 }
 
 export interface CoEvoResult {
@@ -426,6 +429,7 @@ export interface IpcChannels {
   'testcases:getBySkill': (skillId: string) => Promise<TestCase[]>
   'testcases:create': (tc: Omit<TestCase, 'id' | 'createdAt'>) => Promise<TestCase>
   'testcases:delete': (id: string) => Promise<void>
+  'testcases:update': (id: string, patch: Partial<Pick<TestCase, 'name' | 'input' | 'judgeType' | 'judgeParam'>>) => Promise<TestCase>
   'testcases:generate': (skillId: string, count: number) => Promise<TestCase[]>
   'testcases:importJson': (skillId: string, items: unknown[]) => Promise<{ imported: TestCase[]; errors: string[] }>
   'evo:installAndEval': (originalSkillId: string, evolvedContent: string) => Promise<EvoRunResult>

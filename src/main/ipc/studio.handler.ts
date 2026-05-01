@@ -17,12 +17,19 @@ const SKILL_FORMAT_HINT = `A Skill has this structure:
 name: SkillName
 version: 1.0.0
 format: markdown
+description: "Use this skill when [context/trigger] — it [key capability]."
 tags: [tag1, tag2]
 ---
 
 # Skill Description
 
-[Detailed instructions for the AI...]`
+[Detailed instructions for the AI...]
+
+IMPORTANT — description field rules:
+- Must be a When-To-Use trigger sentence, NOT a feature summary.
+- Format: "Use this skill when [context] — it [capability]."
+- Good: "Use this skill when reviewing code for security issues — it identifies vulnerabilities and suggests fixes."
+- Bad: "A skill for code review." (too vague, no trigger context)`
 
 const STUDIO_SYSTEM_PROMPT = `You are an expert Skill author. Generate a well-structured Skill in Markdown format.
 
@@ -34,12 +41,20 @@ const EVOLVE_SYSTEM_PROMPT = `You are an expert Skill optimizer. You receive an 
 
 ${SKILL_FORMAT_HINT}
 
+## Improvement Priority Framework (use to fill IMPROVEMENT_PRIORITY)
+P0 Effect (highest): output deviates from intent; Skill over-constrains; output format wrong
+P1 Structure: missing trigger words; no Phase/Step flow; no user confirmation checkpoint
+P2 Specificity: vague steps; missing input/output spec; no error handling fallback
+P3 Readability (lowest): paragraphs too long; duplicate descriptions; missing TL;DR
+Pick the highest applicable priority. Format: "P0 — <specific strategy from the framework above>"
+
 ## Required Analysis (output as an HTML comment block BEFORE the Skill frontmatter)
 Before writing the improved Skill, output a comment block in this exact format:
 <!--ANALYSIS
 ROOT_CAUSE: <one sentence — the underlying instruction gap, stated as a principle not "task X failed">
 GENERALITY_TEST: <a DIFFERENT task not in the evidence that would also benefit from this fix — if you can't name one, your fix is overfitting>
 REGRESSION_RISK: <which currently-passing dimensions might be affected, and why your fix won't harm them>
+IMPROVEMENT_PRIORITY: <P0/P1/P2/P3 label followed by the specific strategy, e.g. "P1 — add Phase/Step flow to clarify execution order">
 -->
 
 ## Hard Rules
@@ -89,8 +104,9 @@ function parseAnalysisBlock(text: string): EvoAnalysis | null {
   const rootCause = body.match(/ROOT_CAUSE:\s*(.+)/)?.[1]?.trim() ?? ''
   const generalityTest = body.match(/GENERALITY_TEST:\s*(.+)/)?.[1]?.trim() ?? ''
   const regressionRisk = body.match(/REGRESSION_RISK:\s*(.+)/)?.[1]?.trim() ?? ''
+  const improvementPriority = body.match(/IMPROVEMENT_PRIORITY:\s*(.+)/)?.[1]?.trim()
   if (!rootCause && !generalityTest && !regressionRisk) return null
-  return { rootCause, generalityTest, regressionRisk }
+  return { rootCause, generalityTest, regressionRisk, ...(improvementPriority ? { improvementPriority } : {}) }
 }
 
 const EXTRACT_SYSTEM_PROMPT = `You are an expert Skill author. Analyze the conversation below and extract a reusable Skill ONLY if it contains stable, durable user preferences, constraints, or workflows that would benefit future interactions.

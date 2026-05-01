@@ -93,4 +93,96 @@ describe('EvoSkillEngine', () => {
     const lastCall = calls[calls.length - 1]
     expect(lastCall[1]).toMatchObject({ done: true })
   })
+
+  it('does not trigger exploratory rewrite when scores improve each round', async () => {
+    let count = 0
+    const store = makeStore({
+      queryEvalHistory: vi.fn().mockImplementation((skillId: string) => {
+        // Each new skill scores higher than the previous
+        const score = skillId === 's1' ? 5 : 5 + count * 1.0
+        return [{ input_prompt: 'x', output: 'y', total_score: score, status: 'success', scores: JSON.stringify({ a: { score } }) }]
+      }),
+    })
+    const storage = {
+      saveEvolvedSkill: vi.fn().mockImplementation(() => `evolved-${++count}`),
+      copyTestCases: vi.fn(),
+    }
+    const ai = makeAI()
+    const engine = new EvoSkillEngine(ai, 'model', store, makeReporter(), storage)
+    const result = await engine.run({ skillId: 's1', maxIterations: 3 })
+    expect(result.exploratoryRewriteTriggered).toBeUndefined()
+  })
+
+  it('triggers exploratory rewrite after 2 stagnant rounds', async () => {
+    let count = 0
+    const store = makeStore({
+      queryEvalHistory: vi.fn().mockImplementation(() => {
+        // All skills score the same — no improvement, stagnation
+        return [{ input_prompt: 'x', output: 'y', total_score: 5, status: 'success', scores: JSON.stringify({ a: { score: 5 } }) }]
+      }),
+    })
+    const storage = {
+      saveEvolvedSkill: vi.fn().mockImplementation(() => `evolved-${++count}`),
+      copyTestCases: vi.fn(),
+    }
+    const ai = makeAI()
+    const engine = new EvoSkillEngine(ai, 'model', store, makeReporter(), storage)
+    // Need at least 3 iterations: round 1 (stagnant), round 2 (stagnant), round 3 (triggers rewrite)
+    const result = await engine.run({ skillId: 's1', maxIterations: 3 })
+    expect(result.exploratoryRewriteTriggered).toBe(true)
+  })
+
+  it('uses evoskill-exploratory engine label when rewrite triggers', async () => {
+    let count = 0
+    const store = makeStore({
+      queryEvalHistory: vi.fn().mockReturnValue([
+        { input_prompt: 'x', output: 'y', total_score: 5, status: 'success', scores: JSON.stringify({ a: { score: 5 } }) }
+      ]),
+    })
+    const storage = {
+      saveEvolvedSkill: vi.fn().mockImplementation(() => `evolved-${++count}`),
+      copyTestCases: vi.fn(),
+    }
+    const engine = new EvoSkillEngine(makeAI(), 'model', store, makeReporter(), storage)
+    await engine.run({ skillId: 's1', maxIterations: 3 })
+    const calls = (storage.saveEvolvedSkill as ReturnType<typeof vi.fn>).mock.calls
+    const exploratoryCall = calls.find((c: unknown[]) => (c[0] as { engine: string }).engine === 'evoskill-exploratory')
+    expect(exploratoryCall).toBeDefined()
+  })
+
+  it('resets stagnation counter after exploratory rewrite', async () => {
+    let count = 0
+    const store = makeStore({
+      queryEvalHistory: vi.fn().mockReturnValue([
+        { input_prompt: 'x', output: 'y', total_score: 5, status: 'success', scores: JSON.stringify({ a: { score: 5 } }) }
+      ]),
+    })
+    const storage = {
+      saveEvolvedSkill: vi.fn().mockImplementation(() => `evolved-${++count}`),
+      copyTestCases: vi.fn(),
+    }
+    const engine = new EvoSkillEngine(makeAI(), 'model', store, makeReporter(), storage)
+    // 3 iterations: rounds 1-2 stagnate, round 3 triggers rewrite — exactly 1 exploratory call
+    await engine.run({ skillId: 's1', maxIterations: 3 })
+    const calls = (storage.saveEvolvedSkill as ReturnType<typeof vi.fn>).mock.calls
+    const exploratoryCalls = calls.filter((c: unknown[]) => (c[0] as { engine: string }).engine === 'evoskill-exploratory')
+    expect(exploratoryCalls.length).toBe(1)
+  })
+
+  it('exploratoryRewriteTriggered is absent from result when no stagnation', async () => {
+    let count = 0
+    const store = makeStore({
+      queryEvalHistory: vi.fn().mockImplementation((skillId: string) => {
+        const score = skillId === 's1' ? 4 : 4 + count * 2
+        return [{ input_prompt: 'x', output: 'y', total_score: score, status: 'success', scores: JSON.stringify({ a: { score } }) }]
+      }),
+    })
+    const storage = {
+      saveEvolvedSkill: vi.fn().mockImplementation(() => `evolved-${++count}`),
+      copyTestCases: vi.fn(),
+    }
+    const engine = new EvoSkillEngine(makeAI(), 'model', store, makeReporter(), storage)
+    const result = await engine.run({ skillId: 's1', maxIterations: 2 })
+    expect(result).not.toHaveProperty('exploratoryRewriteTriggered')
+  })
 })

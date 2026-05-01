@@ -21,6 +21,7 @@ function parseAnalysisBlock(content: string): {
   rootCause: string
   generalityTest: string
   regressionRisk: string
+  improvementPriority?: string
 } | null {
   const match = content.match(/<!--ANALYSIS\s*([\s\S]*?)-->/)
   if (!match) return null
@@ -28,7 +29,9 @@ function parseAnalysisBlock(content: string): {
   const rootCause      = body.match(/ROOT_CAUSE:\s*(.+)/)?.[1]?.trim() ?? ''
   const generalityTest = body.match(/GENERALITY_TEST:\s*(.+)/)?.[1]?.trim() ?? ''
   const regressionRisk = body.match(/REGRESSION_RISK:\s*(.+)/)?.[1]?.trim() ?? ''
-  return { rootCause, generalityTest, regressionRisk }
+  const improvementPriority = body.match(/IMPROVEMENT_PRIORITY:\s*(.+)/)?.[1]?.trim()
+  if (!rootCause && !generalityTest && !regressionRisk) return null
+  return { rootCause, generalityTest, regressionRisk, ...(improvementPriority ? { improvementPriority } : {}) }
 }
 
 // ── 5D scoreSkill response parsing ───────────────────────────────────────────
@@ -134,6 +137,43 @@ describe('parseAnalysisBlock', () => {
     const content = `<!--ANALYSIS\nROOT_CAUSE: x\nGENERALITY_TEST: y\nREGRESSION_RISK: high — core behavior changed\n-->`
     const result = parseAnalysisBlock(content)
     expect(result!.regressionRisk.toLowerCase()).toContain('high')
+  })
+
+  it('extracts IMPROVEMENT_PRIORITY when present', () => {
+    const content = `<!--ANALYSIS\nROOT_CAUSE: vague steps\nGENERALITY_TEST: ok\nREGRESSION_RISK: low\nIMPROVEMENT_PRIORITY: P2 — add specific input/output spec\n-->`
+    const result = parseAnalysisBlock(content)
+    expect(result!.improvementPriority).toBe('P2 — add specific input/output spec')
+  })
+
+  it('leaves improvementPriority undefined when field is absent', () => {
+    const content = `<!--ANALYSIS\nROOT_CAUSE: x\nGENERALITY_TEST: y\nREGRESSION_RISK: low\n-->`
+    const result = parseAnalysisBlock(content)
+    expect(result!.improvementPriority).toBeUndefined()
+  })
+
+  it('correctly identifies P0 priority prefix', () => {
+    const content = `<!--ANALYSIS\nROOT_CAUSE: x\nGENERALITY_TEST: y\nREGRESSION_RISK: low\nIMPROVEMENT_PRIORITY: P0 — output deviates from intent\n-->`
+    const result = parseAnalysisBlock(content)
+    expect(result!.improvementPriority?.startsWith('P0')).toBe(true)
+  })
+
+  it('correctly identifies P1 priority prefix', () => {
+    const content = `<!--ANALYSIS\nROOT_CAUSE: x\nGENERALITY_TEST: y\nREGRESSION_RISK: low\nIMPROVEMENT_PRIORITY: P1 — missing trigger words in frontmatter\n-->`
+    const result = parseAnalysisBlock(content)
+    expect(result!.improvementPriority?.startsWith('P1')).toBe(true)
+  })
+
+  it('correctly identifies P3 priority (readability)', () => {
+    const content = `<!--ANALYSIS\nROOT_CAUSE: x\nGENERALITY_TEST: y\nREGRESSION_RISK: low\nIMPROVEMENT_PRIORITY: P3 — paragraphs too long, needs TL;DR\n-->`
+    const result = parseAnalysisBlock(content)
+    expect(result!.improvementPriority?.startsWith('P3')).toBe(true)
+  })
+
+  it('old-format block without IMPROVEMENT_PRIORITY still parses correctly', () => {
+    const content = `<!--ANALYSIS\nROOT_CAUSE: clarity issue\nGENERALITY_TEST: ok\nREGRESSION_RISK: medium\n-->\n---\nname: Evolved\n---\n# Body`
+    const result = parseAnalysisBlock(content)
+    expect(result!.rootCause).toBe('clarity issue')
+    expect(result!.improvementPriority).toBeUndefined()
   })
 })
 

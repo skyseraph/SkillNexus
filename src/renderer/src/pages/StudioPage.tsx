@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Skill, SkillScore5D, TestCase, GithubSkillResult, EvalResult, EvalHistoryPage } from '../../../shared/types'
 import { SKILLNET_SKILLS, type DiscoverySkill } from '../data/studio-discovery'
 import { useT } from '../i18n/useT'
+import { useToast } from '../hooks/useToast'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -43,8 +44,11 @@ const SCORE_5D_KEYS = ['safety', 'completeness', 'executability', 'maintainabili
 
 const PRESET_TOOLS = [
   'web_search', 'code_exec', 'file_read', 'file_write',
-  'shell', 'browser', 'mcp_tool', 'sub_skill'
+  'http_request', 'shell', 'browser', 'mcp_tool', 'sub_skill'
 ]
+
+// Tools declared in UI but not yet implemented in the execution engine
+const SOON_TOOLS = new Set(['browser', 'mcp_tool', 'sub_skill'])
 
 
 // ── DiscoveryPanel ────────────────────────────────────────────────────────────
@@ -663,7 +667,7 @@ function InputAreaExtract({ streaming, apiKeySet, skills, onExtract, defaultSkil
         </div>
       </div>
 
-      {loading && <div className="studio-v2-empty">加载中...</div>}
+      {loading && <div className="studio-v2-empty">{t('common.loading')}</div>}
       {loaded && !loading && records.length === 0 && (
         <div className="studio-v2-empty">{t('studio.extract.no_records')}</div>
       )}
@@ -775,6 +779,118 @@ function Score5DMini({ scores, loading }: { scores: SkillScore5D | null; loading
   )
 }
 
+// ── StructQualityMini ─────────────────────────────────────────────────────────
+
+interface StructQualityResult {
+  frontmatter: number
+  workflow: number
+  edgeCases: number
+  checkpoints: number
+}
+
+function analyzeStructQuality(content: string): StructQualityResult {
+  const body = content.replace(/^---[\s\S]*?---\n?/, '')
+
+  // D1: Frontmatter 质量
+  let frontmatter = 0
+  if (/^---[\s\S]*?name:\s*\S/m.test(content)) frontmatter += 3
+  const descMatch = content.match(/^---[\s\S]*?description:\s*["']?([^\n"']+)/m)
+  const desc = descMatch?.[1]?.trim() ?? ''
+  if (desc.length > 0) frontmatter += 3
+  if (desc.length > 0 && desc.length <= 1024) frontmatter += 2
+  if (/使用|触发|when|use when|mention|说|输入/i.test(desc)) frontmatter += 2
+
+  // D2: 工作流清晰度
+  let workflow = 0
+  if (/^\s*\d+[\.\)]\s+\S/m.test(body)) workflow += 5
+  if (/Step\s+\d+|Phase\s+\d+|阶段\s*\d+|步骤\s*\d+/i.test(body)) workflow += 3
+  if (/输入|输出|input|output/i.test(body)) workflow += 2
+
+  // D3: 边界条件覆盖
+  let edgeCases = 0
+  if (/fallback|如果.*失败|失败时|出错|error|exception|异常/i.test(body)) edgeCases += 6
+  if (/边界|edge case|特殊情况|注意/i.test(body)) edgeCases += 4
+
+  // D4: 检查点设计（有用户确认机制才得分）
+  const checkpoints = /用户确认|暂停|confirm|checkpoint|等待用户|pause|人工确认|请确认/i.test(body) ? 10 : 0
+
+  return { frontmatter, workflow, edgeCases, checkpoints }
+}
+
+const STRUCT_QUALITY_COLORS: Record<keyof StructQualityResult, string> = {
+  frontmatter: '#0ea5e9',
+  workflow:    '#10b981',
+  edgeCases:   '#f59e0b',
+  checkpoints: '#8b5cf6',
+}
+
+const STRUCT_QUALITY_KEYS: (keyof StructQualityResult)[] = ['frontmatter', 'workflow', 'edgeCases', 'checkpoints']
+
+function StructQualityMini({ content }: { content: string }) {
+  const t = useT()
+  const [hintOpen, setHintOpen] = useState(false)
+
+  if (!content.trim()) return null
+
+  const result = analyzeStructQuality(content)
+  const labels: Record<keyof StructQualityResult, string> = {
+    frontmatter: t('studio.struct.frontmatter'),
+    workflow:    t('studio.struct.workflow'),
+    edgeCases:   t('studio.struct.edgeCases'),
+    checkpoints: t('studio.struct.checkpoints'),
+  }
+  const tips: Record<keyof StructQualityResult, string> = {
+    frontmatter: t('studio.struct.tip.frontmatter'),
+    workflow:    t('studio.struct.tip.workflow'),
+    edgeCases:   t('studio.struct.tip.edgeCases'),
+    checkpoints: t('studio.struct.tip.checkpoints'),
+  }
+
+  const avg = STRUCT_QUALITY_KEYS.reduce((a, k) => a + result[k], 0) / STRUCT_QUALITY_KEYS.length
+  const weakDims = STRUCT_QUALITY_KEYS.filter(k => result[k] < 6)
+
+  return (
+    <div className="studio-v2-score-mini-wrap">
+      <div className="studio-v2-score-mini">
+        <span className="studio-v2-score-struct-label">{t('studio.struct.label')}</span>
+        {STRUCT_QUALITY_KEYS.map(k => {
+          const val = result[k]
+          const isWeak = val < 6
+          return (
+            <span
+              key={k}
+              className={`studio-v2-score-pill${isWeak ? ' weak' : ''}`}
+              style={{ color: STRUCT_QUALITY_COLORS[k], borderColor: `${STRUCT_QUALITY_COLORS[k]}${isWeak ? '99' : '44'}` }}
+              title={isWeak ? `${labels[k]} — ${tips[k]}` : undefined}
+            >
+              {labels[k]} {val}
+              {isWeak && <span className="studio-v2-score-pill-warn">!</span>}
+            </span>
+          )
+        })}
+        <span className="studio-v2-score-avg" style={{ color: avg >= 7 ? 'var(--success)' : avg >= 5 ? 'var(--warning)' : 'var(--danger)' }}>
+          均 {avg.toFixed(1)}
+        </span>
+        {weakDims.length > 0 && (
+          <button className="studio-v2-score-hint-toggle" onClick={() => setHintOpen(v => !v)}>
+            {hintOpen ? '▾' : '▸'} 改进建议
+          </button>
+        )}
+      </div>
+      {hintOpen && weakDims.length > 0 && (
+        <div className="studio-v2-score-hints">
+          {weakDims.map(k => (
+            <div key={k} className="studio-v2-score-hint-row">
+              <span className="studio-v2-score-hint-dim" style={{ color: STRUCT_QUALITY_COLORS[k] }}>{labels[k]}</span>
+              <span className="studio-v2-score-hint-text">{tips[k]}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── SimilarWarn ───────────────────────────────────────────────────────────────
 
 function SimilarWarn({ skills }: { skills: Skill[] }) {
@@ -821,6 +937,7 @@ function InstallBar({ content, scores, scoring, similar, parentSkillId, onInstal
     <div className="studio-v2-install-bar">
       <SimilarWarn skills={similar} />
       <Score5DMini scores={scores} loading={scoring} />
+      <StructQualityMini content={content} />
       <div className="studio-v2-install-row">
         <input
           placeholder={t('studio.skill_name_placeholder')}
@@ -935,13 +1052,17 @@ function AgentDesignPanel({ streaming, apiKeySet, onGenerate }: {
       <div className="studio-v2-agent-field">
         <label>工具声明 <span className="studio-v2-agent-field-hint">（可多选）</span></label>
         <div className="studio-v2-tool-chips">
-          {PRESET_TOOLS.map(t => (
-            <button key={t}
-              className={`studio-v2-tool-chip ${tools.includes(t) ? 'active' : ''}`}
-              onClick={() => toggleTool(t)}>
-              {t}
-            </button>
-          ))}
+          {PRESET_TOOLS.map(t => {
+            const soon = SOON_TOOLS.has(t)
+            return (
+              <button key={t}
+                className={`studio-v2-tool-chip ${tools.includes(t) ? 'active' : ''} ${soon ? 'disabled' : ''}`}
+                disabled={soon}
+                onClick={() => !soon && toggleTool(t)}>
+                {t}{soon ? ' (soon)' : ''}
+              </button>
+            )
+          })}
         </div>
       </div>
       <div className="studio-v2-agent-field">
@@ -1235,6 +1356,7 @@ function ValidationPanel({ expanded, onToggle, installedSkill }: {
 
 export default function StudioPage({ initialSkillId, onNavigate, apiKeySet: apiKeySetProp }: { initialSkillId?: string; onNavigate?: (page: string, skillId?: string) => void; apiKeySet?: boolean | null } = {}) {
   const t = useT()
+  const { toast } = useToast()
   const CREATION_TABS = [
     { id: 'describe' as StudioMode, label: t('studio.tab.describe'), icon: '✍️' },
     { id: 'examples' as StudioMode, label: t('studio.tab.examples'), icon: '🔁' },
@@ -1262,7 +1384,6 @@ export default function StudioPage({ initialSkillId, onNavigate, apiKeySet: apiK
   const [discExpanded, setDiscExpanded] = useState(true)
   const [valExpanded, setValExpanded] = useState(false)
   const [showMethodModal, setShowMethodModal] = useState(false)
-  const [successMsg, setSuccessMsg] = useState('')
   const [noSkill, setNoSkill] = useState(false)
   const [mySkills, setMySkills] = useState<Skill[]>([])
   const [extractSourceSkillId, setExtractSourceSkillId] = useState<string | undefined>()
@@ -1359,8 +1480,7 @@ export default function StudioPage({ initialSkillId, onNavigate, apiKeySet: apiK
   const handleGenerate = useCallback((fields?: { name: string; description: string; steps: string; tags: string }) => {
     if (activeMethod.type === 'external') {
       window.api.shell.openExternal(activeMethod.url!)
-      setSuccessMsg(`已打开 ${activeMethod.label}，完成后将内容粘贴到编辑器`)
-      setTimeout(() => setSuccessMsg(''), 4000)
+      toast(`已打开 ${activeMethod.label}，完成后将内容粘贴到编辑器`, 'info')
       return
     }
     if (activeMethodId === 'skill-creator' && fields) {
@@ -1480,10 +1600,6 @@ export default function StudioPage({ initialSkillId, onNavigate, apiKeySet: apiK
         <div className="studio-v2-guard">
           ⚠️ 未配置 AI Provider。请前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>Settings</button> 添加后再使用生成功能。
         </div>
-      )}
-
-      {successMsg && (
-        <div className="studio-v2-toast">{successMsg}</div>
       )}
 
       {/* Workspace */}

@@ -4,6 +4,8 @@ import type { EvoSkillResult } from '../../../shared/types'
 
 const MAX_FRONTIER = 5
 const DEFAULT_ITERATIONS = 3
+const MIN_MEANINGFUL_IMPROVEMENT = 0.3
+const STAGNATION_THRESHOLD = 2
 
 interface FrontierNode {
   skillId: string
@@ -44,6 +46,14 @@ export class EvoSkillEngine extends BaseEvolutionEngine<EvoSkillConfig, EvoSkill
     })
   }
 
+  private async proposeExploratoryRewrite(skillContent: string, worstSamples: string[]): Promise<string> {
+    const samplesText = worstSamples.map((s, i) => `[Sample ${i + 1}]\n${s}`).join('\n\n')
+    return this.callAI({
+      systemPrompt: 'You are a Skill optimizer. The current Skill has stagnated — incremental improvements are no longer working. Perform a complete exploratory rewrite from scratch. Do NOT preserve the existing structure. Rethink the approach entirely based on the failure evidence. Output only the new Skill content in full, maintaining the YAML frontmatter format.',
+      userMessage: `Current Skill (stagnated — do NOT copy its structure):\n${skillContent}\n\nFailure Evidence:\n${samplesText}\n\nOutput a completely rewritten Skill:`
+    })
+  }
+
   async run(config: EvoSkillConfig): Promise<EvoSkillResult> {
     const maxIter = config.maxIterations ?? DEFAULT_ITERATIONS
     const skillRow = this.store.querySkill(config.skillId)
@@ -57,19 +67,32 @@ export class EvoSkillEngine extends BaseEvolutionEngine<EvoSkillConfig, EvoSkill
       avgScore: this.avgScoreForSkill(config.skillId)
     }]
 
+    let stagnantRounds = 0
+    let prevBestScore = frontier[0].avgScore
+    let exploratoryRewriteTriggered = false
+
     for (let iter = 1; iter <= maxIter; iter++) {
       this.reporter.report('studio:progress', { stage: 'evoskill', iteration: iter, total: maxIter })
 
       const base = frontier.reduce((a, b) => a.avgScore < b.avgScore ? a : b)
       const worstSamples = this.getWorstSamples(base.skillId)
-      const candidateContent = await this.proposeImprovement(base.content, worstSamples)
+
+      const isExploratory = stagnantRounds >= STAGNATION_THRESHOLD
+      const candidateContent = isExploratory
+        ? await this.proposeExploratoryRewrite(base.content, worstSamples)
+        : await this.proposeImprovement(base.content, worstSamples)
+
+      if (isExploratory) {
+        exploratoryRewriteTriggered = true
+        stagnantRounds = 0
+      }
 
       const candidateId = this.storage.saveEvolvedSkill({
         parentSkillId: config.skillId,
-        engine: 'evoskill',
+        engine: isExploratory ? 'evoskill-exploratory' : 'evoskill',
         generation: iter,
         content: candidateContent,
-        namePrefix: 'EvoSkill-gen'
+        namePrefix: isExploratory ? 'EvoSkill-rewrite' : 'EvoSkill-gen'
       })
       this.storage.copyTestCases(config.skillId, candidateId)
 
@@ -83,6 +106,14 @@ export class EvoSkillEngine extends BaseEvolutionEngine<EvoSkillConfig, EvoSkill
         const minIdx = frontier.reduce((mi, n, i) => n.avgScore < frontier[mi].avgScore ? i : mi, 0)
         frontier.splice(minIdx, 1)
       }
+
+      const currentBest = frontier.reduce((a, b) => a.avgScore > b.avgScore ? a : b).avgScore
+      if (currentBest - prevBestScore < MIN_MEANINGFUL_IMPROVEMENT) {
+        stagnantRounds++
+      } else {
+        stagnantRounds = 0
+      }
+      prevBestScore = currentBest
     }
 
     const best = frontier.reduce((a, b) => a.avgScore > b.avgScore ? a : b)
@@ -92,7 +123,8 @@ export class EvoSkillEngine extends BaseEvolutionEngine<EvoSkillConfig, EvoSkill
       frontierIds: frontier.map(n => n.skillId),
       bestId: best.skillId,
       iterations: maxIter,
-      finalAvgScore: best.avgScore
+      finalAvgScore: best.avgScore,
+      ...(exploratoryRewriteTriggered ? { exploratoryRewriteTriggered: true } : {})
     }
   }
 }

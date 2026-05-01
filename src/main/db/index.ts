@@ -105,7 +105,9 @@ const MIGRATIONS = [
   `ALTER TABLE eval_history ADD COLUMN test_case_id TEXT`,
   `ALTER TABLE eval_history ADD COLUMN test_case_name TEXT`,
   `ALTER TABLE eval_history ADD COLUMN job_id TEXT`,
-  `ALTER TABLE eval_history ADD COLUMN label TEXT`
+  `ALTER TABLE eval_history ADD COLUMN label TEXT`,
+  `ALTER TABLE eval_history ADD COLUMN content_hash TEXT`,
+  `ALTER TABLE eval_history ADD COLUMN eval_mode TEXT NOT NULL DEFAULT 'llm'`
 ]
 
 export function initDatabase(): Database.Database {

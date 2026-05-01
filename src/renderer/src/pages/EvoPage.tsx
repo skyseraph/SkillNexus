@@ -1,12 +1,14 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import type { MutableRefObject } from 'react'
 import { useT } from '../i18n'
+import { friendlyError } from '../utils/friendly-error'
 import type { Skill, EvalResult, EvalHistoryPage, EvoRunResult, EvoSession, EvoPhase, EvoParadigm, EvoAnalysis, EvoConfig, EvoChainEntry, EvolutionEngine, ParetoPoint, EvoSkillResult, CoEvoResult, TransferReport, SkillXResult, SkillClawResult } from '../../../shared/types'
 import { useTrack } from '../hooks/useTrack'
 
 const MIN_MEANINGFUL_IMPROVEMENT = 0.3
 const PER_DIM_REGRESSION_TOLERANCE = 1.0
 const SIMILARITY_WARNING_THRESHOLD = 0.95
+const SIZE_WARNING_RATIO = 1.5  // evolved > 150% of original triggers warning
 
 function bigramSimilarity(a: string, b: string): number {
   const bigrams = (s: string) => {
@@ -343,9 +345,20 @@ function DimCompareRow({ dim, before, after }: { dim: string; before: number; af
 }
 
 function AnalysisPanel({ data }: { data: EvoAnalysis }) {
+  const priorityColor = data.improvementPriority?.startsWith('P0') ? 'var(--danger)'
+    : data.improvementPriority?.startsWith('P1') ? 'var(--warning)'
+    : data.improvementPriority?.startsWith('P2') ? 'var(--accent)'
+    : 'var(--text-muted)'
+
   return (
     <div className="analysis-panel">
       <div className="analysis-title">优化器诊断</div>
+      {data.improvementPriority && (
+        <div className="analysis-field">
+          <span className="analysis-label">改进优先级</span>
+          <span className="analysis-value" style={{ color: priorityColor }}>{data.improvementPriority}</span>
+        </div>
+      )}
       <div className="analysis-field"><span className="analysis-label">根因分析</span><span className="analysis-value">{data.rootCause || '—'}</span></div>
       <div className="analysis-field"><span className="analysis-label">泛化测试</span><span className="analysis-value">{data.generalityTest || '—'}</span></div>
       <div className="analysis-field"><span className="analysis-label">回归风险</span><span className="analysis-value">{data.regressionRisk || '—'}</span></div>
@@ -585,17 +598,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
 
   const handleReset = () => { cleanupRef.current?.(); cleanupRef.current = null; loadSkill(selectedId) }
 
-  const friendlyError = (e: unknown): string => {
-    const msg = String(e)
-    if (msg.includes('API key') || msg.includes('api_key') || msg.includes('401')) return t('evo.error.api_key')
-    if (msg.includes('rate limit') || msg.includes('429')) return t('evo.error.rate_limit')
-    if (msg.includes('timeout') || msg.includes('ETIMEDOUT')) return t('evo.error.timeout')
-    if (msg.includes('not found') || msg.includes('404')) return t('evo.error.not_found')
-    if (msg.includes('No eval history') || msg.includes('eval records')) return t('evo.error.no_eval_history')
-    if (msg.includes('cancelled') || msg.includes('aborted')) return t('evo.error.cancelled')
-    if (msg.includes('ECONNREFUSED') || msg.includes('network')) return t('evo.error.network')
-    return msg.replace(/^Error:\s*/i, '')
-  }
+
 
   const handleCancelV2 = () => {
     v2AbortRef.current = true
@@ -653,7 +656,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
         }
       }
     } catch (e) {
-      if (!v2AbortRef.current) setError(friendlyError(e))
+      if (!v2AbortRef.current) setError(friendlyError(e, t))
     } finally {
       setV2Running(false)
     }
@@ -1188,11 +1191,20 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
 
               {phase === 'reviewing' && (() => {
                 const similarity = bigramSimilarity(selectedSkill?.markdownContent ?? '', evolvedContent)
+                const origBytes = new TextEncoder().encode(selectedSkill?.markdownContent ?? '').length
+                const evolvedBytes = new TextEncoder().encode(evolvedContent).length
+                const sizeRatio = origBytes > 0 ? evolvedBytes / origBytes : 1
+                const isBloated = sizeRatio > SIZE_WARNING_RATIO
                 return (
                   <>
                     {similarity >= SIMILARITY_WARNING_THRESHOLD && (
                       <div className="similarity-warn">
                         ⚠️ 进化内容与原版高度相似（差异 &lt; {Math.round((1 - similarity) * 100)}%），建议重新进化或切换范式
+                      </div>
+                    )}
+                    {isBloated && (
+                      <div className="size-warn">
+                        ⚠️ 进化版体积为原版的 {sizeRatio.toFixed(1)}x（{evolvedBytes} B vs {origBytes} B），Skill 过度膨胀会降低 LLM 遵循率，建议精简后再安装
                       </div>
                     )}
                     <div className="pane-footer">
@@ -1457,6 +1469,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
         .regression-banner { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.4); border-radius: var(--radius); padding: 10px 14px; color: var(--danger); font-size: 13px; margin-bottom: 14px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
         .regressed-dim { background: rgba(239,68,68,0.15); border-radius: 4px; padding: 2px 8px; font-weight: 700; font-size: 11px; }
         .similarity-warn { background: rgba(250,204,21,0.08); border: 1px solid rgba(250,204,21,0.35); border-radius: var(--radius); padding: 10px 12px; color: var(--warning); font-size: 12px; margin-top: 8px; }
+        .size-warn { background: rgba(249,115,22,0.08); border: 1px solid rgba(249,115,22,0.35); border-radius: var(--radius); padding: 10px 12px; color: #f97316; font-size: 12px; margin-top: 8px; }
 
         /* Engine selector — grouped chips */
         .engine-group { margin-bottom: 10px; }

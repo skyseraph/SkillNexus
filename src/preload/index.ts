@@ -98,8 +98,12 @@ const api = {
     create: (tc: Omit<TestCase, 'id' | 'createdAt'>): Promise<TestCase> =>
       ipcRenderer.invoke('testcases:create', tc),
     delete: (id: string): Promise<void> => ipcRenderer.invoke('testcases:delete', id),
+    update: (id: string, patch: Partial<Pick<TestCase, 'name' | 'input' | 'judgeType' | 'judgeParam'>>): Promise<TestCase> =>
+      ipcRenderer.invoke('testcases:update', id, patch),
     generate: (skillId: string, count: number): Promise<TestCase[]> =>
       ipcRenderer.invoke('testcases:generate', skillId, count),
+    generatePreview: (skillId: string, count: number): Promise<Omit<TestCase, 'id' | 'createdAt'>[]> =>
+      ipcRenderer.invoke('testcases:generatePreview', skillId, count),
     importJson: (skillId: string, items: unknown[]): Promise<{ imported: TestCase[]; errors: string[] }> =>
       ipcRenderer.invoke('testcases:importJson', skillId, items)
   },

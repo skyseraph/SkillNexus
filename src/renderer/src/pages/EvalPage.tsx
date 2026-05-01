@@ -3,7 +3,10 @@ import type { Skill, EvalResult, EvalScore, TestCase } from '../../../shared/typ
 import CompareMode from './EvalCompareMode'
 import ThreeConditionMode from './EvalThreeConditionMode'
 import { useTrack } from '../hooks/useTrack'
+import EmptyState from '../components/EmptyState'
 import { useT } from '../i18n/useT'
+import { useToast } from '../hooks/useToast'
+import { friendlyError } from '../utils/friendly-error'
 
 const DIM_COLORS: Record<string, string> = {
   correctness:           '#6c63ff',
@@ -667,6 +670,112 @@ function DimBarChart({ scores }: { scores: Record<string, EvalScore> }) {
   )
 }
 
+// ── GeneratePreviewModal ──────────────────────────────────────────────────────
+
+interface PreviewCandidate extends Omit<TestCase, 'id' | 'createdAt'> {
+  _key: string
+}
+
+function GeneratePreviewModal({ candidates, saving, onSave, onCancel }: {
+  candidates: Omit<TestCase, 'id' | 'createdAt'>[]
+  saving: boolean
+  onSave: (selected: Omit<TestCase, 'id' | 'createdAt'>[]) => void
+  onCancel: () => void
+}) {
+  const [items, setItems] = useState<PreviewCandidate[]>(() =>
+    candidates.map((c, i) => ({ ...c, _key: `preview-${i}` }))
+  )
+  const [checkedKeys, setCheckedKeys] = useState<Set<string>>(
+    () => new Set(candidates.map((_, i) => `preview-${i}`))
+  )
+
+  const toggleKey = (key: string) => setCheckedKeys(prev => {
+    const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next
+  })
+  const allChecked = checkedKeys.size === items.length
+  const toggleAll = () => setCheckedKeys(allChecked ? new Set() : new Set(items.map(i => i._key)))
+
+  const updateItem = (key: string, field: keyof Omit<PreviewCandidate, '_key'>, value: string) => {
+    setItems(prev => prev.map(it => it._key === key ? { ...it, [field]: value } : it))
+  }
+
+  const handleSave = () => {
+    const selected = items.filter(it => checkedKeys.has(it._key)).map(({ _key: _k, ...rest }) => rest)
+    onSave(selected)
+  }
+
+  const JUDGE_BADGE_COLORS: Record<string, string> = { llm: '#6c63ff', grep: '#00d4aa', command: '#f59e0b' }
+
+  return (
+    <div className="tc-preview-overlay" onClick={e => { if (e.target === e.currentTarget) onCancel() }}>
+      <div className="tc-preview-modal">
+        <div className="tc-preview-header">
+          <span className="tc-preview-title">预览生成的测试用例（{items.length} 个）</span>
+          <div className="tc-preview-header-actions">
+            <button className="btn btn-xs" onClick={toggleAll}>{allChecked ? '取消全选' : '全选'}</button>
+          </div>
+        </div>
+        <div className="tc-preview-list">
+          {items.map(item => (
+            <div key={item._key} className={`tc-preview-card ${checkedKeys.has(item._key) ? 'checked' : ''}`}>
+              <div className="tc-preview-card-header">
+                <input
+                  type="checkbox"
+                  checked={checkedKeys.has(item._key)}
+                  onChange={() => toggleKey(item._key)}
+                />
+                <input
+                  className="tc-preview-name"
+                  value={item.name}
+                  onChange={e => updateItem(item._key, 'name', e.target.value)}
+                  placeholder="用例名称"
+                />
+                <span
+                  className="judge-chip"
+                  style={{ color: JUDGE_BADGE_COLORS[item.judgeType] }}
+                >
+                  {item.judgeType}
+                </span>
+              </div>
+              <div className="tc-preview-field">
+                <span className="tc-preview-label">输入</span>
+                <textarea
+                  className="tc-preview-input"
+                  rows={3}
+                  value={item.input}
+                  onChange={e => updateItem(item._key, 'input', e.target.value)}
+                  placeholder="用户输入内容"
+                />
+              </div>
+              {item.judgeType !== 'command' && (
+                <div className="tc-preview-field">
+                  <span className="tc-preview-label">判断</span>
+                  <input
+                    className="tc-preview-judge"
+                    value={item.judgeParam}
+                    onChange={e => updateItem(item._key, 'judgeParam', e.target.value)}
+                    placeholder="判断标准"
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="tc-preview-footer">
+          <button className="btn btn-sm" onClick={onCancel} disabled={saving}>取消</button>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={handleSave}
+            disabled={saving || checkedKeys.size === 0}
+          >
+            {saving ? '保存中...' : `保存已选（${checkedKeys.size} 个）`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── TestCase Tab ──────────────────────────────────────────────────────────────
 
 const JUDGE_COLORS: Record<string, string> = { llm: '#6c63ff', grep: '#00d4aa', command: '#f59e0b' }
@@ -697,6 +806,10 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<{ imported: number; errors: string[] } | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
+  const [previewCandidates, setPreviewCandidates] = useState<Omit<TestCase, 'id' | 'createdAt'>[] | null>(null)
+  const [previewing, setPreviewing] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [savingPreview, setSavingPreview] = useState(false)
 
   useEffect(() => {
     if (!skillId) return
@@ -716,6 +829,30 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
     const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
   })
 
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<{ name: string; input: string; judgeType: TestCase['judgeType']; judgeParam: string }>({ name: '', input: '', judgeType: 'llm', judgeParam: '' })
+  const [saving, setSaving] = useState(false)
+
+  const startEdit = (tc: TestCase) => {
+    setEditingId(tc.id)
+    setEditForm({ name: tc.name, input: tc.input, judgeType: tc.judgeType, judgeParam: tc.judgeParam })
+  }
+
+  const cancelEdit = () => { setEditingId(null) }
+
+  const handleUpdate = async (id: string) => {
+    setSaving(true)
+    try {
+      const updated = await window.api.testcases.update(id, editForm)
+      setTestCases((prev) => prev.map((t) => t.id === id ? updated : t))
+      setEditingId(null)
+    } catch (e) {
+      // keep form open so user can retry
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleDelete = (id: string) => {
     window.api.testcases.delete(id)
     setTestCases((prev) => prev.filter((t) => t.id !== id))
@@ -730,8 +867,30 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
       setTestCases((prev) => [...prev, ...tcs])
       setSelectedIds((prev) => { const next = new Set(prev); tcs.forEach((t) => next.add(t.id)); return next })
       setGenSuccess(tcs.length)
-    } catch (e) { setGenError(String(e)) }
+    } catch (e) { setGenError(friendlyError(e, t)) }
     finally { setGenerating(false) }
+  }
+
+  const handleGeneratePreview = async () => {
+    setPreviewing(true); setPreviewError(null)
+    try {
+      const candidates = await window.api.testcases.generatePreview(skillId, genCount)
+      setPreviewCandidates(candidates)
+    } catch (e) { setPreviewError(friendlyError(e, t)) }
+    finally { setPreviewing(false) }
+  }
+
+  const handleSavePreview = async (selected: Omit<TestCase, 'id' | 'createdAt'>[]) => {
+    setSavingPreview(true)
+    const saved: TestCase[] = []
+    for (const tc of selected) {
+      const created = await window.api.testcases.create(tc)
+      saved.push(created)
+    }
+    setTestCases((prev) => [...prev, ...saved])
+    setSelectedIds((prev) => { const next = new Set(prev); saved.forEach((t) => next.add(t.id)); return next })
+    setPreviewCandidates(null)
+    setSavingPreview(false)
   }
 
   const handleAdd = async () => {
@@ -781,18 +940,34 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
           <div className="count-row">
             {[3, 5, 10, 15].map((n) => (
               <button key={n} className={`count-chip ${genCount === n ? 'active' : ''}`}
-                onClick={() => setGenCount(n)} disabled={generating}>{n}</button>
+                onClick={() => setGenCount(n)} disabled={generating || previewing}>{n}</button>
             ))}
           </div>
-          <button className="btn btn-primary btn-sm" onClick={handleGenerate}
-            disabled={generating || apiKeySet === false}>
-            {generating ? <><span className="gen-spinner" />{` 生成中...`}</> : `生成 ${genCount} 个`}
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary btn-sm" onClick={handleGeneratePreview}
+              disabled={generating || previewing || apiKeySet === false}>
+              {previewing ? <><span className="gen-spinner" />{` 生成中...`}</> : `预览生成 ▸`}
+            </button>
+            <button className="btn btn-sm" onClick={handleGenerate}
+              disabled={generating || previewing || apiKeySet === false}>
+              {generating ? <><span className="gen-spinner" />{` 生成中...`}</> : `直接生成`}
+            </button>
+          </div>
         </div>
-        {genError && <div className="gen-error">⚠️ {genError}</div>}
+        {(genError || previewError) && <div className="gen-error">⚠️ {genError || previewError}</div>}
         {genSuccess > 0 && !genError && <div className="gen-success">✅ 已生成 {genSuccess} 个用例</div>}
         {apiKeySet === false && <div className="gen-warn">⚠️ 未配置 API Key，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 添加。</div>}
       </div>
+
+      {/* Generate Preview Modal */}
+      {previewCandidates && (
+        <GeneratePreviewModal
+          candidates={previewCandidates}
+          saving={savingPreview}
+          onSave={handleSavePreview}
+          onCancel={() => setPreviewCandidates(null)}
+        />
+      )}
 
       {/* List */}
       <div className="eval-card">
@@ -817,7 +992,11 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
         </div>
 
         {loading ? <div className="tc-empty">{t('common.loading')}</div>
-          : filtered.length === 0 ? <div className="tc-empty">{testCases.length === 0 ? t('studio.no_test_cases') : t('common.no_match')}</div>
+          : filtered.length === 0 ? (
+            testCases.length === 0
+              ? <EmptyState icon="🧪" title={t('eval.no_cases')} action={{ label: t('eval.go_studio'), onClick: () => onNavigate?.('studio') }} />
+              : <div className="tc-empty">{t('common.no_match')}</div>
+          )
           : (
             <div className="tc-list">
               {filtered.map((tc) => (
@@ -843,20 +1022,54 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
                     >
                       {confirmingDeleteId === tc.id ? t('eval.confirm_delete') : t('common.delete')}
                     </button>
+                    <button className="btn btn-xs btn-ghost" onClick={(e) => { e.stopPropagation(); startEdit(tc); setExpandedTcId(tc.id) }}>
+                      {t('common.edit')}
+                    </button>
                   </div>
                   {expandedTcId === tc.id && (
                     <div className="tc-card-body">
-                      <div className="tc-field">
-                        <span className="tc-field-label">Input</span>
-                        <pre className="tc-field-value">{tc.input}</pre>
-                      </div>
-                      {tc.judgeParam && (
-                        <div className="tc-field">
-                          <span className="tc-field-label">Judge Param</span>
-                          <pre className="tc-field-value">{tc.judgeParam}</pre>
-                        </div>
+                      {editingId === tc.id ? (
+                        <>
+                          <div className="tc-field">
+                            <span className="tc-field-label">{t('eval.tc.name')}</span>
+                            <input className="tc-edit-input" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
+                          </div>
+                          <div className="tc-field">
+                            <span className="tc-field-label">Input</span>
+                            <textarea className="tc-edit-textarea" rows={4} value={editForm.input} onChange={(e) => setEditForm((f) => ({ ...f, input: e.target.value }))} />
+                          </div>
+                          <div className="tc-field">
+                            <span className="tc-field-label">Judge Type</span>
+                            <select className="tc-edit-select" value={editForm.judgeType} onChange={(e) => setEditForm((f) => ({ ...f, judgeType: e.target.value as TestCase['judgeType'] }))}>
+                              <option value="llm">LLM</option>
+                              <option value="grep">Grep</option>
+                              <option value="command">Command</option>
+                            </select>
+                          </div>
+                          <div className="tc-field">
+                            <span className="tc-field-label">Judge Param</span>
+                            <textarea className="tc-edit-textarea" rows={3} value={editForm.judgeParam} onChange={(e) => setEditForm((f) => ({ ...f, judgeParam: e.target.value }))} />
+                          </div>
+                          <div className="tc-edit-actions">
+                            <button className="btn btn-primary btn-sm" disabled={saving} onClick={() => handleUpdate(tc.id)}>{saving ? t('common.saving') : t('common.save')}</button>
+                            <button className="btn btn-ghost btn-sm" disabled={saving} onClick={cancelEdit}>{t('common.cancel')}</button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="tc-field">
+                            <span className="tc-field-label">Input</span>
+                            <pre className="tc-field-value">{tc.input}</pre>
+                          </div>
+                          {tc.judgeParam && (
+                            <div className="tc-field">
+                              <span className="tc-field-label">Judge Param</span>
+                              <pre className="tc-field-value">{tc.judgeParam}</pre>
+                            </div>
+                          )}
+                          <div className="tc-meta">创建于 {new Date(tc.createdAt).toLocaleString()}</div>
+                        </>
                       )}
-                      <div className="tc-meta">创建于 {new Date(tc.createdAt).toLocaleString()}</div>
                     </div>
                   )}
                 </div>
@@ -954,7 +1167,7 @@ function ByCasePanel({ caseMap }: { caseMap: Map<string, EvalResult[]> }) {
   const [sortBy, setSortBy] = useState<'avg' | 'count'>('avg')
   const [expandedCase, setExpandedCase] = useState<string | null>(null)
 
-  if (caseMap.size === 0) return <div className="tc-empty" style={{ padding: 16 }}>暂无按用例聚合数据，请先运行评测</div>
+  if (caseMap.size === 0) return <div className="tc-empty" style={{ padding: 16 }}>{t('eval.no_cases')}</div>
 
   const entries = [...caseMap.entries()].sort((a, b) => {
     if (sortBy === 'count') return b[1].length - a[1].length
@@ -1033,6 +1246,7 @@ function ByCasePanel({ caseMap }: { caseMap: Map<string, EvalResult[]> }) {
 export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey }: { initialSkillId?: string; onNavigate?: (page: string, skillId?: string) => void; skillsRefreshKey?: number } = {}) {
   const track = useTrack()
   const t = useT()
+  const { toasts, toast, dismiss } = useToast()
   const DIM_LABELS = makeDimLabels(t)
   const [skills, setSkills] = useState<Skill[]>([])
   const [selectedSkill, setSelectedSkill] = useState(initialSkillId ?? '')
@@ -1084,11 +1298,11 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
       setHistory(res.items)
       setHistoryTotal(res.total)
       setHistoryPage(page)
-    }).catch((e) => console.error('[EvalPage] history load failed:', e))
+    }).catch((e) => toast(friendlyError(e, t), 'error'))
     // Load full history for charts and search (no pagination limit)
     window.api.eval.history(selectedSkill, 10000, 0).then((res) => {
       setChartHistory(res.items)
-    }).catch((e) => console.error('[EvalPage] chart history load failed:', e))
+    }).catch((e) => toast(friendlyError(e, t), 'error'))
   }, [selectedSkill])
 
   useEffect(() => {
@@ -1691,6 +1905,9 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
         .tc-field-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); display: block; margin-bottom: 3px; }
         .tc-field-value { font-family: 'Courier New', monospace; font-size: 12px; color: var(--text); white-space: pre-wrap; word-break: break-all; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; margin: 0; max-height: 100px; overflow-y: auto; }
         .tc-meta { font-size: 11px; color: var(--text-muted); }
+        .tc-edit-input, .tc-edit-select { width: 100%; font-size: 13px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); box-sizing: border-box; }
+        .tc-edit-textarea { width: 100%; font-size: 12px; font-family: 'Courier New', monospace; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); resize: vertical; box-sizing: border-box; }
+        .tc-edit-actions { display: flex; gap: 8px; margin-top: 10px; }
         .tc-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
 
         /* Buttons */
@@ -1709,6 +1926,27 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
         .gen-warn { margin-top: 10px; background: rgba(250,204,21,0.08); border: 1px solid rgba(250,204,21,0.3); border-radius: var(--radius); padding: 8px 12px; color: var(--warning); font-size: 12px; }
         .gen-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 4px; }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Generate Preview Modal */
+        .tc-preview-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 24px; }
+        .tc-preview-modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); width: 100%; max-width: 640px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+        .tc-preview-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+        .tc-preview-title { font-size: 14px; font-weight: 700; }
+        .tc-preview-header-actions { display: flex; gap: 8px; }
+        .tc-preview-list { flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+        .tc-preview-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; background: var(--surface2); transition: border-color var(--transition); }
+        .tc-preview-card.checked { border-color: rgba(108,99,255,0.5); background: rgba(108,99,255,0.04); }
+        .tc-preview-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .tc-preview-name { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 13px; font-weight: 500; padding: 4px 8px; }
+        .tc-preview-name:focus { outline: none; border-color: var(--accent); }
+        .tc-preview-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+        .tc-preview-field:last-child { margin-bottom: 0; }
+        .tc-preview-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+        .tc-preview-input { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 12px; font-family: 'Courier New', monospace; padding: 6px 8px; resize: vertical; }
+        .tc-preview-input:focus { outline: none; border-color: var(--accent); }
+        .tc-preview-judge { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font-size: 12px; padding: 4px 8px; }
+        .tc-preview-judge:focus { outline: none; border-color: var(--accent); }
+        .tc-preview-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); flex-shrink: 0; }
 
         /* Search */
         .tc-search-wrap { position: relative; display: flex; align-items: center; }

@@ -1,0 +1,16 @@
+export function friendlyError(e: unknown, t: (k: string) => string): string {
+  const msg = String(e)
+  if (msg.includes('API key') || msg.includes('api_key') || msg.includes('401'))
+    return t('error.api_key')
+  if (msg.includes('rate limit') || msg.includes('429'))
+    return t('error.rate_limit')
+  if (msg.includes('timeout') || msg.includes('ETIMEDOUT') || msg.includes('Timeout after'))
+    return t('error.timeout')
+  if (msg.includes('not found') || msg.includes('404'))
+    return t('error.not_found')
+  if (msg.includes('ECONNREFUSED') || msg.includes('network') || msg.includes('fetch failed'))
+    return t('error.network')
+  if (msg.includes('cancelled') || msg.includes('aborted'))
+    return t('error.cancelled')
+  return msg.replace(/^Error:\s*/i, '')
+}

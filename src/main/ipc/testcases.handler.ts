@@ -71,6 +71,23 @@ export function registerTestCasesHandlers(): void {
     getDb().prepare('DELETE FROM test_cases WHERE id = ?').run(id)
   })
 
+  ipcMain.handle('testcases:update', (_event, id: string, patch: Partial<Pick<TestCase, 'name' | 'input' | 'judgeType' | 'judgeParam'>>): TestCase => {
+    const db = getDb()
+    const existing = db.prepare('SELECT * FROM test_cases WHERE id = ?').get(id) as Record<string, unknown> | undefined
+    if (!existing) throw new Error(`TestCase ${id} not found`)
+
+    const VALID_JUDGE = new Set(['llm', 'grep', 'command'])
+    const name      = typeof patch.name       === 'string' ? String(patch.name).slice(0, 120)                                    : existing.name       as string
+    const input     = typeof patch.input      === 'string' ? patch.input                                                         : existing.input      as string
+    const judgeType = VALID_JUDGE.has(patch.judgeType ?? '') ? patch.judgeType as TestCase['judgeType']                          : existing.judge_type  as TestCase['judgeType']
+    const judgeParam= typeof patch.judgeParam === 'string' ? patch.judgeParam                                                    : existing.judge_param as string
+
+    db.prepare('UPDATE test_cases SET name = ?, input = ?, judge_type = ?, judge_param = ? WHERE id = ?')
+      .run(name, input, judgeType, judgeParam, id)
+
+    return { id, skillId: existing.skill_id as string, name, input, judgeType, judgeParam, createdAt: existing.created_at as number }
+  })
+
   ipcMain.handle(
     'testcases:importJson',
     (_event, skillId: string, items: unknown[]): { imported: TestCase[]; errors: string[] } => {
@@ -120,6 +137,47 @@ export function registerTestCasesHandlers(): void {
       return { imported, errors }
     }
   )
+
+  ipcMain.handle('testcases:generatePreview', async (_event, skillId: string, count: number): Promise<Omit<TestCase, 'id' | 'createdAt'>[]> => {
+    if (count < 1 || count > 20) throw new Error('count must be between 1 and 20')
+
+    const db = getDb()
+    const skill = db.prepare('SELECT * FROM skills WHERE id = ?').get(skillId) as Record<string, unknown> | undefined
+    if (!skill) throw new Error(`Skill ${skillId} not found`)
+
+    const provider = getAIProvider()
+    const result = await withTimeout(
+      provider.call({
+        model: getActiveModel(),
+        systemPrompt: GENERATE_TC_PROMPT,
+        userMessage: `Skill name: ${skill.name as string}\n\nSkill content:\n${skill.markdown_content as string}\n\nGenerate ${count} test cases.`,
+        maxTokens: 2048
+      }),
+      AI_TIMEOUT_MS,
+      'testcases:generatePreview'
+    )
+
+    const rawContent = result.content.replace(/^```[a-z]*\n?/gm, '').replace(/^```\s*$/gm, '')
+    const candidates: Omit<TestCase, 'id' | 'createdAt'>[] = []
+    for (const line of rawContent.split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed.startsWith('{')) continue
+      try {
+        const parsed = JSON.parse(trimmed) as { name?: string; input?: string; judgeType?: string; judgeParam?: string }
+        if (!parsed.name || !parsed.input) continue
+        candidates.push({
+          skillId,
+          name: String(parsed.name).slice(0, 120),
+          input: String(parsed.input),
+          judgeType: (['llm', 'grep', 'command'].includes(parsed.judgeType ?? '') ? parsed.judgeType : 'llm') as TestCase['judgeType'],
+          judgeParam: String(parsed.judgeParam ?? ''),
+        })
+      } catch { /* skip malformed line */ }
+    }
+
+    if (candidates.length === 0) throw new Error('AI did not return valid test cases. Try again.')
+    return candidates
+  })
 
   ipcMain.handle('testcases:generate', async (_event, skillId: string, count: number): Promise<TestCase[]> => {
     if (count < 1 || count > 20) throw new Error('count must be between 1 and 20')
