@@ -170,6 +170,7 @@ Output ONLY the Skill content.`,
     mkdirSync(skillsDir, { recursive: true })
     const now = Date.now()
     const filePath = resolve(join(skillsDir, `generated-${now}.md`))
+    if (!filePath.startsWith(resolve(skillsDir))) throw new Error('Path traversal detected')
     writeFileSync(filePath, generatedContent, 'utf-8')
 
     const match = generatedContent.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/)

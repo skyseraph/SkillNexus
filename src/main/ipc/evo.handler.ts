@@ -65,6 +65,7 @@ export function registerEvoHandlers(): void {
     const safeName = basename(evolvedName.replace(/[^a-zA-Z0-9_\- ]/g, '')).replace(/\s+/g, '-').toLowerCase() || 'evolved-skill'
     const skillType: SkillType = (frontmatter.skill_type as string) === 'agent' ? 'agent' : 'single'
     const filePath = resolve(join(skillsDir, `${safeName}-${Date.now()}.md`))
+    if (!filePath.startsWith(resolve(skillsDir))) throw new Error('Path traversal detected')
     writeFileSync(filePath, strippedContent, 'utf-8')
 
     const now = Date.now()
