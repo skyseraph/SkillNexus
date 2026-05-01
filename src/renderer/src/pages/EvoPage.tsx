@@ -84,6 +84,7 @@ interface TCDetailProps {
 }
 
 function TestCaseDetail({ origHistory, evolvedHistory }: TCDetailProps) {
+  const t = useT()
   const [open, setOpen] = useState(false)
 
   // Match by input order (both lists were built from the same test cases)
@@ -102,12 +103,12 @@ function TestCaseDetail({ origHistory, evolvedHistory }: TCDetailProps) {
     <div className="tc-detail">
       <button className="tc-toggle" onClick={() => setOpen(!open)}>
         <span>{open ? '▼' : '▶'}</span>
-        测试用例明细（{rows.length} 条）
+        {t('evo.tc_detail_title').replace('{n}', String(rows.length))}
       </button>
       {open && (
         <div className="tc-table">
           <div className="tc-head">
-            <span>输入摘要</span><span>原版</span><span>进化版</span><span>Delta</span>
+            <span>{t('evo.tc_col_input')}</span><span>{t('evo.tc_col_orig')}</span><span>{t('evo.tc_col_evol')}</span><span>Delta</span>
           </div>
           {rows.map(({ orig, origAvg, evolAvg, delta, isRegress }, i) => (
             <div key={i} className={`tc-row ${isRegress ? 'tc-regress' : ''}`}>
@@ -134,10 +135,11 @@ interface EvoTreeProps {
 }
 
 function EvoTree({ chain, currentId, onSelect }: EvoTreeProps) {
+  const t = useT()
   if (chain.length < 2) return null
   return (
     <div className="evo-tree">
-      <div className="evo-section-title">进化历史</div>
+      <div className="evo-section-title">{t('evo.history_title')}</div>
       {chain.map((entry, idx) => {
         const isCurrent = entry.id === currentId
         const prevEntry = chain[idx - 1]
@@ -158,7 +160,7 @@ function EvoTree({ chain, currentId, onSelect }: EvoTreeProps) {
               )}
             </div>
             {entry.paradigm && <div className="tree-tag">{entry.paradigm}</div>}
-            {entry.isRoot && <div className="tree-root-label">根版本</div>}
+            {entry.isRoot && <div className="tree-root-label">{t('evo.root_version')}</div>}
           </div>
         )
       })}
@@ -169,19 +171,20 @@ function EvoTree({ chain, currentId, onSelect }: EvoTreeProps) {
 // ── ParetoScatter component ────────────────────────────────────────────────────
 
 function ParetoScatter({ points }: { points: ParetoPoint[] }) {
+  const t = useT()
   const [hovered, setHovered] = useState<string | null>(null)
-  if (points.length === 0) return <div className="pareto-empty">暂无 Pareto 数据</div>
+  if (points.length === 0) return <div className="pareto-empty">{t('evo.pareto_empty')}</div>
   const W = 280; const H = 200; const PAD = 32
 
   return (
     <div className="pareto-wrap">
-      <div className="evo-section-title">Pareto 前沿</div>
+      <div className="evo-section-title">{t('evo.pareto_title')}</div>
       <svg width={W} height={H} style={{ display: 'block' }}>
         {/* Axes */}
         <line x1={PAD} y1={H - PAD} x2={W - PAD / 2} y2={H - PAD} stroke="var(--border)" strokeWidth={1} />
         <line x1={PAD} y1={PAD / 2} x2={PAD} y2={H - PAD} stroke="var(--border)" strokeWidth={1} />
-        <text x={W / 2} y={H - 6} textAnchor="middle" fontSize={10} fill="var(--text-muted)">准确性</text>
-        <text x={8} y={H / 2} textAnchor="middle" fontSize={10} fill="var(--text-muted)" transform={`rotate(-90, 8, ${H / 2})`}>成本意识</text>
+        <text x={W / 2} y={H - 6} textAnchor="middle" fontSize={10} fill="var(--text-muted)">{t('evo.pareto_x')}</text>
+        <text x={8} y={H / 2} textAnchor="middle" fontSize={10} fill="var(--text-muted)" transform={`rotate(-90, 8, ${H / 2})`}>{t('evo.pareto_y')}</text>
         {points.map((p) => {
           const cx = PAD + ((p.x / 10) * (W - PAD * 1.5))
           const cy = (H - PAD) - ((p.y / 10) * (H - PAD * 1.5))
@@ -203,6 +206,7 @@ function ParetoScatter({ points }: { points: ParetoPoint[] }) {
 // ── RadarChart component ───────────────────────────────────────────────────────
 
 function RadarChart({ dims, before, after }: { dims: string[]; before: Record<string, number>; after: Record<string, number> }) {
+  const t = useT()
   if (dims.length === 0) return null
   const [zoom, setZoom] = useState(1)
   const SIZE = 220; const CX = SIZE / 2; const CY = SIZE / 2; const R = 80; const MAX = 10
@@ -230,7 +234,7 @@ function RadarChart({ dims, before, after }: { dims: string[]; before: Record<st
   }
 
   return (
-    <div className="radar-wrap" onWheel={handleWheel} onDoubleClick={() => setZoom(1)} title="滚轮缩放，双击重置">
+    <div className="radar-wrap" onWheel={handleWheel} onDoubleClick={() => setZoom(1)} title={t('evo.radar_zoom_hint')}>
       <svg
         viewBox={`${-PAD} ${-PAD} ${SIZE + PAD * 2} ${SIZE + PAD * 2}`}
         width={SIZE} height={SIZE}
@@ -264,8 +268,8 @@ function RadarChart({ dims, before, after }: { dims: string[]; before: Record<st
         })}
       </svg>
       <div className="radar-legend">
-        <span className="radar-leg-orig">■ 原版</span>
-        <span className="radar-leg-evo">■ 进化版</span>
+        <span className="radar-leg-orig">{t('evo.radar_orig')}</span>
+        <span className="radar-leg-evo">{t('evo.radar_evol')}</span>
       </div>
     </div>
   )
@@ -274,14 +278,15 @@ function RadarChart({ dims, before, after }: { dims: string[]; before: Record<st
 // ── EvoSkillProgress component ─────────────────────────────────────────────────
 
 function EvoSkillProgress({ iteration, total, result }: { iteration: number; total: number; result: EvoSkillResult | null }) {
+  const t = useT()
   return (
     <div className="evo-card">
-      <div className="card-title">EvoSkill 进化中... ({iteration}/{total})</div>
+      <div className="card-title">{t('evo.evoskill_title').replace('{iter}', String(iteration)).replace('{total}', String(total))}</div>
       <div className="progress-wrap"><div className="progress-bar" style={{ width: `${(iteration / total) * 100}%` }} /></div>
       {result && (
         <div style={{ marginTop: 12, fontSize: 13 }}>
-          <div>Frontier: {result.frontierIds.length} 个候选</div>
-          <div>最高均分: <strong>{result.finalAvgScore.toFixed(2)}</strong></div>
+          <div>{t('evo.evoskill_frontier').replace('{n}', String(result.frontierIds.length))}</div>
+          <div>{t('evo.evoskill_best')} <strong>{result.finalAvgScore.toFixed(2)}</strong></div>
         </div>
       )}
     </div>
@@ -308,7 +313,7 @@ function CoEvoStatus({ result }: { result: CoEvoResult | null }) {
           <div>{result.passedAll ? t('evo.coevo.all_passed') : t('evo.coevo.some_failed')}</div>
         </div>
       ) : (
-        <div className="text-muted">协同进化中，请稍候... <span className="streaming-dot">●</span></div>
+        <div className="text-muted">{t('evo.coevo_waiting')} <span className="streaming-dot">●</span></div>
       )}
     </div>
   )
@@ -345,6 +350,7 @@ function DimCompareRow({ dim, before, after }: { dim: string; before: number; af
 }
 
 function AnalysisPanel({ data }: { data: EvoAnalysis }) {
+  const t = useT()
   const priorityColor = data.improvementPriority?.startsWith('P0') ? 'var(--danger)'
     : data.improvementPriority?.startsWith('P1') ? 'var(--warning)'
     : data.improvementPriority?.startsWith('P2') ? 'var(--accent)'
@@ -352,16 +358,16 @@ function AnalysisPanel({ data }: { data: EvoAnalysis }) {
 
   return (
     <div className="analysis-panel">
-      <div className="analysis-title">优化器诊断</div>
+      <div className="analysis-title">{t('evo.analysis_title')}</div>
       {data.improvementPriority && (
         <div className="analysis-field">
-          <span className="analysis-label">改进优先级</span>
+          <span className="analysis-label">{t('evo.analysis_priority')}</span>
           <span className="analysis-value" style={{ color: priorityColor }}>{data.improvementPriority}</span>
         </div>
       )}
-      <div className="analysis-field"><span className="analysis-label">根因分析</span><span className="analysis-value">{data.rootCause || '—'}</span></div>
-      <div className="analysis-field"><span className="analysis-label">泛化测试</span><span className="analysis-value">{data.generalityTest || '—'}</span></div>
-      <div className="analysis-field"><span className="analysis-label">回归风险</span><span className="analysis-value">{data.regressionRisk || '—'}</span></div>
+      <div className="analysis-field"><span className="analysis-label">{t('evo.analysis_root_cause')}</span><span className="analysis-value">{data.rootCause || '—'}</span></div>
+      <div className="analysis-field"><span className="analysis-label">{t('evo.analysis_generality')}</span><span className="analysis-value">{data.generalityTest || '—'}</span></div>
+      <div className="analysis-field"><span className="analysis-label">{t('evo.analysis_regression')}</span><span className="analysis-value">{data.regressionRisk || '—'}</span></div>
     </div>
   )
 }
@@ -569,7 +575,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
     try {
       await window.api.studio.evolve(selectedId, { paradigm, targets: targets.length > 0 ? targets : undefined } as EvoConfig)
     } catch (e) {
-      setError(String(e)); setPhase('idle'); cleanupRef.current?.(); cleanupRef.current = null
+      setError(friendlyError(e, t)); setPhase('idle'); cleanupRef.current?.(); cleanupRef.current = null
     }
   }
 
@@ -593,7 +599,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
       } else {
         setPhase('deciding')
       }
-    } catch (e) { setError(String(e)); setPhase('reviewing') }
+    } catch (e) { setError(friendlyError(e, t)); setPhase('reviewing') }
   }
 
   const handleReset = () => { cleanupRef.current?.(); cleanupRef.current = null; loadSkill(selectedId) }
@@ -669,7 +675,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
       const report = await window.api.evo.runTransferTest(selectedId, transferModels)
       setTransferReport(report)
     } catch (e) {
-      setError(String(e))
+      setError(friendlyError(e, t))
     } finally {
       setTransferRunning(false)
     }
@@ -697,36 +703,36 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
     <div className="evo-root">
       {demoMode && (
         <div className="demo-banner">
-          🎬 Demo 模式已开启 — 无需 API Key，所有进化操作使用预置数据
-          <button className="demo-banner-exit" onClick={async () => { await window.api.demo.exit(); setDemoMode(false) }}>退出 Demo</button>
+          {t('evo.demo_banner')}
+          <button className="demo-banner-exit" onClick={async () => { await window.api.demo.exit(); setDemoMode(false) }}>{t('evo.demo_exit')}</button>
         </div>
       )}
       <div className="evo-page-header">
         <div>
           <h1>Skill Evo</h1>
-          <p className="evo-subtitle">证据驱动进化 · 多代迭代优化 · 量化验证对比</p>
+          <p className="evo-subtitle">{t('evo.subtitle')}</p>
         </div>
       </div>
       <div className="evo-layout">
 
         {/* ── Left column ─────────────────────────────── */}
         <div className="evo-left">
-          <div className="evo-section-title">Skill</div>
+          <div className="evo-section-title">{t('evo.skill_section')}</div>
           <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)}
             disabled={phase !== 'idle' && phase !== 'configured'} className="evo-select">
-            <option value="">选择 Skill...</option>
+            <option value="">{t('evo.select_skill')}</option>
             {skills.map((s) => <option key={s.id} value={s.id}>{s.name} v{s.version}</option>)}
           </select>
           {skills.length === 0 && onNavigate && (
-            <button className="btn btn-ghost btn-sm" style={{ marginTop: 6 }} onClick={() => onNavigate('studio')}>✦ 去 Studio 创建 Skill</button>
+            <button className="btn btn-ghost btn-sm" style={{ marginTop: 6 }} onClick={() => onNavigate('studio')}>{t('evo.go_studio')}</button>
           )}
           {selectedSkill?.skillType === 'agent' && !tavilyKeySet && (
-            <div className="gen-warn" style={{ marginTop: 6 }}>⚠️ Agent Skill 评测需要 Tavily API Key，请前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 配置。</div>
+            <div className="gen-warn" style={{ marginTop: 6 }}>{t('evo.agent_needs_tavily')}</div>
           )}
 
           {selectedId && origHistory.length > 0 && (
             <div className="orig-scores">
-              <span className="orig-scores-label">当前评测均分</span>
+              <span className="orig-scores-label">{t('evo.current_avg_scores')}</span>
               {Object.entries(origScores).sort(([,a],[,b]) => a - b).map(([dim, score]) => (
                 <div key={dim} className="mini-bar-row">
                   <span className="mini-dim">{dim}</span>
@@ -738,8 +744,8 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
           )}
           {selectedId && origHistory.length === 0 && (
             <p className="text-muted" style={{ fontSize: 12, marginTop: 8 }}>
-              暂无评测记录
-              {onNavigate && <> · <button className="link-btn" style={{ fontSize: 12 }} onClick={() => onNavigate('eval', selectedId)}>去评测 →</button></>}
+              {t('evo.no_eval_records')}
+              {onNavigate && <> · <button className="link-btn" style={{ fontSize: 12 }} onClick={() => onNavigate('eval', selectedId)}>{t('evo.go_eval')}</button></>}
             </p>
           )}
 
@@ -753,17 +759,17 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
           {/* Back button — shown whenever not idle */}
           {(phase !== 'idle' || v2Running) && (
             <button className="evo-back-btn" onClick={handleReset} disabled={v2Running}>
-              ← 返回配置
+              {t('evo.back_to_config')}
             </button>
           )}
 
           {/* ① Config panel */}
           {(phase === 'idle' || phase === 'configured') && (
             <div className="evo-card">
-              <div className="card-title">① 进化引擎</div>
+              <div className="card-title">{t('evo.engine_section')}</div>
               {/* Default: SkVM engines */}
               <div className="engine-group">
-                <div className="engine-group-label">SkVM 经典</div>
+                <div className="engine-group-label">{t('evo.engine_group_classic')}</div>
                 <div className="engine-chip-row">
                   {engineGroups[0].ids.map(id => {
                     const e = engines.find(x => x.id === id)!
@@ -782,13 +788,13 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                 className="engine-advanced-toggle"
                 onClick={() => setShowAdvancedEngines(v => !v)}
               >
-                {showAdvancedEngines ? '▾' : '▸'} 高级引擎
-                {!showAdvancedEngines && <span className="engine-advanced-hint">v2 算法 · 本地插件</span>}
+                {showAdvancedEngines ? '▾' : '▸'} {t('evo.engine_advanced_toggle')}
+                {!showAdvancedEngines && <span className="engine-advanced-hint">{t('evo.engine_advanced_hint')}</span>}
               </button>
               {showAdvancedEngines && (
                 <>
                   <div className="engine-group">
-                    <div className="engine-group-label">v2 算法</div>
+                    <div className="engine-group-label">{t('evo.engine_group_v2')}</div>
                     <div className="engine-chip-row">
                       {engineGroups[1].ids.map(id => {
                         const e = engines.find(x => x.id === id)!
@@ -804,10 +810,10 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                   </div>
                   {plugins.length > 0 && (
                     <div className="engine-group">
-                      <div className="engine-group-label">本地插件</div>
+                      <div className="engine-group-label">{t('evo.engine_group_plugins')}</div>
                       <div style={{ fontSize: 11, color: '#f59e0b', background: '#7c3a001a', border: '1px solid #f59e0b44', borderRadius: 5, padding: '4px 8px', marginBottom: 6, display: 'flex', gap: 5, alignItems: 'flex-start' }}>
                         <span>⚠️</span>
-                        <span>插件为第三方代码，将在本机以完整 Node.js 权限运行，请仅安装来自可信来源的插件。</span>
+                        <span>{t('evo.engine_plugin_warning')}</span>
                       </div>
                       <div className="engine-chip-row">
                         {plugins.map(p => {
@@ -816,7 +822,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                             <label key={p.id} className={`engine-chip ${engine === pluginEngineId ? 'active' : ''}`} title={p.description}>
                               <input type="radio" name="engine" value={pluginEngineId} checked={engine === pluginEngineId} onChange={() => setEngine(pluginEngineId)} />
                               {p.name}
-                              <span className="engine-chip-dot" title="本地插件">·</span>
+                              <span className="engine-chip-dot" title={t('evo.engine_plugin_label')}>·</span>
                             </label>
                           )
                         })}
@@ -832,7 +838,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                   <div className="engine-desc">
                     <span className="engine-desc-name">{sel.label}</span>
                     <span className="engine-desc-hint">{sel.hint}</span>
-                    {sel.prereq && <span className="engine-desc-prereq">前提：{sel.prereq}</span>}
+                    {sel.prereq && <span className="engine-desc-prereq">{t('evo.engine_prereq').replace('{prereq}', sel.prereq)}</span>}
                   </div>
                 )
                 if (engine.startsWith('plugin:')) {
@@ -840,7 +846,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                   const plug = plugins.find(p => p.id === pluginId)
                   if (plug) return (
                     <div className="engine-desc">
-                      <span className="engine-desc-name">{plug.name} <span style={{fontSize:10,opacity:.6}}>本地插件 v{plug.version}</span></span>
+                      <span className="engine-desc-name">{plug.name} <span style={{fontSize:10,opacity:.6}}>{t('evo.engine_plugin_ver').replace('{ver}', plug.version)}</span></span>
                       {plug.description && <span className="engine-desc-hint">{plug.description}</span>}
                     </div>
                   )
@@ -851,7 +857,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
               {/* SkVM paradigm sub-options */}
               {(engine === 'skvm-evidence' || engine === 'skvm-strategy' || engine === 'skvm-capability') && (
                 <>
-                  <div className="card-title" style={{ marginTop: 16 }}>② 进化配置</div>
+                  <div className="card-title" style={{ marginTop: 16 }}>{t('evo.config_section')}</div>
                   <div className="paradigm-row">
                     {paradigms.map((p) => (
                       <label key={p.id} className={`paradigm-card ${paradigm === p.id ? 'active' : ''}`}>
@@ -879,10 +885,10 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                     </div>
                   )}
                   <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleEvolve} disabled={!selectedId || apiKeySet === false}>
-                    启动进化 (SkVM)
+                    {t('evo.start_skvm')}
                   </button>
-                  {!selectedId && <div className="no-skill-hint">← 请先在左侧选择一个 Skill</div>}
-                  {apiKeySet === false && <div className="gen-warn" style={{ marginTop: 8 }}>⚠️ 未配置 API Key，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 添加。</div>}
+                  {!selectedId && <div className="no-skill-hint">{t('evo.no_skill_hint')}</div>}
+                  {apiKeySet === false && <div className="gen-warn" style={{ marginTop: 8 }}>{t('evo.no_api_key')}</div>}
                 </>
               )}
 
@@ -893,7 +899,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                   {engine === 'evoskill' && (
                     <div className="engine-params">
                       <label className="engine-param-row">
-                        <span className="engine-param-label">最大迭代轮次</span>
+                        <span className="engine-param-label">{t('evo.param_max_iter')}</span>
                         <input type="range" min={1} max={10} value={evoMaxIter}
                           onChange={e => setEvoMaxIter(Number(e.target.value))} />
                         <span className="engine-param-val">{evoMaxIter}</span>
@@ -903,7 +909,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                   {engine === 'coevoskill' && (
                     <div className="engine-params">
                       <label className="engine-param-row">
-                        <span className="engine-param-label">最大轮次</span>
+                        <span className="engine-param-label">{t('evo.param_max_rounds')}</span>
                         <input type="range" min={3} max={10} value={coEvoMaxRounds}
                           onChange={e => setCoEvoMaxRounds(Number(e.target.value))} />
                         <span className="engine-param-val">{coEvoMaxRounds}</span>
@@ -913,7 +919,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                   {engine === 'skillx' && (
                     <div className="engine-params">
                       <label className="engine-param-row">
-                        <span className="engine-param-label">最低分门槛</span>
+                        <span className="engine-param-label">{t('evo.param_min_score')}</span>
                         <input type="range" min={5} max={9} step={0.5} value={skillXMinScore}
                           onChange={e => setSkillXMinScore(Number(e.target.value))} />
                         <span className="engine-param-val">{skillXMinScore.toFixed(1)}</span>
@@ -923,7 +929,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                   {engine === 'skillclaw' && (
                     <div className="engine-params">
                       <label className="engine-param-row">
-                        <span className="engine-param-label">分析窗口（条）</span>
+                        <span className="engine-param-label">{t('evo.param_window_size')}</span>
                         <input type="range" min={10} max={50} step={5} value={skillClawWindowSize}
                           onChange={e => setSkillClawWindowSize(Number(e.target.value))} />
                         <span className="engine-param-val">{skillClawWindowSize}</span>
@@ -934,22 +940,22 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                     disabled={!selectedId || apiKeySet === false || v2Running}>
                     {v2Running ? <><span className="evo-spinner" />{t('evo.running')}</> : `${t('evo.start')} ${engines.find(e => e.id === engine)?.label ?? (engine.startsWith('plugin:') ? plugins.find(p => p.id === engine.slice(7))?.name ?? engine : engine)}`}
                   </button>
-                  {!selectedId && !v2Running && <div className="no-skill-hint">← 请先在左侧选择一个 Skill</div>}
-                  {apiKeySet === false && !v2Running && <div className="gen-warn" style={{ marginTop: 8 }}>⚠️ 未配置 API Key，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 添加。</div>}
+                  {!selectedId && !v2Running && <div className="no-skill-hint">{t('evo.no_skill_hint')}</div>}
+                  {apiKeySet === false && !v2Running && <div className="gen-warn" style={{ marginTop: 8 }}>{t('evo.no_api_key')}</div>}
                   {v2Running && !v2Cancelled && (
-                    <button className="btn btn-ghost btn-sm" onClick={handleCancelV2} style={{ marginLeft: 6 }}>取消</button>
+                    <button className="btn btn-ghost btn-sm" onClick={handleCancelV2} style={{ marginLeft: 6 }}>{t('evo.cancel')}</button>
                   )}
                   {v2Cancelled && v2Running && (
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>正在停止...</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{t('evo.stopping')}</span>
                   )}
                 </>
               )}
 
               {!demoMode && (
                 <div className="demo-entry">
-                  没有 API Key？
+                  {t('evo.demo_entry_prompt')}
                   <button className="demo-entry-btn" onClick={async () => { await window.api.demo.enter(); setDemoMode(true) }}>
-                    体验 Demo 模式
+                    {t('evo.demo_entry_btn')}
                   </button>
                 </div>
               )}
@@ -962,10 +968,10 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
           )}
           {phase === 'analyzing' && !analysisData && (
             <div className="analysis-panel loading">
-              <div className="analysis-title">优化器诊断 <span className="streaming-dot">●</span></div>
-              <div className="analysis-field"><span className="analysis-label">根因分析</span><span className="analysis-value dim">分析中...</span></div>
-              <div className="analysis-field"><span className="analysis-label">泛化测试</span><span className="analysis-value dim">—</span></div>
-              <div className="analysis-field"><span className="analysis-label">回归风险</span><span className="analysis-value dim">—</span></div>
+              <div className="analysis-title">{t('evo.analysis_loading')} <span className="streaming-dot">●</span></div>
+              <div className="analysis-field"><span className="analysis-label">{t('evo.analysis_root_cause')}</span><span className="analysis-value dim">{t('evo.analysis_loading_root')}</span></div>
+              <div className="analysis-field"><span className="analysis-label">{t('evo.analysis_generality')}</span><span className="analysis-value dim">—</span></div>
+              <div className="analysis-field"><span className="analysis-label">{t('evo.analysis_regression')}</span><span className="analysis-value dim">—</span></div>
             </div>
           )}
 
@@ -975,14 +981,14 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
           )}
           {!v2Running && evoSkillResult && (
             <div className="evo-card">
-              <div className="card-title">EvoSkill 完成</div>
+              <div className="card-title">{t('evo.evoskill_done_title')}</div>
               <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div>完成 {evoSkillResult.iterations} 轮迭代</div>
-                <div>最高均分: <strong style={{ color: 'var(--accent)' }}>{evoSkillResult.finalAvgScore.toFixed(2)}</strong></div>
+                <div>{t('evo.evoskill_done_iters').replace('{n}', String(evoSkillResult.iterations))}</div>
+                <div>{t('evo.evoskill_best_score')} <strong style={{ color: 'var(--accent)' }}>{evoSkillResult.finalAvgScore.toFixed(2)}</strong></div>
               </div>
               {evoSkillResult.frontierIds.length > 0 && (
                 <div className="frontier-list">
-                  <div className="frontier-list-title">Frontier 候选版本（{evoSkillResult.frontierIds.length}）</div>
+                  <div className="frontier-list-title">{t('evo.frontier_title').replace('{n}', String(evoSkillResult.frontierIds.length))}</div>
                   {evoSkillResult.frontierIds.map(fid => {
                     const sk = skills.find(s => s.id === fid)
                     const isBest = fid === evoSkillResult.bestId
@@ -990,15 +996,15 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                       <div key={fid} className={`frontier-row ${isBest ? 'frontier-best' : ''}`}>
                         <span className="frontier-name">{sk?.name ?? fid.slice(-8)}</span>
                         {sk?.version != null && <span className="frontier-ver">v{sk.version}</span>}
-                        {isBest && <span className="frontier-badge">最优</span>}
+                        {isBest && <span className="frontier-badge">{t('evo.frontier_best')}</span>}
                         <div className="frontier-actions">
-                          <button className="task-action-btn" title="查看内容" onClick={async () => {
+                          <button className="task-action-btn" title={t('evo.frontier_view')} onClick={async () => {
                             try {
                               const c = await window.api.skills.getContent(fid)
                               setV2ContentModal({ title: sk?.name ?? fid.slice(-8), content: c, skillId: fid })
                             } catch { /* ignore */ }
                           }}>👁</button>
-                          <button className="task-action-btn" title="去评测" onClick={() => onNavigate?.('eval', fid)}>📊</button>
+                          <button className="task-action-btn" title={t('evo.frontier_eval')} onClick={() => onNavigate?.('eval', fid)}>📊</button>
                         </div>
                       </div>
                     )
@@ -1006,7 +1012,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                 </div>
               )}
               <div className="v2-result-actions">
-                <button className="btn btn-primary btn-sm" onClick={() => onNavigate?.('eval', evoSkillResult.bestId)}>去评测最优版本</button>
+                <button className="btn btn-primary btn-sm" onClick={() => onNavigate?.('eval', evoSkillResult.bestId)}>{t('evo.go_eval_best')}</button>
               </div>
             </div>
           )}
@@ -1016,40 +1022,40 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
           {(!v2Running && coEvoResult) && <CoEvoStatus result={coEvoResult} />}
           {!v2Running && coEvoResult?.evolvedContent && (
             <div className="v2-result-actions">
-              <button className="btn btn-ghost btn-sm" onClick={() => setV2ContentModal({ title: 'CoEvoSkill 进化版内容', content: coEvoResult.evolvedContent })}>查看内容</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setV2ContentModal({ title: t('evo.coevo_content_title'), content: coEvoResult.evolvedContent })}>{t('evo.coevo_view_content')}</button>
             </div>
           )}
 
           {/* Pareto frontier */}
           {paretoPoints.length > 0 && <ParetoScatter points={paretoPoints} />}
           {v2Running && engine === 'skillmoo' && (
-            <div className="evo-card"><div className="card-title">SkillMOO — 计算 Pareto 前沿...</div><div className="text-muted"><span className="streaming-dot">●</span></div></div>
+            <div className="evo-card"><div className="card-title">{t('evo.skillmoo_running')}</div><div className="text-muted"><span className="streaming-dot">●</span></div></div>
           )}
 
           {/* Transfer test panel */}
           {/* SkillX result */}
           {v2Running && engine === 'skillx' && (
-            <div className="evo-card"><div className="card-title">SkillX — 提取知识库...</div><div className="text-muted"><span className="streaming-dot">●</span> 分析高分样本中</div></div>
+            <div className="evo-card"><div className="card-title">{t('evo.skillx_running')}</div><div className="text-muted"><span className="streaming-dot">●</span> {t('evo.skillx_running_hint')}</div></div>
           )}
           {!v2Running && skillXResult && (
             <div className="evo-card">
-              <div className="card-title">SkillX 知识库（{skillXResult.totalSourceSamples} 条样本）</div>
+              <div className="card-title">{t('evo.skillx_kb_title').replace('{n}', String(skillXResult.totalSourceSamples))}</div>
               <div className="skillx-entries">
                 {skillXResult.entries.map((entry, i) => (
                   <div key={i} className="skillx-entry">
                     <span className={`skillx-badge skillx-l${entry.level}`}>L{entry.level} {entry.levelName}</span>
                     <span className="skillx-content">{entry.content}</span>
-                    <span className="skillx-src">{entry.sourceCount} 样本支撑</span>
+                    <span className="skillx-src">{t('evo.skillx_src_count').replace('{n}', String(entry.sourceCount))}</span>
                   </div>
                 ))}
-                {skillXResult.entries.length === 0 && <p className="text-muted" style={{ fontSize: 12 }}>未提取到知识条目</p>}
+                {skillXResult.entries.length === 0 && <p className="text-muted" style={{ fontSize: 12 }}>{t('evo.skillx_no_entries')}</p>}
               </div>
               {skillXResult.evolvedSkillId && (
                 <>
-                  <div className="skillx-result-note">进化版 Skill 已安装（ID: {skillXResult.evolvedSkillId.slice(-8)}）</div>
+                  <div className="skillx-result-note">{t('evo.skillx_installed').replace('{id}', skillXResult.evolvedSkillId.slice(-8))}</div>
                   <div className="v2-result-actions">
-                    <button className="btn btn-ghost btn-sm" onClick={() => setV2ContentModal({ title: 'SkillX 进化版内容', content: skillXResult.evolvedContent, skillId: skillXResult.evolvedSkillId })}>查看内容</button>
-                    <button className="btn btn-primary btn-sm" onClick={() => onNavigate?.('eval', skillXResult.evolvedSkillId)}>去评测</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setV2ContentModal({ title: t('evo.skillx_content_title'), content: skillXResult.evolvedContent, skillId: skillXResult.evolvedSkillId })}>{t('evo.skillx_view_content')}</button>
+                    <button className="btn btn-primary btn-sm" onClick={() => onNavigate?.('eval', skillXResult.evolvedSkillId)}>{t('evo.skillx_go_eval')}</button>
                   </div>
                 </>
               )}
@@ -1072,12 +1078,12 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
           )}
           {!v2Running && skillClawResult && (
             <div className="evo-card">
-              <div className="card-title">SkillClaw 完成（{skillClawResult.sessionsAnalyzed} 条记录）</div>
+              <div className="card-title">{t('evo.skillclaw_done_title').replace('{n}', String(skillClawResult.sessionsAnalyzed))}</div>
               {skillClawResult.commonFailures.length === 0 ? (
                 <p className="text-muted" style={{ fontSize: 12 }}>{skillClawResult.improvementSummary}</p>
               ) : (
                 <>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>共同失败模式</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{t('evo.skillclaw_failures_label')}</div>
                   <ul className="skillclaw-failures">
                     {skillClawResult.commonFailures.map((f, i) => <li key={i}>{f}</li>)}
                   </ul>
@@ -1086,10 +1092,10 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                   )}
                   {skillClawResult.evolvedSkillId && (
                     <>
-                      <div className="skillx-result-note">进化版 Skill 已安装（ID: {skillClawResult.evolvedSkillId.slice(-8)}）</div>
+                      <div className="skillx-result-note">{t('evo.skillclaw_installed').replace('{id}', skillClawResult.evolvedSkillId.slice(-8))}</div>
                       <div className="v2-result-actions">
-                        <button className="btn btn-ghost btn-sm" onClick={() => setV2ContentModal({ title: 'SkillClaw 进化版内容', content: skillClawResult.evolvedContent, skillId: skillClawResult.evolvedSkillId })}>查看内容</button>
-                        <button className="btn btn-primary btn-sm" onClick={() => onNavigate?.('eval', skillClawResult.evolvedSkillId)}>去评测</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setV2ContentModal({ title: t('evo.skillclaw_content_title'), content: skillClawResult.evolvedContent, skillId: skillClawResult.evolvedSkillId })}>{t('evo.skillclaw_view_content')}</button>
+                        <button className="btn btn-primary btn-sm" onClick={() => onNavigate?.('eval', skillClawResult.evolvedSkillId)}>{t('evo.skillclaw_go_eval')}</button>
                       </div>
                     </>
                   )}
@@ -1100,9 +1106,11 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
 
           {selectedId && (
             <div className="evo-card transfer-card">
-              <div className="card-title">跨 LLM 迁移率测试</div>
+              <div className="card-title">{t('evo.transfer_title')}</div>
               {availableProviders.length === 0 ? (
-                <p className="text-muted" style={{ fontSize: 12 }}>请先<button className="link-btn" style={{ fontSize: 12 }} onClick={() => onNavigate?.('settings')}>在设置中配置 LLM Provider</button></p>
+                <p className="text-muted" style={{ fontSize: 12 }}>
+                  <button className="link-btn" style={{ fontSize: 12 }} onClick={() => onNavigate?.('settings')}>{t('evo.transfer_no_providers')}</button>
+                </p>
               ) : (
                 <>
                   <div className="transfer-model-grid">
@@ -1126,12 +1134,12 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                     onClick={handleRunTransferTest}
                     disabled={transferRunning || transferModels.length === 0}
                   >
-                    {transferRunning ? <><span className="streaming-dot">●</span> 测试中...</> : '运行迁移测试'}
+                    {transferRunning ? <><span className="streaming-dot">●</span> {t('evo.transfer_running')}</> : t('evo.transfer_run_btn')}
                   </button>
                   {transferReport && (
                     <table className="transfer-table">
                       <thead>
-                        <tr><th>模型</th><th>通过率</th><th></th></tr>
+                        <tr><th>{t('evo.transfer_col_model')}</th><th>{t('evo.transfer_col_pass')}</th><th></th></tr>
                       </thead>
                       <tbody>
                         {Object.entries(transferReport.results).map(([modelId, rate]) => {
@@ -1164,25 +1172,25 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
               {/* View toggle (only in reviewing phase, not while streaming) */}
               {phase === 'reviewing' && (
                 <div className="view-toggle">
-                  <button className={`toggle-btn ${!diffMode ? 'active' : ''}`} onClick={() => setDiffMode(false)}>并排</button>
+                  <button className={`toggle-btn ${!diffMode ? 'active' : ''}`} onClick={() => setDiffMode(false)}>{t('evo.view_toggle_side')}</button>
                   <button className={`toggle-btn ${diffMode ? 'active' : ''}`} onClick={() => setDiffMode(true)}>Diff</button>
                 </div>
               )}
 
               {diffMode && phase === 'reviewing' ? (
                 <div className="evo-card diff-card">
-                  <div className="compare-header evolved" style={{ marginBottom: 8 }}>Diff 对比（绿色=新增 / 红色=删除）</div>
+                  <div className="compare-header evolved" style={{ marginBottom: 8 }}>{t('evo.diff_header')}</div>
                   <DiffView original={selectedSkill?.markdownContent ?? ''} evolved={evolvedContent} />
                 </div>
               ) : (
                 <div className="compare-layout">
                   <div className="compare-pane">
-                    <div className="compare-header">原版</div>
+                    <div className="compare-header">{t('evo.compare_orig')}</div>
                     <pre className="code-pre dim">{selectedSkill?.markdownContent ?? ''}</pre>
                   </div>
                   <div className="compare-pane">
                     <div className="compare-header evolved">
-                      进化版{isStreaming && <span className="streaming-dot"> ●</span>}
+                      {t('evo.compare_evol')}{isStreaming && <span className="streaming-dot"> ●</span>}
                     </div>
                     <pre className="code-pre">{evolvedContent}{isStreaming ? '▌' : ''}</pre>
                   </div>
@@ -1199,18 +1207,18 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                   <>
                     {similarity >= SIMILARITY_WARNING_THRESHOLD && (
                       <div className="similarity-warn">
-                        ⚠️ 进化内容与原版高度相似（差异 &lt; {Math.round((1 - similarity) * 100)}%），建议重新进化或切换范式
+                        {t('evo.similarity_warn').replace('{pct}', String(Math.round((1 - similarity) * 100)))}
                       </div>
                     )}
                     {isBloated && (
                       <div className="size-warn">
-                        ⚠️ 进化版体积为原版的 {sizeRatio.toFixed(1)}x（{evolvedBytes} B vs {origBytes} B），Skill 过度膨胀会降低 LLM 遵循率，建议精简后再安装
+                        {t('evo.size_warn').replace('{ratio}', sizeRatio.toFixed(1)).replace('{evolved}', String(evolvedBytes)).replace('{orig}', String(origBytes))}
                       </div>
                     )}
                     <div className="pane-footer">
-                      <button className="btn btn-primary" onClick={handleRunEval}>安装并评测</button>
-                      <button className="btn btn-ghost" onClick={handleEvolve}>重新生成</button>
-                      <button className="btn btn-ghost" onClick={handleReset}>重新配置</button>
+                      <button className="btn btn-primary" onClick={handleRunEval}>{t('evo.install_and_eval')}</button>
+                      <button className="btn btn-ghost" onClick={handleEvolve}>{t('evo.regenerate')}</button>
+                      <button className="btn btn-ghost" onClick={handleReset}>{t('evo.reconfigure')}</button>
                     </div>
                   </>
                 )
@@ -1221,9 +1229,9 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
           {/* ④ Evaluating */}
           {phase === 'evaluating' && (
             <div className="evo-card">
-              <div className="card-title">评测中...</div>
+              <div className="card-title">{t('evo.evaluating_title')}</div>
               <div className="progress-wrap"><div className="progress-bar" style={{ width: `${evalProgress}%` }} /></div>
-              <p className="text-muted">正在对原版和进化版并行评测，可切换到其他页面，回来后结果依然保留。</p>
+              <p className="text-muted">{t('evo.evaluating_hint')}</p>
             </div>
           )}
 
@@ -1236,13 +1244,13 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
             const deltaLabel = isMeaningfulGain
               ? `+${totalDelta.toFixed(2)}`
               : isMeaningfulLoss ? `${totalDelta.toFixed(2)}`
-              : `${totalDelta > 0 ? '+' : ''}${totalDelta.toFixed(2)} 持平`
+              : `${totalDelta > 0 ? '+' : ''}${totalDelta.toFixed(2)} ${t('evo.delta_flat')}`
             return (
               <div className="evo-card results-card">
-                <div className="card-title">进化结果</div>
+                <div className="card-title">{t('evo.result_title')}</div>
                 {regressedDims.length > 0 && (
                   <div className="regression-banner">
-                    ⚠️ 以下维度出现回归（下降超过 {PER_DIM_REGRESSION_TOLERANCE} 分）：
+                    {t('evo.regression_banner').replace('{tol}', String(PER_DIM_REGRESSION_TOLERANCE))}
                     {regressedDims.map(dim => {
                       const drop = (origScores[dim] ?? 0) - (evolvedScores[dim] ?? 0)
                       return <span key={dim} className="regressed-dim">{dim} -{drop.toFixed(1)}</span>
@@ -1250,16 +1258,16 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
                   </div>
                 )}
                 <div className="overall-row">
-                  <div className="overall-item"><span className="overall-label">原版均分</span><span className="overall-score">{origAvg.toFixed(2)}</span></div>
+                  <div className="overall-item"><span className="overall-label">{t('evo.orig_avg')}</span><span className="overall-score">{origAvg.toFixed(2)}</span></div>
                   <div className={`overall-delta ${deltaClass}`}>{deltaLabel}</div>
-                  <div className="overall-item"><span className="overall-label">进化版均分</span><span className="overall-score evolved">{evolvedAvg.toFixed(2)}</span></div>
+                  <div className="overall-item"><span className="overall-label">{t('evo.evol_avg')}</span><span className="overall-score evolved">{evolvedAvg.toFixed(2)}</span></div>
                 </div>
                 {allDims.length > 1 && (
                   <RadarChart dims={allDims} before={origScores} after={evolvedScores} />
                 )}
                 {allDims.length > 0 && (
                   <div className="dim-compare">
-                    <div className="dim-legend"><span className="legend-before">■ 原版</span><span className="legend-after">■ 进化版</span></div>
+                    <div className="dim-legend"><span className="legend-before">{t('evo.dim_legend_orig')}</span><span className="legend-after">{t('evo.dim_legend_evol')}</span></div>
                     {allDims.map((dim) => <DimCompareRow key={dim} dim={dim} before={origScores[dim] ?? 0} after={evolvedScores[dim] ?? 0} />)}
                   </div>
                 )}
@@ -1268,18 +1276,18 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
 
                 {evoResult.evolvedSkill && (
                   <div className="installed-info" style={{ marginTop: 12 }}>
-                    已安装为 <strong>{evoResult.evolvedSkill.name}</strong>（v{evoResult.evolvedSkill.version}）
+                    {t('evo.installed_as').replace('{name}', evoResult.evolvedSkill.name).replace('{ver}', String(evoResult.evolvedSkill.version))}
                   </div>
                 )}
                 {evoResult.evolvedJobId === '' && (
-                  <div className="no-testcases-info">No test cases — 无测试用例，无法评测对比</div>
+                  <div className="no-testcases-info">{t('evo.no_testcases')}</div>
                 )}
                 <div className="result-actions">
                   {onNavigate && evoResult.evolvedSkill && (
-                    <button className="btn btn-primary btn-sm" onClick={() => onNavigate('eval', evoResult.evolvedSkill.id)}>📊 去评测</button>
+                    <button className="btn btn-primary btn-sm" onClick={() => onNavigate('eval', evoResult.evolvedSkill.id)}>{t('evo.go_eval_evolved')}</button>
                   )}
-                  <button className="btn btn-ghost" onClick={handleEvolve}>再次进化</button>
-                  <button className="btn btn-ghost" onClick={handleReset}>重新配置</button>
+                  <button className="btn btn-ghost" onClick={handleEvolve}>{t('evo.re_evolve')}</button>
+                  <button className="btn btn-ghost" onClick={handleReset}>{t('evo.reconfigure')}</button>
                 </div>
               </div>
             )
@@ -1300,7 +1308,7 @@ export default function EvoPage({ session, initialSkillId, onNavigate, skillsRef
             <pre className="modal-code">{v2ContentModal.content}</pre>
             {v2ContentModal.skillId && onNavigate && (
               <div className="modal-footer">
-                <button className="btn btn-primary btn-sm" onClick={() => { setV2ContentModal(null); onNavigate('eval', v2ContentModal.skillId) }}>去评测</button>
+                <button className="btn btn-primary btn-sm" onClick={() => { setV2ContentModal(null); onNavigate('eval', v2ContentModal.skillId) }}>{t('evo.modal_go_eval')}</button>
               </div>
             )}
           </div>

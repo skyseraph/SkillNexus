@@ -768,7 +768,7 @@ function GeneratePreviewModal({ candidates, saving, onSave, onCancel }: {
             onClick={handleSave}
             disabled={saving || checkedKeys.size === 0}
           >
-            {saving ? '保存中...' : `保存已选（${checkedKeys.size} 个）`}
+            {saving ? t('common.saving') : t('eval.tc.save_selected', { n: String(checkedKeys.size) })}
           </button>
         </div>
       </div>
@@ -1080,7 +1080,7 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
         {/* Add / Import */}
         {!addOpen && (
           <div className="tc-add-row">
-            <button className="btn btn-ghost btn-sm" onClick={() => { setAddOpen(true); setImportResult(null) }}>+ 手动添加</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => { setAddOpen(true); setImportResult(null) }}>{t('eval.tc.add_manual')}</button>
             <button className="btn btn-ghost btn-sm" onClick={() => importInputRef.current?.click()} disabled={importing}>
               {importing ? t('eval.importing') : t('eval.import_json')}
             </button>
@@ -1089,10 +1089,10 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
         )}
         {importResult && (
           <div className={`import-result ${importResult.errors.length > 0 && importResult.imported === 0 ? 'import-result-error' : 'import-result-ok'}`}>
-            {importResult.imported > 0 && <div>✅ 成功导入 {importResult.imported} 条</div>}
+            {importResult.imported > 0 && <div>{t('eval.tc.import_success', { n: String(importResult.imported) })}</div>}
             {importResult.errors.length > 0 && (
               <details>
-                <summary>⚠️ {importResult.errors.length} 条跳过</summary>
+                <summary>{t('eval.tc.import_skipped', { n: String(importResult.errors.length) })}</summary>
                 <ul className="import-errors">{importResult.errors.map((e, i) => <li key={i}>{e}</li>)}</ul>
               </details>
             )}
@@ -1102,21 +1102,21 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
           ? null
           : (
             <div className="add-form">
-              <div className="add-form-header"><span>手动添加</span><button className="btn-icon-sm" onClick={() => setAddOpen(false)}>✕</button></div>
+              <div className="add-form-header"><span>{t('eval.tc.add_header')}</span><button className="btn-icon-sm" onClick={() => setAddOpen(false)}>✕</button></div>
               <input placeholder={t('eval.case_name_placeholder')} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} style={{ width: '100%', marginBottom: 8 }} />
               <textarea rows={3} placeholder={t('eval.input_placeholder')} value={form.input} onChange={(e) => setForm((f) => ({ ...f, input: e.target.value }))} style={{ width: '100%', resize: 'vertical', marginBottom: 8 }} />
               <div className="add-form-row">
                 <select value={form.judgeType} onChange={(e) => setForm((f) => ({ ...f, judgeType: e.target.value as TestCase['judgeType'] }))}>
-                  <option value="llm">LLM 评判</option>
-                  <option value="grep">Grep 匹配</option>
-                  <option value="command">命令执行</option>
+                  <option value="llm">{t('eval.judge.llm')}</option>
+                  <option value="grep">{t('eval.judge.grep')}</option>
+                  <option value="command">{t('eval.judge.command')}</option>
                 </select>
                 <input placeholder={t('eval.judge_placeholder')} value={form.judgeParam} onChange={(e) => setForm((f) => ({ ...f, judgeParam: e.target.value }))} style={{ flex: 1 }} />
               </div>
               {form.judgeType === 'command' && (
                 <div className="warn-banner" style={{ marginTop: 6, padding: '6px 10px', background: '#7c3a001a', border: '1px solid #f59e0b55', borderRadius: 6, fontSize: 12, color: '#f59e0b', display: 'flex', gap: 6, alignItems: 'flex-start' }}>
                   <span>⚠️</span>
-                  <span><b>高级功能：</b>Command 判断类型会在本机直接执行 shell 命令，请确保 judge param 来自可信来源，避免使用破坏性命令（如 <code>rm</code>）。</span>
+                  <span>{t('eval.tc.command_warn')}</span>
                 </div>
               )}
               <div className="add-form-actions">
@@ -1130,7 +1130,7 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
       {/* Run eval CTA */}
       {testCases.length > 0 && (
         <div className="run-cta">
-          <span className="run-cta-hint">已选 {selectedIds.size} / {testCases.length} 个用例</span>
+          <span className="run-cta-hint">{t('eval.tc.selected', { selected: String(selectedIds.size), total: String(testCases.length) })}</span>
           <button className="btn btn-primary" disabled={selectedIds.size === 0 || apiKeySet === false}
             onClick={() => onRunEval([...selectedIds])}>
             ▶ 切换到评测 Tab 并运行

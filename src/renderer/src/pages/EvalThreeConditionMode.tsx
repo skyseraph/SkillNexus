@@ -54,6 +54,15 @@ export default function ThreeConditionMode({ skills, apiKeySet, onNavigate }: { 
   const [progress, setProgress] = useState(0)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
+  const tempSkillsRef = useRef<{ noSkillId: string; generatedSkillId: string } | null>(null)
+
+  const cleanupTempSkills = () => {
+    if (!tempSkillsRef.current) return
+    const { noSkillId, generatedSkillId } = tempSkillsRef.current
+    tempSkillsRef.current = null
+    window.api.skills.uninstall(noSkillId).catch(() => {})
+    window.api.skills.uninstall(generatedSkillId).catch(() => {})
+  }
 
   useEffect(() => () => { cleanupRef.current?.(); if (pollRef.current) clearInterval(pollRef.current) }, [])
 
@@ -71,14 +80,27 @@ export default function ThreeConditionMode({ skills, apiKeySet, onNavigate }: { 
     setRunning(true); setPhase('generating'); setProgress(10)
     setError(null); setResult(null); setScoresA(null); setScoresB(null); setScoresC(null)
     setDetailsA([]); setDetailsB([]); setDetailsC([]); setExpandedTc(null); setDetailsOpen(false)
+    cleanupTempSkills()
     cleanupRef.current?.()
+
+    // R4: track per-jobId progress for A/B/C independently
+    const jobProgress: Record<string, number> = {}
     cleanupRef.current = window.api.eval.onProgress((data) => {
-      setProgress(p => Math.max(p, data.progress < 100 ? 30 + Math.round(data.progress * 0.6) : 90))
+      if (data.jobId) jobProgress[data.jobId] = data.progress
+      const vals = Object.values(jobProgress)
+      if (vals.length > 0) {
+        const avg = vals.reduce((a, b) => a + b, 0) / vals.length
+        setProgress(Math.round(30 + avg * 0.65))
+      }
     })
+
     try {
       setPhase('evaluating')
       const r = await window.api.eval.startThreeCondition(skillId, [...selectedTcIds])
       setResult(r); setProgress(50)
+      // R5: store temp skill IDs for cleanup
+      tempSkillsRef.current = { noSkillId: r.noSkillId, generatedSkillId: r.generatedSkillId }
+
       const poll = setInterval(async () => {
         const recent = Date.now() - 120_000
         const [histA, histB, histC] = await Promise.all([
@@ -92,16 +114,20 @@ export default function ThreeConditionMode({ skills, apiKeySet, onNavigate }: { 
           setScoresA(avgDims(histA)); setScoresB(avgDims(histB)); setScoresC(avgDims(histC))
           setDetailsA(histA); setDetailsB(histB); setDetailsC(histC)
           setPhase('done'); setRunning(false); setProgress(100)
+          cleanupTempSkills()
         }
       }, 2500)
       pollRef.current = poll
       setTimeout(() => {
         clearInterval(poll); pollRef.current = null
-        setPhase(p => { if (p !== 'done') { setRunning(false); cleanupRef.current?.(); cleanupRef.current = null; return 'done' } return p })
+        cleanupRef.current?.(); cleanupRef.current = null
+        cleanupTempSkills()
+        setPhase(p => { if (p !== 'done') { setRunning(false); return 'done' } return p })
       }, 180_000)
     } catch (e) {
       setError(String(e)); setRunning(false); setPhase('idle')
       cleanupRef.current?.(); cleanupRef.current = null
+      cleanupTempSkills()
     }
   }
 
@@ -115,25 +141,25 @@ export default function ThreeConditionMode({ skills, apiKeySet, onNavigate }: { 
 
   return (
     <div className="compare-mode">
-      {apiKeySet === false && <div className="guard-banner">⚠️ 未配置 LLM 供应商，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>Settings</button> 添加。</div>}
+      {apiKeySet === false && <div className="guard-banner">{t('cmp.guard_no_llm')}</div>}
 
       <div className="eval-card">
-        <span className="card-title">三条件评测（SkillsBench）</span>
+        <span className="card-title">{t('eval.three.title')}</span>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.6 }}>
-          同时运行三个条件：<strong>A</strong> 无 Skill 基线 · <strong>B</strong> 当前 Skill · <strong>C</strong> AI 自动生成 Skill，输出 Δpp 增益。
+          {t('eval.three.description')}
         </p>
         <select value={skillId} onChange={e => setSkillId(e.target.value)} className="skill-select" style={{ width: '100%', marginBottom: 14 }}>
-          <option value="">选择 Skill...</option>
+          <option value="">{t('cmp.option_skill_a')}</option>
           {skills.map(s => <option key={s.id} value={s.id}>{s.name} v{s.version}</option>)}
         </select>
 
         {testCases.length > 0 && (
           <div className="cmp-tc-section">
             <div className="card-row" style={{ marginBottom: 8 }}>
-              <span className="card-title" style={{ marginBottom: 0 }}>测试用例</span>
+              <span className="card-title" style={{ marginBottom: 0 }}>{t('cmp.title_test_cases')}</span>
               <div className="bulk-btns">
-                <button className="btn btn-ghost btn-sm" onClick={() => setSelectedTcIds(new Set(testCases.map(t => t.id)))}>全选</button>
-                <button className="btn btn-ghost btn-sm" onClick={() => setSelectedTcIds(new Set())}>取消</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setSelectedTcIds(new Set(testCases.map(t => t.id)))}>{t('common.select_all')}</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setSelectedTcIds(new Set())}>{t('common.cancel')}</button>
               </div>
             </div>
             <div className="tc-list" style={{ maxHeight: 140, overflowY: 'auto' }}>
@@ -151,7 +177,7 @@ export default function ThreeConditionMode({ skills, apiKeySet, onNavigate }: { 
         )}
 
         {skillId && testCases.length === 0 && (
-          <div className="info-banner">Skill 还没有测试用例，请先<button className="link-btn" onClick={() => onNavigate?.('eval')}>在 TestCase 页面添加</button>。</div>
+          <div className="info-banner">{t('cmp.info_no_test_cases')}</div>
         )}
 
         <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={handleRun}
@@ -189,7 +215,7 @@ export default function ThreeConditionMode({ skills, apiKeySet, onNavigate }: { 
                     Δpp {delta > 0 ? '+' : ''}{delta.toFixed(2)}
                   </div>
                 )}
-                {delta === null && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>基准</div>}
+                {delta === null && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('eval.three.baseline')}</div>}
               </div>
             ))}
           </div>
@@ -197,9 +223,9 @@ export default function ThreeConditionMode({ skills, apiKeySet, onNavigate }: { 
           {allDims.length > 0 && (
             <div className="cmp-dim-table" style={{ marginTop: 16 }}>
               <div className="cmp-dim-header">
-                <span className="cmp-dim-col">维度</span>
+                <span className="cmp-dim-col">{t('eval.three.dim_header')}</span>
                 <span className="cmp-dim-col">B ({skillName})</span>
-                <span className="cmp-dim-col">C (AI 生成)</span>
+                <span className="cmp-dim-col">{t('eval.three.cond_c')}</span>
                 <span className="cmp-dim-col">B vs C</span>
               </div>
               {allDims.map(dim => {
@@ -229,10 +255,10 @@ export default function ThreeConditionMode({ skills, apiKeySet, onNavigate }: { 
           <div className="cmp-winner" style={{ marginTop: 16 }}>
             {avgB !== null && avgC !== null && (
               avgB > avgC
-                ? <span className="winner-badge a">🏆 当前 Skill 胜出</span>
+                ? <span className="winner-badge a">{t('eval.three.winner_b')}</span>
                 : avgC > avgB
-                  ? <span className="winner-badge b">🏆 AI 生成 Skill 胜出</span>
-                  : <span className="winner-badge neu">平局</span>
+                  ? <span className="winner-badge b">{t('eval.three.winner_c')}</span>
+                  : <span className="winner-badge neu">{t('cmp.tie')}</span>
             )}
           </div>
 
@@ -241,17 +267,17 @@ export default function ThreeConditionMode({ skills, apiKeySet, onNavigate }: { 
               <div className="tc-detail-header" onClick={() => setDetailsOpen(o => !o)}>
                 <span className="tc-detail-chevron">{detailsOpen ? '▼' : '▶'}</span>
                 <span className="tc-detail-title">{t('eval.three.per_case_title')}</span>
-                <span className="tc-detail-count">{detailsB.length} 条</span>
+                <span className="tc-detail-count">{t('eval.three.detail_count').replace('{n}', String(detailsB.length))}</span>
               </div>
               {detailsOpen && (() => {
                 const tcNames = [...new Set([...detailsA, ...detailsB, ...detailsC].map(r => r.testCaseName ?? t('eval.unnamed')))]
                 return (
                   <div className="tc-detail-table">
                     <div className="tc-detail-thead">
-                      <span className="tc-detail-col-name">用例</span>
-                      <span className="tc-detail-col-score">A 基线</span>
-                      <span className="tc-detail-col-score">B 当前</span>
-                      <span className="tc-detail-col-score">C AI生成</span>
+                      <span className="tc-detail-col-name">{t('eval.three.col_case')}</span>
+                      <span className="tc-detail-col-score">{t('eval.three.col_a')}</span>
+                      <span className="tc-detail-col-score">{t('eval.three.col_b')}</span>
+                      <span className="tc-detail-col-score">{t('eval.three.col_c')}</span>
                     </div>
                     {tcNames.map(tcName => {
                       const rA = detailsA.find(r => (r.testCaseName ?? t('eval.unnamed')) === tcName)
