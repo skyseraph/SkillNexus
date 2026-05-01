@@ -39,8 +39,11 @@ ${langInstruction}`,
 
   private async synthesizeSkill(skillContent: string, entries: SkillXEntry[]): Promise<string> {
     const patternsText = entries.map(e => `[L${e.level} ${e.levelName.toUpperCase()}] ${e.content}`).join('\n')
+    const langSuffix = getLanguage() === 'en'
+      ? ' Write all generated Skill content in English.'
+      : ' 请用简体中文撰写所有生成的 Skill 内容。'
     return this.callAI({
-      systemPrompt: 'You are a Skill synthesizer. Given the original skill and extracted knowledge patterns, generate an improved skill that incorporates these patterns. Maintain the YAML frontmatter format. Output only the full improved skill content.',
+      systemPrompt: `You are a Skill synthesizer. Given the original skill and extracted knowledge patterns, generate an improved skill that incorporates these patterns. Maintain the YAML frontmatter format. Output only the full improved skill content.${langSuffix}`,
       userMessage: `Original Skill:\n${skillContent}\n\nExtracted Knowledge Patterns:\n${patternsText}\n\nOutput the improved Skill:`
     })
   }

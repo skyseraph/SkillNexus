@@ -1,5 +1,6 @@
 import { BaseEvolutionEngine } from './base-engine'
 import { runEvalJob } from '../eval-job'
+import { getLanguage } from '../../ipc/config.handler'
 import type { EvoSkillResult } from '../../../shared/types'
 
 const MAX_FRONTIER = 5
@@ -38,10 +39,16 @@ export class EvoSkillEngine extends BaseEvolutionEngine<EvoSkillConfig, EvoSkill
     return rows.map(r => `Input: ${r.input_prompt}\nOutput: ${r.output}\nScore: ${r.total_score.toFixed(1)}`)
   }
 
+  private langSuffix(): string {
+    return getLanguage() === 'en'
+      ? ' Write all generated Skill content in English.'
+      : ' 请用简体中文撰写所有生成的 Skill 内容。'
+  }
+
   private async proposeImprovement(skillContent: string, worstSamples: string[]): Promise<string> {
     const samplesText = worstSamples.map((s, i) => `[Sample ${i + 1}]\n${s}`).join('\n\n')
     return this.callAI({
-      systemPrompt: 'You are a Skill optimizer. Given a Skill and its worst-performing test samples, propose a targeted improvement. Output only the improved Skill content in full, maintaining the YAML frontmatter format.',
+      systemPrompt: `You are a Skill optimizer. Given a Skill and its worst-performing test samples, propose a targeted improvement. Output only the improved Skill content in full, maintaining the YAML frontmatter format.${this.langSuffix()}`,
       userMessage: `Current Skill:\n${skillContent}\n\nWorst Performing Samples:\n${samplesText}\n\nOutput the improved Skill:`
     })
   }
@@ -49,7 +56,7 @@ export class EvoSkillEngine extends BaseEvolutionEngine<EvoSkillConfig, EvoSkill
   private async proposeExploratoryRewrite(skillContent: string, worstSamples: string[]): Promise<string> {
     const samplesText = worstSamples.map((s, i) => `[Sample ${i + 1}]\n${s}`).join('\n\n')
     return this.callAI({
-      systemPrompt: 'You are a Skill optimizer. The current Skill has stagnated — incremental improvements are no longer working. Perform a complete exploratory rewrite from scratch. Do NOT preserve the existing structure. Rethink the approach entirely based on the failure evidence. Output only the new Skill content in full, maintaining the YAML frontmatter format.',
+      systemPrompt: `You are a Skill optimizer. The current Skill has stagnated — incremental improvements are no longer working. Perform a complete exploratory rewrite from scratch. Do NOT preserve the existing structure. Rethink the approach entirely based on the failure evidence. Output only the new Skill content in full, maintaining the YAML frontmatter format.${this.langSuffix()}`,
       userMessage: `Current Skill (stagnated — do NOT copy its structure):\n${skillContent}\n\nFailure Evidence:\n${samplesText}\n\nOutput a completely rewritten Skill:`
     })
   }

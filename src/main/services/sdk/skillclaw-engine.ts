@@ -41,8 +41,11 @@ IMPORTANT: The "commonFailures" and "improvementSummary" fields MUST be written 
   }
 
   private async generateImprovedSkill(skillContent: string, commonFailures: string[]): Promise<string> {
+    const langSuffix = getLanguage() === 'en'
+      ? ' Write all generated Skill content in English.'
+      : ' 请用简体中文撰写所有生成的 Skill 内容。'
     return this.callAI({
-      systemPrompt: 'You are a Skill improver. Fix the identified recurring failure patterns in the skill. Make targeted, surgical changes. Maintain the YAML frontmatter format. Output only the full improved skill content.',
+      systemPrompt: `You are a Skill improver. Fix the identified recurring failure patterns in the skill. Make targeted, surgical changes. Maintain the YAML frontmatter format. Output only the full improved skill content.${langSuffix}`,
       userMessage: `Skill:\n${skillContent}\n\nCommon failure patterns to fix:\n${commonFailures.map((f, i) => `${i + 1}. ${f}`).join('\n')}\n\nOutput improved Skill:`
     })
   }
