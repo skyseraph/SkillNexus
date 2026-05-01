@@ -2,11 +2,12 @@ import { ipcMain } from 'electron'
 import { getAIProvider } from '../services/ai-provider'
 import { getActiveModel, getConfig } from './config.handler'
 import { getDb } from '../db'
-import { writeFileSync, mkdirSync } from 'fs'
-import { join, resolve, basename, dirname } from 'path'
+import { writeFileSync, mkdirSync, readFileSync } from 'fs'
+import { join, resolve, basename, dirname, extname } from 'path'
 import { app } from 'electron'
 import yaml from 'js-yaml'
 import { withTimeout, AI_TIMEOUT_MS } from '../services/eval-job'
+import { getLanguage } from './config.handler'
 import { fetchJson, fetchText } from './github-fetch'
 import { isDemoMode } from '../demo'
 import { runDemoEvolve } from '../services/demo/demo-runner'
@@ -68,6 +69,16 @@ const EXAMPLES_SYSTEM_PROMPT = `You are an expert Skill author. Given input/outp
 ${SKILL_FORMAT_HINT}
 
 Output ONLY the complete Skill. No extra commentary.`
+
+const DOCUMENT_SYSTEM_PROMPT = `You are an expert Skill author. Analyze the provided document content and extract a reusable, well-structured Skill that captures the core workflow, methodology, or expertise described in the document.
+
+${SKILL_FORMAT_HINT}
+
+Rules:
+- Focus on extracting durable, reusable patterns — not document-specific details
+- If the document describes a process or methodology, encode it as actionable Skill instructions
+- If the document is reference material, encode the key knowledge as constraints and guidelines
+- Output ONLY the complete Skill. No extra commentary.`
 
 const STRATEGY_HINTS: Record<string, string> = {
   improve_weak:   'Focus on the weakest-scoring dimensions shown in the evidence. Fix the root cause — do not just add instructions that address the symptoms.',
@@ -161,11 +172,17 @@ Dimensions:
 Respond with ONLY valid JSON in this exact format:
 {"safety":8,"completeness":7,"executability":9,"maintainability":8,"orchestration":7}`
 
+function langSuffix(): string {
+  return getLanguage() === 'en'
+    ? '\n\nIMPORTANT: Write all generated content (Skill name, description, instructions, comments) in English.'
+    : '\n\nIMPORTANT: 请用简体中文撰写所有生成内容（Skill 名称、描述、指令、注释）。'
+}
+
 export function registerStudioHandlers(): void {
   ipcMain.handle('studio:generate', async (_event, prompt: string) => {
     const provider = getAIProvider()
     const result = await withTimeout(
-      provider.call({ model: getActiveModel(), systemPrompt: STUDIO_SYSTEM_PROMPT, userMessage: prompt }),
+      provider.call({ model: getActiveModel(), systemPrompt: STUDIO_SYSTEM_PROMPT + langSuffix(), userMessage: prompt }),
       AI_TIMEOUT_MS,
       'studio:generate'
     )
@@ -329,33 +346,37 @@ export function registerStudioHandlers(): void {
     let analysisSent = false
     const ANALYSIS_SEARCH_LIMIT = 2000
 
-    await provider.stream(
-      { model: getActiveModel(), systemPrompt: EVOLVE_SYSTEM_PROMPT, userMessage },
-      (chunk) => {
-        if (analysisSent) {
-          event.sender.send('studio:chunk', { chunk, done: false })
-          return
-        }
-        buffer += chunk
-        const closeIdx = buffer.indexOf('-->')
-        if (closeIdx !== -1) {
-          // Full ANALYSIS block is in buffer
-          const analysis = parseAnalysisBlock(buffer)
-          if (analysis) {
-            event.sender.send('studio:analysis', analysis)
+    await withTimeout(
+      provider.stream(
+        { model: getActiveModel(), systemPrompt: EVOLVE_SYSTEM_PROMPT + langSuffix(), userMessage },
+        (chunk) => {
+          if (analysisSent) {
+            event.sender.send('studio:chunk', { chunk, done: false })
+            return
           }
-          analysisSent = true
-          // Forward everything after the closing --> as chunk
-          const remainder = buffer.slice(closeIdx + 3).trimStart()
-          if (remainder) {
-            event.sender.send('studio:chunk', { chunk: remainder, done: false })
+          buffer += chunk
+          const closeIdx = buffer.indexOf('-->')
+          if (closeIdx !== -1) {
+            // Full ANALYSIS block is in buffer
+            const analysis = parseAnalysisBlock(buffer)
+            if (analysis) {
+              event.sender.send('studio:analysis', analysis)
+            }
+            analysisSent = true
+            // Forward everything after the closing --> as chunk
+            const remainder = buffer.slice(closeIdx + 3).trimStart()
+            if (remainder) {
+              event.sender.send('studio:chunk', { chunk: remainder, done: false })
+            }
+          } else if (buffer.length > ANALYSIS_SEARCH_LIMIT) {
+            // Give up waiting for ANALYSIS — forward buffer as-is
+            analysisSent = true
+            event.sender.send('studio:chunk', { chunk: buffer, done: false })
           }
-        } else if (buffer.length > ANALYSIS_SEARCH_LIMIT) {
-          // Give up waiting for ANALYSIS — forward buffer as-is
-          analysisSent = true
-          event.sender.send('studio:chunk', { chunk: buffer, done: false })
         }
-      }
+      ),
+      AI_TIMEOUT_MS * 4,
+      'studio:evolve'
     )
     event.sender.send('studio:chunk', { chunk: '', done: true })
   })
@@ -371,18 +392,65 @@ export function registerStudioHandlers(): void {
     const userMessage = `Based on these examples, write a Skill:\n\n${examplesText}${descLine}\n\nGenerate the Skill:`
 
     const provider = getAIProvider()
-    await provider.stream(
-      { model: getActiveModel(), systemPrompt: EXAMPLES_SYSTEM_PROMPT, userMessage },
-      (chunk) => event.sender.send('studio:chunk', { chunk, done: false })
+    await withTimeout(
+      provider.stream(
+        { model: getActiveModel(), systemPrompt: EXAMPLES_SYSTEM_PROMPT + langSuffix(), userMessage },
+        (chunk) => event.sender.send('studio:chunk', { chunk, done: false })
+      ),
+      AI_TIMEOUT_MS * 4,
+      'studio:generateFromExamples'
+    )
+    event.sender.send('studio:chunk', { chunk: '', done: true })
+  })
+
+  ipcMain.handle('studio:generateFromDocument', async (event, filePath: string) => {
+    // SEC: resolve and validate the path is an absolute path to a real file
+    const resolved = resolve(filePath)
+    const ext = extname(resolved).toLowerCase()
+    const ALLOWED_EXTS = new Set(['.pdf', '.txt', '.md', '.markdown'])
+    if (!ALLOWED_EXTS.has(ext)) {
+      throw new Error(`Unsupported file type: ${ext}. Allowed: .pdf, .txt, .md, .markdown`)
+    }
+
+    let text: string
+    if (ext === '.pdf') {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
+      const buf = readFileSync(resolved)
+      const result = await pdfParse(buf)
+      text = result.text
+    } else {
+      text = readFileSync(resolved, 'utf-8')
+    }
+
+    // Truncate to ~12 000 chars to stay within context limits
+    const MAX_CHARS = 12000
+    const truncated = text.length > MAX_CHARS
+      ? text.slice(0, MAX_CHARS) + '\n\n[Document truncated for length]'
+      : text
+
+    const userMessage = `Document content:\n\n${truncated}\n\nExtract a reusable Skill from this document:`
+    const provider = getAIProvider()
+    await withTimeout(
+      provider.stream(
+        { model: getActiveModel(), systemPrompt: DOCUMENT_SYSTEM_PROMPT + langSuffix(), userMessage },
+        (chunk) => event.sender.send('studio:chunk', { chunk, done: false })
+      ),
+      AI_TIMEOUT_MS * 4,
+      'studio:generateFromDocument'
     )
     event.sender.send('studio:chunk', { chunk: '', done: true })
   })
 
   ipcMain.handle('studio:generateStream', async (event, prompt: string) => {
     const provider = getAIProvider()
-    await provider.stream(
-      { model: getActiveModel(), systemPrompt: STUDIO_SYSTEM_PROMPT, userMessage: prompt },
-      (chunk) => event.sender.send('studio:chunk', { chunk, done: false })
+    await withTimeout(
+      provider.stream(
+        { model: getActiveModel(), systemPrompt: STUDIO_SYSTEM_PROMPT + langSuffix(), userMessage: prompt },
+        (chunk) => event.sender.send('studio:chunk', { chunk, done: false })
+      ),
+      AI_TIMEOUT_MS * 4,
+      'studio:generateStream'
     )
     event.sender.send('studio:chunk', { chunk: '', done: true })
   })
@@ -474,12 +542,16 @@ export function registerStudioHandlers(): void {
     const userMessage = `Conversation to analyze:\n\n${conversation}\n\nExtract a reusable Skill or output NO_SKILL:`
     const provider = getAIProvider()
     let buffer = ''
-    await provider.stream(
-      { model: getActiveModel(), systemPrompt: buildExtractPrompt(sourceSkillContent), userMessage },
-      (chunk) => {
-        buffer += chunk
-        event.sender.send('studio:chunk', { chunk, done: false })
-      }
+    await withTimeout(
+      provider.stream(
+        { model: getActiveModel(), systemPrompt: buildExtractPrompt(sourceSkillContent) + langSuffix(), userMessage },
+        (chunk) => {
+          buffer += chunk
+          event.sender.send('studio:chunk', { chunk, done: false })
+        }
+      ),
+      AI_TIMEOUT_MS * 4,
+      'studio:extract'
     )
     // If AI returned NO_SKILL, signal with a special done payload
     const isNoSkill = buffer.trim() === 'NO_SKILL'

@@ -73,7 +73,8 @@
     "@anthropic-ai/sdk": "^0.39.0",
     "electron-store": "^8.2.0",
     "fflate": "^0.8.2",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "pdf-parse": "2.4.5"
   },
   "optionalDependencies": {
     "better-sqlite3": "^11.0.0"

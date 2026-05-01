@@ -60,6 +60,8 @@ const api = {
     evolve: (skillId: string, config: EvoConfig): Promise<void> => ipcRenderer.invoke('studio:evolve', skillId, config),
     generateFromExamples: (examples: Array<{ input: string; output: string }>, description?: string): Promise<void> =>
       ipcRenderer.invoke('studio:generateFromExamples', examples, description),
+    generateFromDocument: (filePath: string): Promise<void> =>
+      ipcRenderer.invoke('studio:generateFromDocument', filePath),
     install: (content: string, name: string, parentSkillId?: string): Promise<Skill> =>
       ipcRenderer.invoke('studio:install', content, name, parentSkillId),
     extract: (conversation: string, sourceSkillId?: string, sourceSkillContent?: string): Promise<void> =>

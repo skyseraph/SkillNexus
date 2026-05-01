@@ -6,7 +6,7 @@ import { useToast } from '../hooks/useToast'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type StudioMode = 'describe' | 'examples' | 'extract' | 'edit' | 'agent'
+type StudioMode = 'describe' | 'examples' | 'extract' | 'edit' | 'agent' | 'document'
 type MethodType = 'builtin' | 'external'
 type DiscoverySource = 'skillnet' | 'github' | 'mine'
 
@@ -1025,6 +1025,51 @@ function QuickRunPane({ editorContent, apiKeySet }: { editorContent: string; api
 }
 
 
+// ── InputAreaDocument ─────────────────────────────────────────────────────────
+
+function InputAreaDocument({ streaming, apiKeySet, onGenerate }: {
+  streaming: boolean
+  apiKeySet: boolean | null
+  onGenerate: (filePath: string) => void
+}) {
+  const t = useT()
+  const [fileName, setFileName] = useState<string | null>(null)
+  const [filePath, setFilePath] = useState<string | null>(null)
+
+  const handlePickFile = async () => {
+    const path = await window.api.skills.openDialog('file')
+    if (!path) return
+    const ext = path.split('.').pop()?.toLowerCase() ?? ''
+    if (!['pdf', 'txt', 'md', 'markdown'].includes(ext)) return
+    setFilePath(path)
+    setFileName(path.split('/').pop() ?? path)
+  }
+
+  const canGenerate = !!filePath && !streaming && apiKeySet !== false
+
+  return (
+    <div className="studio-v2-doc-panel">
+      <p className="studio-v2-doc-hint">{t('studio.document.hint')}</p>
+      <div className="studio-v2-doc-row">
+        <button className="studio-v2-btn" onClick={handlePickFile} disabled={streaming}>
+          {t('studio.document.upload')}
+        </button>
+        <span className="studio-v2-doc-filename">
+          {fileName ?? t('studio.document.no_file')}
+        </span>
+      </div>
+      <button
+        className="studio-v2-btn primary"
+        disabled={!canGenerate}
+        onClick={() => filePath && onGenerate(filePath)}
+      >
+        {streaming ? t('studio.document.generating') : t('studio.document.btn')}
+      </button>
+    </div>
+  )
+}
+
+
 // ── AgentDesignPanel ──────────────────────────────────────────────────────────
 
 function AgentDesignPanel({ streaming, apiKeySet, onGenerate }: {
@@ -1366,6 +1411,7 @@ export default function StudioPage({ initialSkillId, onNavigate, apiKeySet: apiK
     { id: 'describe' as StudioMode, label: t('studio.tab.describe'), icon: '✍️' },
     { id: 'examples' as StudioMode, label: t('studio.tab.examples'), icon: '🔁' },
     { id: 'extract'  as StudioMode, label: t('studio.tab.extract'),  icon: '💬' },
+    { id: 'document' as StudioMode, label: t('studio.tab.document'), icon: '📄' },
     { id: 'edit'     as StudioMode, label: t('studio.tab.edit'),     icon: '✏️' },
     { id: 'agent'    as StudioMode, label: t('studio.tab.agent'),    icon: '🤖' }
   ]
@@ -1554,6 +1600,10 @@ export default function StudioPage({ initialSkillId, onNavigate, apiKeySet: apiK
     startStream(() => window.api.studio.generateStream(agentPrompt))
   }, [startStream])
 
+  const handleGenerateFromDocument = useCallback((filePath: string) => {
+    startStream(() => window.api.studio.generateFromDocument(filePath))
+  }, [startStream])
+
   const handleModeChange = (newMode: StudioMode) => {
     cleanupRef.current?.()
     cleanupRef.current = null
@@ -1686,6 +1736,12 @@ export default function StudioPage({ initialSkillId, onNavigate, apiKeySet: apiK
             <AgentDesignPanel
               streaming={streaming} apiKeySet={apiKeySet}
               onGenerate={handleGenerateAgent}
+            />
+          )}
+          {mode === 'document' && (
+            <InputAreaDocument
+              streaming={streaming} apiKeySet={apiKeySet}
+              onGenerate={handleGenerateFromDocument}
             />
           )}
 
@@ -2020,6 +2076,10 @@ export default function StudioPage({ initialSkillId, onNavigate, apiKeySet: apiK
         .studio-v2-tool-chip { font-size: 11px; padding: 3px 10px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; transition: all var(--transition); font-family: monospace; }
         .studio-v2-tool-chip:hover { color: var(--text); border-color: var(--text-muted); }
         .studio-v2-tool-chip.active { background: rgba(249,115,22,0.1); color: #f97316; border-color: rgba(249,115,22,0.4); }
+        .studio-v2-doc-panel { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 12px; flex-shrink: 0; }
+        .studio-v2-doc-hint { font-size: 12px; color: var(--text-muted); margin: 0; }
+        .studio-v2-doc-row { display: flex; align-items: center; gap: 10px; }
+        .studio-v2-doc-filename { font-size: 12px; color: var(--text-muted); font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
         .studio-v2-val-tabs { display: flex; gap: 4px; margin-bottom: 10px; }
         .studio-v2-val-tab { font-size: 12px; padding: 4px 12px; border-radius: var(--radius); border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; transition: all var(--transition); }
         .studio-v2-val-tab:hover:not(.disabled) { color: var(--text); border-color: var(--text-muted); }
