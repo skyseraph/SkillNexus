@@ -159,6 +159,7 @@ interface AgentTrace { turn: number; toolName: string; toolInput: Record<string,
 interface AgentOutput { answer: string; trace: AgentTrace[] }
 
 function AgentOutputRenderer({ output }: { output: string }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   let parsed: AgentOutput | null = null
   try {
@@ -174,7 +175,7 @@ function AgentOutputRenderer({ output }: { output: string }) {
       {parsed.trace.length > 0 && (
         <div className="agent-trace">
           <button className="trace-toggle" onClick={() => setOpen(o => !o)}>
-            {open ? '▼' : '▶'} 执行轨迹（{parsed.trace.length} 步）
+            {open ? '▼' : '▶'} {t('eval.agent_trace', { n: parsed.trace.length })}
           </button>
           {open && (
             <div className="trace-steps">
@@ -208,6 +209,7 @@ function AgentOutputRenderer({ output }: { output: string }) {
 function TrendLine({ history, tcNames, width = 340, height = 120 }: {
   history: EvalResult[]; tcNames: string[]; width?: number; height?: number
 }) {
+  const t = useT()
   const [tcFilter, setTcFilter] = useState('')
   const filtered = tcFilter ? history.filter(r => r.testCaseName === tcFilter) : history
   const data = filtered.slice(-20)
@@ -216,12 +218,12 @@ function TrendLine({ history, tcNames, width = 340, height = 120 }: {
       {tcNames.length > 0 && (
         <div className="trend-filter-row">
           <select className="trend-tc-select" value={tcFilter} onChange={e => setTcFilter(e.target.value)}>
-            <option value="">全部用例</option>
+            <option value="">{t('eval.all_cases')}</option>
             {tcNames.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </div>
       )}
-      <div className="chart-empty">至少需要 2 次评测数据</div>
+      <div className="chart-empty">{t('eval.chart_min_2')}</div>
     </div>
   )
 
@@ -258,7 +260,7 @@ function TrendLine({ history, tcNames, width = 340, height = 120 }: {
       {tcNames.length > 0 && (
         <div className="trend-filter-row">
           <select className="trend-tc-select" value={tcFilter} onChange={e => setTcFilter(e.target.value)}>
-            <option value="">全部用例</option>
+            <option value="">{t('eval.all_cases')}</option>
             {tcNames.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </div>
@@ -289,7 +291,7 @@ function TrendLine({ history, tcNames, width = 340, height = 120 }: {
         )}
         {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} fill="#6c63ff" />)}
       </svg>
-      {maPath && <p className="chart-hint" style={{ marginTop: 2 }}>虚线 = 7 点滑动均值</p>}
+      {maPath && <p className="chart-hint" style={{ marginTop: 2 }}>{t('eval.ma_hint')}</p>}
     </div>
   )
 }
@@ -307,7 +309,7 @@ function MultiDimTrendChart({ history, width = 540, height = 200 }: {
   const [hoveredDim, setHoveredDim] = useState<string | null>(null)
   const [showS, setShowS] = useState(false)
   const data = history.slice(-20)
-  if (data.length < 2) return <div className="chart-empty">至少需要 2 次评测数据</div>
+  if (data.length < 2) return <div className="chart-empty">{t('eval.chart_min_2')}</div>
 
   const activeDims = showS ? DIM_ORDER : G_DIMS
   const pad = { l: 28, r: 70, t: 10, b: 28 }
@@ -431,7 +433,7 @@ function HeatmapChart({ history }: { history: EvalResult[] }) {
   const DIM_LABELS = makeDimLabels(t)
   const [deltaMode, setDeltaMode] = useState(false)
   const rows = [...history].reverse().slice(0, 20)
-  if (rows.length === 0) return <div className="chart-empty">暂无评测数据</div>
+  if (rows.length === 0) return <div className="chart-empty">{t('eval.heatmap_empty')}</div>
   const dims = DIM_ORDER.filter(d => rows.some(r => d in (r.scores ?? {})))
 
   // per-dim global avg for Δ mode
@@ -447,7 +449,7 @@ function HeatmapChart({ history }: { history: EvalResult[] }) {
         <button className={`hm-delta-btn ${deltaMode ? 'active' : ''}`} onClick={() => setDeltaMode(v => !v)}>
           {deltaMode ? t('eval.exit_delta') : t('eval.delta_mode')}
         </button>
-        {deltaMode && <span className="hm-delta-hint">绿 = 高于均值　红 = 低于均值</span>}
+        {deltaMode && <span className="hm-delta-hint">{t('eval.heatmap_delta_hint')}</span>}
       </div>
       <div className="heatmap-table">
         {/* Header row */}
@@ -572,7 +574,7 @@ function BoxPlotChart({ history, width = 520, height = 160, onRunEval }: {
           const cy = pad.t + i * rowH + rowH / 2
           const bh = Math.max(rowH * 0.42, 6)
           const color = DIM_COLORS[dim]
-          const tooltipContent = `${DIM_LABELS[dim]}\nmin ${min.toFixed(1)}  Q1 ${q1.toFixed(1)}  中位 ${median.toFixed(1)}\n均值 ${mean.toFixed(1)}  Q3 ${q3.toFixed(1)}  max ${max.toFixed(1)}\nn = ${n}`
+          const tooltipContent = `${DIM_LABELS[dim]}\nmin ${min.toFixed(1)}  Q1 ${q1.toFixed(1)}  ${t('eval.median')} ${median.toFixed(1)}\n${t('eval.mean')} ${mean.toFixed(1)}  Q3 ${q3.toFixed(1)}  max ${max.toFixed(1)}\nn = ${n}`
           return (
             <g key={dim}>
               {/* Dim label */}
@@ -682,6 +684,7 @@ function GeneratePreviewModal({ candidates, saving, onSave, onCancel }: {
   onSave: (selected: Omit<TestCase, 'id' | 'createdAt'>[]) => void
   onCancel: () => void
 }) {
+  const t = useT()
   const [items, setItems] = useState<PreviewCandidate[]>(() =>
     candidates.map((c, i) => ({ ...c, _key: `preview-${i}` }))
   )
@@ -710,9 +713,9 @@ function GeneratePreviewModal({ candidates, saving, onSave, onCancel }: {
     <div className="tc-preview-overlay" onClick={e => { if (e.target === e.currentTarget) onCancel() }}>
       <div className="tc-preview-modal">
         <div className="tc-preview-header">
-          <span className="tc-preview-title">预览生成的测试用例（{items.length} 个）</span>
+          <span className="tc-preview-title">{t('eval.preview_title', { n: items.length })}</span>
           <div className="tc-preview-header-actions">
-            <button className="btn btn-xs" onClick={toggleAll}>{allChecked ? '取消全选' : '全选'}</button>
+            <button className="btn btn-xs" onClick={toggleAll}>{allChecked ? t('common.clear') : t('common.select_all')}</button>
           </div>
         </div>
         <div className="tc-preview-list">
@@ -728,7 +731,7 @@ function GeneratePreviewModal({ candidates, saving, onSave, onCancel }: {
                   className="tc-preview-name"
                   value={item.name}
                   onChange={e => updateItem(item._key, 'name', e.target.value)}
-                  placeholder="用例名称"
+                  placeholder={t('eval.tc.name_placeholder')}
                 />
                 <span
                   className="judge-chip"
@@ -738,23 +741,23 @@ function GeneratePreviewModal({ candidates, saving, onSave, onCancel }: {
                 </span>
               </div>
               <div className="tc-preview-field">
-                <span className="tc-preview-label">输入</span>
+                <span className="tc-preview-label">{t('eval.input_label')}</span>
                 <textarea
                   className="tc-preview-input"
                   rows={3}
                   value={item.input}
                   onChange={e => updateItem(item._key, 'input', e.target.value)}
-                  placeholder="用户输入内容"
+                  placeholder={t('eval.input_placeholder2')}
                 />
               </div>
               {item.judgeType !== 'command' && (
                 <div className="tc-preview-field">
-                  <span className="tc-preview-label">判断</span>
+                  <span className="tc-preview-label">{t('eval.judge_label')}</span>
                   <input
                     className="tc-preview-judge"
                     value={item.judgeParam}
                     onChange={e => updateItem(item._key, 'judgeParam', e.target.value)}
-                    placeholder="判断标准"
+                    placeholder={t('eval.judge_criteria_placeholder')}
                   />
                 </div>
               )}
@@ -762,7 +765,7 @@ function GeneratePreviewModal({ candidates, saving, onSave, onCancel }: {
           ))}
         </div>
         <div className="tc-preview-footer">
-          <button className="btn btn-sm" onClick={onCancel} disabled={saving}>取消</button>
+          <button className="btn btn-sm" onClick={onCancel} disabled={saving}>{t('common.cancel')}</button>
           <button
             className="btn btn-primary btn-sm"
             onClick={handleSave}
@@ -934,7 +937,7 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
       <div className="eval-card">
         <div className="card-row">
           <span className="card-title">{t('eval.gen_cases')}</span>
-          <span className="gen-hint">覆盖 8 个评测维度</span>
+          <span className="gen-hint">{t('eval.gen_hint')}</span>
         </div>
         <div className="gen-controls">
           <div className="count-row">
@@ -946,17 +949,17 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-primary btn-sm" onClick={handleGeneratePreview}
               disabled={generating || previewing || apiKeySet === false}>
-              {previewing ? <><span className="gen-spinner" />{` 生成中...`}</> : `预览生成 ▸`}
+              {previewing ? <><span className="gen-spinner" />{` ${t('common.generating')}`}</> : t('eval.preview_btn')}
             </button>
             <button className="btn btn-sm" onClick={handleGenerate}
               disabled={generating || previewing || apiKeySet === false}>
-              {generating ? <><span className="gen-spinner" />{` 生成中...`}</> : `直接生成`}
+              {generating ? <><span className="gen-spinner" />{` ${t('common.generating')}`}</> : t('eval.direct_btn')}
             </button>
           </div>
         </div>
         {(genError || previewError) && <div className="gen-error">⚠️ {genError || previewError}</div>}
-        {genSuccess > 0 && !genError && <div className="gen-success">✅ 已生成 {genSuccess} 个用例</div>}
-        {apiKeySet === false && <div className="gen-warn">⚠️ 未配置 API Key，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 添加。</div>}
+        {genSuccess > 0 && !genError && <div className="gen-success">{t('eval.gen_success', { n: genSuccess })}</div>}
+        {apiKeySet === false && <div className="gen-warn">⚠️ {t('eval.no_api_key_prefix')}<button className="link-btn" onClick={() => onNavigate?.('settings')}>{t('nav.settings')}</button>{t('eval.no_api_key_suffix')}</div>}
       </div>
 
       {/* Generate Preview Modal */}
@@ -973,7 +976,7 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
       <div className="eval-card">
         <div className="card-row">
           <div className="tc-stats">
-            <span className="stat-total">{testCases.length} 个用例</span>
+            <span className="stat-total">{t('eval.tc_count', { n: String(testCases.length) })}</span>
             {Object.entries(byType).filter(([, n]) => n > 0).map(([type, n]) => (
               <span key={type} className="stat-chip" style={{ color: JUDGE_COLORS[type] }}>
                 {JUDGE_LABELS[type]} ×{n}
@@ -983,11 +986,11 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <div className="tc-search-wrap">
               <span className="search-icon">🔍</span>
-              <input className="tc-search" placeholder="搜索..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              <input className="tc-search" placeholder={t('eval.search_placeholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
               {search && <button className="search-clear" onClick={() => setSearch('')}>✕</button>}
             </div>
-            <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(new Set(testCases.map((t) => t.id)))}>全选</button>
-            <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(new Set())}>取消</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(new Set(testCases.map((t) => t.id)))}>{t('common.select_all')}</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(new Set())}>{t('eval.deselect')}</button>
           </div>
         </div>
 
@@ -1067,7 +1070,7 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
                               <pre className="tc-field-value">{tc.judgeParam}</pre>
                             </div>
                           )}
-                          <div className="tc-meta">创建于 {new Date(tc.createdAt).toLocaleString()}</div>
+                          <div className="tc-meta">{t('eval.tc.created_at', { date: new Date(tc.createdAt).toLocaleString() })}</div>
                         </>
                       )}
                     </div>
@@ -1133,7 +1136,7 @@ function TestCaseTab({ skillId, apiKeySet, onRunEval, onNavigate }: {
           <span className="run-cta-hint">{t('eval.tc.selected', { selected: String(selectedIds.size), total: String(testCases.length) })}</span>
           <button className="btn btn-primary" disabled={selectedIds.size === 0 || apiKeySet === false}
             onClick={() => onRunEval([...selectedIds])}>
-            ▶ 切换到评测 Tab 并运行
+            ▶ {t('eval.tc.run_tab')}
           </button>
         </div>
       )}
@@ -1179,9 +1182,9 @@ function ByCasePanel({ caseMap }: { caseMap: Map<string, EvalResult[]> }) {
   return (
     <div>
       <div className="bycase-sort-row">
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>排序：</span>
-        <button className={`bycase-sort-btn ${sortBy === 'avg' ? 'active' : ''}`} onClick={() => setSortBy('avg')}>均分</button>
-        <button className={`bycase-sort-btn ${sortBy === 'count' ? 'active' : ''}`} onClick={() => setSortBy('count')}>次数</button>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('eval.bycase_sort')}：</span>
+        <button className={`bycase-sort-btn ${sortBy === 'avg' ? 'active' : ''}`} onClick={() => setSortBy('avg')}>{t('eval.bycase_avg')}</button>
+        <button className={`bycase-sort-btn ${sortBy === 'count' ? 'active' : ''}`} onClick={() => setSortBy('count')}>{t('eval.bycase_runs')}</button>
       </div>
       <div className="bycase-table">
         {entries.map(([name, rows]) => {
@@ -1207,7 +1210,7 @@ function ByCasePanel({ caseMap }: { caseMap: Map<string, EvalResult[]> }) {
             <div key={name} style={{ borderRadius: 6, background: 'var(--surface2)' }}>
               <div className="bycase-row" onClick={() => setExpandedCase(expanded ? null : name)}>
                 <span className={`bycase-name ${isUnnamed ? 'unnamed' : ''}`}>{name}</span>
-                <span className="bycase-count">{rows.length} 次</span>
+                <span className="bycase-count">{t('eval.bycase_count', { n: String(rows.length) })}</span>
                 {trendArrow && <span className="bycase-trend" style={{ color: trendColor }}>{trendArrow}</span>}
                 <span className="bycase-total" style={{ color: scoreColor }}>{avgTotal.toFixed(1)}</span>
                 <div className="bycase-dim-bars">
@@ -1396,7 +1399,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
         </div>
         <div className="eval-controls">
           <select value={selectedSkill} onChange={(e) => { setSelectedSkill(e.target.value); setHistoryPage(0) }} className="skill-select">
-            <option value="">选择 Skill...</option>
+            <option value="">{t('eval.select_skill_placeholder')}</option>
             {skills.map((s) => <option key={s.id} value={s.id}>{s.name} v{s.version}</option>)}
           </select>
           {selectedSkill && historyTotal > 0 && (
@@ -1407,19 +1410,19 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
         </div>
       </div>
       {skills.find(s => s.id === selectedSkill)?.skillType === 'agent' && !tavilyKeySet && (
-        <div className="gen-warn">⚠️ Agent Skill 使用 web_search 工具需要 Tavily API Key，请前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 配置。</div>
+        <div className="gen-warn">⚠️ {t('eval.agent_tavily_prefix')}<button className="link-btn" onClick={() => onNavigate?.('settings')}>{t('nav.settings')}</button>{t('eval.agent_tavily_suffix')}</div>
       )}
 
       {/* Page tabs: TestCase | Eval | Chart */}
       <div className="page-tabs">
         <button className={`page-tab ${pageTab === 'testcase' ? 'active' : ''}`} onClick={() => setPageTab('testcase')}>
-          🧪 测试用例
+          🧪 {t('eval.tab_testcase')}
         </button>
         <button className={`page-tab ${pageTab === 'eval' ? 'active' : ''}`} onClick={() => setPageTab('eval')}>
-          ▶ 运行评测
+          ▶ {t('eval.tab_run')}
         </button>
         <button className={`page-tab ${pageTab === 'chart' ? 'active' : ''}`} onClick={() => setPageTab('chart')}>
-          📈 技能成长{historyTotal > 0 && <span className="tab-badge">{historyTotal}</span>}
+          📈 {t('eval.tab_chart')}{historyTotal > 0 && <span className="tab-badge">{historyTotal}</span>}
         </button>
       </div>
 
@@ -1428,7 +1431,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
         <TestCaseTab skillId={selectedSkill} apiKeySet={apiKeySet} onRunEval={handleRunEval} onNavigate={onNavigate} />
       )}
       {pageTab === 'testcase' && !selectedSkill && (
-        <div className="no-skill"><div className="no-skill-icon">🧪</div><p>选择一个 Skill 开始管理测试用例</p>{onNavigate && <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('studio')}>✦ 去 Studio 创建 Skill</button>}</div>
+        <div className="no-skill"><div className="no-skill-icon">🧪</div><p>{t('eval.no_skill_testcase')}</p>{onNavigate && <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('studio')}>✦ {t('eval.go_studio_create')}</button>}</div>
       )}
 
       {/* ── Eval Tab ── */}
@@ -1436,9 +1439,9 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
 
         {/* Eval mode tabs */}
         <div className="eval-mode-tabs">
-          <button className={`eval-mode-tab ${evalMode === 'single' ? 'active' : ''}`} onClick={() => setEvalMode('single')}>📊 单 Skill</button>
-          <button className={`eval-mode-tab ${evalMode === 'compare' ? 'active' : ''}`} onClick={() => setEvalMode('compare')}>⚖️ 对比</button>
-          <button className={`eval-mode-tab ${evalMode === 'three' ? 'active' : ''}`} onClick={() => setEvalMode('three')}>🧪 三条件</button>
+          <button className={`eval-mode-tab ${evalMode === 'single' ? 'active' : ''}`} onClick={() => setEvalMode('single')}>📊 {t('eval.mode_single')}</button>
+          <button className={`eval-mode-tab ${evalMode === 'compare' ? 'active' : ''}`} onClick={() => setEvalMode('compare')}>⚖️ {t('eval.mode_compare')}</button>
+          <button className={`eval-mode-tab ${evalMode === 'three' ? 'active' : ''}`} onClick={() => setEvalMode('three')}>🧪 {t('eval.mode_three')}</button>
         </div>
 
         <FrameworkPanel />
@@ -1456,7 +1459,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
                 <button className="btn btn-primary"
                   onClick={() => handleRunEval()}
                   disabled={!selectedSkill || running || selectedTcIds.size === 0 || apiKeySet === false}>
-                  {running ? <><span className="gen-spinner" />{`${progress}%`}</> : `▶ 运行（${selectedTcIds.size} 个用例）`}
+                  {running ? <><span className="gen-spinner" />{`${progress}%`}</> : t('eval.run_btn', { n: String(selectedTcIds.size) })}
                 </button>
               </div>
               {testCases.length > 0 && (
@@ -1473,8 +1476,8 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
                   ))}
                 </div>
               )}
-              {testCases.length === 0 && <div className="info-banner">还没有测试用例，请先在「测试用例」Tab 添加。</div>}
-              {apiKeySet === false && <div className="gen-warn">⚠️ 未配置 API Key，请先前往 <button className="link-btn" onClick={() => onNavigate?.('settings')}>设置</button> 添加。</div>}
+              {testCases.length === 0 && <div className="info-banner">{t('eval.no_test_cases_hint')}</div>}
+              {apiKeySet === false && <div className="gen-warn">⚠️ {t('eval.no_api_key_prefix')}<button className="link-btn" onClick={() => onNavigate?.('settings')}>{t('nav.settings')}</button>{t('eval.no_api_key_suffix')}</div>}
             </div>
           )}
 
@@ -1488,16 +1491,16 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
 
           {!running && historyTotal > 0 && (
             <div className="run-done-banner">
-              评测完成
-              <button className="link-btn" onClick={() => setPageTab('chart')}>查看技能成长 →</button>
+              {t('eval.run_done')}
+              <button className="link-btn" onClick={() => setPageTab('chart')}>{t('eval.view_growth')}</button>
               {selectedSkill && (
-                <button className="link-btn evo-link" onClick={() => onNavigate?.('evo', selectedSkill)}>⟳ 去进化 →</button>
+                <button className="link-btn evo-link" onClick={() => onNavigate?.('evo', selectedSkill)}>⟳ {t('eval.go_evo')}</button>
               )}
             </div>
           )}
 
           {!selectedSkill && (
-            <div className="no-skill"><div className="no-skill-icon">📊</div><p>选择一个 Skill 开始评测</p>{onNavigate && <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('studio')}>✦ 去 Studio 创建 Skill</button>}</div>
+            <div className="no-skill"><div className="no-skill-icon">📊</div><p>{t('eval.select_skill_hint')}</p>{onNavigate && <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('studio')}>✦ {t('eval.go_studio_create')}</button>}</div>
           )}
 
         </>)}
@@ -1506,24 +1509,24 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
       {/* ── Chart & History Tab ── */}
       {pageTab === 'chart' && (<>
         {!selectedSkill && (
-          <div className="no-skill"><div className="no-skill-icon">📈</div><p>选择一个 Skill 查看技能成长</p>{onNavigate && <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('studio')}>✦ 去 Studio 创建 Skill</button>}</div>
+          <div className="no-skill"><div className="no-skill-icon">📈</div><p>{t('eval.no_skill_chart')}</p>{onNavigate && <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('studio')}>✦ {t('eval.go_studio_create')}</button>}</div>
         )}
 
         {selectedSkill && (<>
           {/* Chart panel */}
           <div className="eval-card chart-panel">
             <div className="chart-tabs">
-              <button className={`chart-tab ${chartTab === 'radar' ? 'active' : ''}`} onClick={() => setChartTab('radar')}>🕸 雷达图</button>
-              <button className={`chart-tab ${chartTab === 'trend' ? 'active' : ''}`} onClick={() => setChartTab('trend')}>📈 总分趋势</button>
-              <button className={`chart-tab ${chartTab === 'multidim' ? 'active' : ''}`} onClick={() => setChartTab('multidim')}>〰 多维趋势</button>
-              <button className={`chart-tab ${chartTab === 'heatmap' ? 'active' : ''}`} onClick={() => setChartTab('heatmap')}>🌡 热力图</button>
-              <button className={`chart-tab ${chartTab === 'boxplot' ? 'active' : ''}`} onClick={() => setChartTab('boxplot')}>📦 分布图</button>
-              <button className={`chart-tab ${chartTab === 'bycase' ? 'active' : ''}`} onClick={() => setChartTab('bycase')}>📋 按用例</button>
+              <button className={`chart-tab ${chartTab === 'radar' ? 'active' : ''}`} onClick={() => setChartTab('radar')}>{t('eval.chart_radar')}</button>
+              <button className={`chart-tab ${chartTab === 'trend' ? 'active' : ''}`} onClick={() => setChartTab('trend')}>{t('eval.chart_trend')}</button>
+              <button className={`chart-tab ${chartTab === 'multidim' ? 'active' : ''}`} onClick={() => setChartTab('multidim')}>{t('eval.chart_multidim')}</button>
+              <button className={`chart-tab ${chartTab === 'heatmap' ? 'active' : ''}`} onClick={() => setChartTab('heatmap')}>{t('eval.chart_heatmap')}</button>
+              <button className={`chart-tab ${chartTab === 'boxplot' ? 'active' : ''}`} onClick={() => setChartTab('boxplot')}>{t('eval.chart_boxplot')}</button>
+              <button className={`chart-tab ${chartTab === 'bycase' ? 'active' : ''}`} onClick={() => setChartTab('bycase')}>{t('eval.chart_bycase')}</button>
             </div>
 
             {successHistory.length === 0 && (
               <div className="chart-empty">
-                还没有成功的评测记录。<button className="link-btn" onClick={() => setPageTab('eval')}>去运行评测 →</button>
+                {t('eval.no_success_records')}<button className="link-btn" onClick={() => setPageTab('eval')}>{t('eval.go_run_eval')}</button>
               </div>
             )}
 
@@ -1542,13 +1545,13 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
                     ))}
                     {overallAvg !== null && (
                       <div className="legend-row overall">
-                        <span className="legend-dim">总均分</span>
+                        <span className="legend-dim">{t('eval.radar_total_avg')}</span>
                         <span className="legend-val accent">{overallAvg.toFixed(2)}</span>
                       </div>
                     )}
                     {minScores && (
                       <div className="legend-row band-hint">
-                        <span className="legend-dim" style={{ color: 'var(--text-muted)', fontSize: 10 }}>虚线带 = min/max 范围（≥5次）</span>
+                        <span className="legend-dim" style={{ color: 'var(--text-muted)', fontSize: 10 }}>{t('eval.radar_band_hint')}</span>
                       </div>
                     )}
                   </div>
@@ -1559,31 +1562,31 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
                 <div>
                   <TrendLine history={successHistory} tcNames={tcNames} width={520} height={120} />
                   <div className="trend-stats">
-                    <div className="trend-stat"><span className="ts-label">最低</span><span className="ts-val danger">{Math.min(...successHistory.map(r => r.totalScore)).toFixed(1)}</span></div>
-                    <div className="trend-stat"><span className="ts-label">均值</span><span className="ts-val accent">{overallAvg!.toFixed(2)}</span></div>
-                    <div className="trend-stat"><span className="ts-label">最高</span><span className="ts-val success">{Math.max(...successHistory.map(r => r.totalScore)).toFixed(1)}</span></div>
-                    <div className="trend-stat"><span className="ts-label">次数</span><span className="ts-val">{successHistory.length}</span></div>
+                    <div className="trend-stat"><span className="ts-label">{t('eval.trend_min')}</span><span className="ts-val danger">{Math.min(...successHistory.map(r => r.totalScore)).toFixed(1)}</span></div>
+                    <div className="trend-stat"><span className="ts-label">{t('eval.trend_avg')}</span><span className="ts-val accent">{overallAvg!.toFixed(2)}</span></div>
+                    <div className="trend-stat"><span className="ts-label">{t('eval.trend_max')}</span><span className="ts-val success">{Math.max(...successHistory.map(r => r.totalScore)).toFixed(1)}</span></div>
+                    <div className="trend-stat"><span className="ts-label">{t('eval.trend_count')}</span><span className="ts-val">{successHistory.length}</span></div>
                   </div>
                 </div>
               )}
 
               {chartTab === 'multidim' && (
                 <div>
-                  <p className="chart-hint">悬停图例可高亮单条维度趋势</p>
+                  <p className="chart-hint">{t('eval.multidim_hint')}</p>
                   <MultiDimTrendChart history={successHistory.slice(-20)} width={560} height={220} />
                 </div>
               )}
 
               {chartTab === 'heatmap' && (
                 <div>
-                  <p className="chart-hint">颜色越绿得分越高，显示最近 20 次评测（最新在上）</p>
+                  <p className="chart-hint">{t('eval.heatmap_hint')}</p>
                   <HeatmapChart history={successHistory} />
                 </div>
               )}
 
               {chartTab === 'boxplot' && (
                 <div>
-                  <p className="chart-hint">◆ 均值　｜　竖线 = 中位数　｜　矩形 = Q1–Q3 区间　｜　横线端点 = min/max</p>
+                  <p className="chart-hint">{t('eval.boxplot_hint')}</p>
                   <BoxPlotChart history={successHistory} width={560} height={Math.max(160, DIM_ORDER.length * 26 + 34)} onRunEval={() => setPageTab('eval')} />
                 </div>
               )}
@@ -1610,7 +1613,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
                     disabled={compareSet.size < 2}
                     onClick={() => setShowCompareModal(true)}
                   >
-                    对比选中 ({compareSet.size}/2)
+                    {t('eval.compare_selected', { n: String(compareSet.size) })}
                   </button>
                 )}
                 <div className="tc-search-wrap">
@@ -1620,13 +1623,13 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
                   {historySearch && <button className="search-clear" onClick={() => setHistorySearch('')}>✕</button>}
                 </div>
                 <select className="status-filter" value={historyStatus} onChange={(e) => setHistoryStatus(e.target.value as 'all' | 'success' | 'error')}>
-                  <option value="all">全部</option>
-                  <option value="success">成功</option>
-                  <option value="error">失败</option>
+                  <option value="all">{t('common.all')}</option>
+                  <option value="success">{t('eval.status_success')}</option>
+                  <option value="error">{t('eval.status_error')}</option>
                 </select>
                 {tcNames.length > 0 && (
                   <select className="status-filter" value={historyTcFilter} onChange={e => setHistoryTcFilter(e.target.value)}>
-                    <option value="">全部用例</option>
+                    <option value="">{t('eval.all_cases')}</option>
                     {tcNames.map(n => <option key={n} value={n}>{n}</option>)}
                   </select>
                 )}
@@ -1634,7 +1637,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
             </div>
 
             {historyTotal === 0 && (
-              <div className="tc-empty">还没有评测记录，<button className="link-btn" onClick={() => setPageTab('eval')}>去运行评测 →</button></div>
+              <div className="tc-empty">{t('eval.no_history')}<button className="link-btn" onClick={() => setPageTab('eval')}>{t('eval.go_run_eval')}</button></div>
             )}
 
             <div className="history-list">
@@ -1662,9 +1665,9 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
                       })}>
                         <span>{collapsedTcGroups.has(tcName) ? '▸' : '▾'}</span>
                         <span className="history-tc-group-name">{tcName}</span>
-                        <span className="history-tc-group-count">{rows.length} 次</span>
+                        <span className="history-tc-group-count">{t('eval.tc_group_runs', { n: String(rows.length) })}</span>
                         <span className="history-tc-group-avg" style={{ color: avg >= 7 ? 'var(--success)' : avg >= 4 ? 'var(--warning)' : 'var(--danger)' }}>
-                          均 {avg.toFixed(1)}
+                          {t('eval.avg_score', { avg: avg.toFixed(1) })}
                         </span>
                         {scores.length >= 2 && (
                           <span className="history-tc-group-trend" style={{ color: trendColor }}>{trendIcon}</span>
@@ -1681,7 +1684,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
                             disabled={!compareSet.has(r.id) && compareSet.size >= 2}
                             onChange={() => toggleCompare(r.id)}
                             onClick={e => e.stopPropagation()}
-                            title="选中后可对比两条记录"
+                            title={t('eval.compare_checkbox_title')}
                           />
                           <span className={`status-dot ${r.status}`} />
                           <span className="result-date">{new Date(r.createdAt).toLocaleString()}</span>
@@ -1707,7 +1710,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
                           </button>
                           <button
                             className="expand-btn history-del-btn"
-                            title="删除此记录"
+                            title={t('eval.delete_record_title')}
                             onClick={async (e) => {
                               e.stopPropagation()
                               await window.api.eval.deleteRecord(r.id)
@@ -1731,13 +1734,13 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
                                   </div>
                                   {s.details && (
                                     <blockquote className="detail-rationale">
-                                      <span className="detail-rationale-label">评分依据</span>
+                                      <span className="detail-rationale-label">{t('eval.rationale_label')}</span>
                                       {s.details}
                                     </blockquote>
                                   )}
                                   {s.violations?.length > 0 && (
                                     <div className="violations-block">
-                                      <span className="violations-label">扣分原因</span>
+                                      <span className="violations-label">{t('eval.violations_label')}</span>
                                       <ul className="violations">{s.violations.map((v, i) => <li key={i}>{v}</li>)}</ul>
                                     </div>
                                   )}
@@ -1767,9 +1770,9 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
 
             {totalPages > 1 && !isFiltering && (
               <div className="pagination">
-                <button className="btn btn-ghost btn-sm" disabled={historyPage === 0} onClick={() => refreshHistory(historyPage - 1)}>← 上一页</button>
+                <button className="btn btn-ghost btn-sm" disabled={historyPage === 0} onClick={() => refreshHistory(historyPage - 1)}>{t('eval.prev_page')}</button>
                 <span className="page-info">{historyPage + 1} / {totalPages}</span>
-                <button className="btn btn-ghost btn-sm" disabled={historyPage >= totalPages - 1} onClick={() => refreshHistory(historyPage + 1)}>下一页 →</button>
+                <button className="btn btn-ghost btn-sm" disabled={historyPage >= totalPages - 1} onClick={() => refreshHistory(historyPage + 1)}>{t('eval.next_page')}</button>
               </div>
             )}
           </div>
@@ -1787,7 +1790,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
           <div className="modal-overlay" onClick={() => setShowCompareModal(false)}>
             <div className="modal-box hist-cmp-modal" onClick={e => e.stopPropagation()}>
               <div className="modal-header">
-                <span className="modal-title">历史评测对比</span>
+                <span className="modal-title">{t('eval.compare_modal_title')}</span>
                 <button className="modal-close" onClick={() => setShowCompareModal(false)}>✕</button>
               </div>
               <div className="hist-cmp-body">
@@ -1800,7 +1803,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
                 {/* 总分 */}
                 <div className="hist-cmp-totals">
                   <span className="hist-cmp-total" style={{ color: rA.totalScore >= 7 ? 'var(--success)' : 'var(--warning)' }}>{rA.totalScore.toFixed(1)}</span>
-                  <span className="hist-cmp-total-label">总分</span>
+                  <span className="hist-cmp-total-label">{t('eval.total_score_label')}</span>
                   <span className="hist-cmp-total" style={{ color: rB.totalScore >= 7 ? 'var(--success)' : 'var(--warning)' }}>{rB.totalScore.toFixed(1)}</span>
                 </div>
                 {/* 维度对比 */}
@@ -2027,14 +2030,20 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
         /* Viz (legacy, kept for per-result mini charts) */
         .viz-grid { display: grid; grid-template-columns: auto 1fr; gap: 16px; }
         .viz-card { }
-        .radar-wrap { display: flex; align-items: center; justify-content: center; gap: 20px; }
-        .radar-legend { display: flex; flex-direction: column; gap: 8px; }
-        .legend-row { display: flex; align-items: center; gap: 8px; }
-        .legend-row.overall { margin-top: 6px; border-top: 1px solid var(--border); padding-top: 6px; }
-        .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-        .legend-dim { font-size: 12px; color: var(--text-muted); text-transform: capitalize; width: 90px; }
-        .legend-val { font-size: 13px; font-weight: 700; }
+        .radar-wrap { display: flex; align-items: center; justify-content: center; gap: 20px; width: 100%; }
+        .radar-legend { display: flex; flex-direction: column; gap: 5px; }
+        .legend-row { display: flex; align-items: center; gap: 6px; }
+        .legend-row.overall { margin-top: 5px; border-top: 1px solid var(--border); padding-top: 5px; }
+        .legend-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .legend-dim { font-size: 11px; color: var(--text-muted); text-transform: capitalize; width: 80px; }
+        .legend-val { font-size: 11px; font-weight: 700; }
         .legend-val.accent { color: var(--accent); }
+        .dim-bar-chart { display: flex; flex-direction: column; gap: 5px; min-width: 150px; }
+        .dbc-row { display: flex; align-items: center; gap: 6px; }
+        .dbc-label { font-size: 11px; font-weight: 600; width: 76px; flex-shrink: 0; }
+        .dbc-track { flex: 1; height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+        .dbc-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+        .dbc-val { font-size: 11px; font-weight: 700; width: 26px; text-align: right; flex-shrink: 0; }
         .trend-stats { display: flex; gap: 24px; margin-top: 10px; }
         .trend-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
         .ts-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
@@ -2103,7 +2112,7 @@ export default function EvalPage({ initialSkillId, onNavigate, skillsRefreshKey 
         .detail-input { }
         .detail-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); display: block; margin-bottom: 4px; }
         .detail-pre { font-family: 'Courier New', monospace; font-size: 11px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; margin: 0; white-space: pre-wrap; word-break: break-all; color: var(--text); max-height: 120px; overflow-y: auto; }
-        .result-viz-row { display: flex; align-items: flex-start; gap: 16px; }
+        .result-viz-row { display: flex; align-items: center; justify-content: center; gap: 24px; width: 100%; }
         .detail-dims-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
         .detail-io-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .detail-io-col { display: flex; flex-direction: column; gap: 4px; }
